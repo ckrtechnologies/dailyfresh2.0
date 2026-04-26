@@ -1,0 +1,957 @@
+import { supabaseAdmin } from '../config/supabase.js';
+import { successResponse, errorResponse } from '../utils/response.js';
+import * as notificationService from '../services/notificationService.js';
+
+const getImageUrl = (file, bodyUrl) => {
+  if (file) {
+    return `https://assets.dailyfreshkolkata.in/uploads/${file.filename}`;
+  }
+  return bodyUrl || null;
+};
+
+// Helper for parsing multi-select options (handles JSON or comma-separated strings)
+const safeParseOptions = (options, defaultVal = []) => {
+  if (!options) return defaultVal;
+  if (Array.isArray(options)) return options;
+  if (typeof options !== 'string') return defaultVal;
+  
+  try {
+    const parsed = JSON.parse(options);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch (e) {
+    // Fallback: handle comma-separated strings (like "morning,express")
+    return options.split(',').map(s => s.trim()).filter(s => s);
+  }
+};
+
+/**
+ * --- STORE MANAGEMENT ---
+ */
+
+export const createStore = async (req, res) => {
+  const { name, manager_user_id, pincode, address, latitude, longitude, phone, email, delivery_radius_km, serviceable_pincodes } = req.body;
+  if (!name) return errorResponse(res, 'Store name is required', 400);
+  if (!pincode) return errorResponse(res, 'Primary PIN code is required', 400);
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('stores')
+      .insert([{
+        name,
+        manager_user_id: manager_user_id || null,
+        pincode, address, latitude, longitude, phone, email,
+        delivery_radius_km: delivery_radius_km || 10,
+        serviceable_pincodes: serviceable_pincodes || [pincode]
+      }])
+      .select()
+      .single();
+
+    if (error) return errorResponse(res, 'Failed to create store', 400, error);
+    return successResponse(res, { store: data }, 'Store created successfully', 201);
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+export const listStores = async (req, res) => {
+  const { search } = req.query;
+  try {
+    let query = supabaseAdmin.from('stores').select('*, manager:profiles(full_name, email)');
+
+    if (search) query = query.or(`name.ilike.%${search}%,pincode.ilike.%${search}%`);
+
+    const { data, error } = await query;
+    if (error) return errorResponse(res, 'Failed to fetch stores', 400, error);
+    return successResponse(res, { stores: data });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+export const updateStore = async (req, res) => {
+  const { id } = req.params;
+  const { name, manager_user_id, pincode, address, latitude, longitude, phone, email, is_active, delivery_radius_km, serviceable_pincodes } = req.body;
+  const updateData = {
+    name,
+    manager_user_id: manager_user_id === "" ? null : manager_user_id,
+    pincode, address, latitude, longitude, phone, email, is_active,
+    delivery_radius_km,
+    serviceable_pincodes
+  };
+
+  // Remove undefined to prevent Supabase from trying to update to null unless intended
+  Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+  try {
+    const { data, error } = await supabaseAdmin.from('stores').update(updateData).eq('id', id).select().single();
+    if (error) return errorResponse(res, 'Update failed', 400, error);
+    return successResponse(res, { store: data }, 'Store updated');
+  } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+export const deleteStore = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { count } = await supabaseAdmin.from('products').select('*', { count: 'exact', head: true }).eq('store_id', id);
+    if (count > 0) return errorResponse(res, 'Cannot delete store with active products', 400);
+
+    const { error } = await supabaseAdmin.from('stores').delete().eq('id', id);
+    if (error) throw error;
+    return successResponse(res, null, 'Store deleted');
+  } catch (error) { return errorResponse(res, 'Delete failed', 500, error); }
+};
+
+/**
+ * --- RIDER MANAGEMENT ---
+ */
+
+export const updateRiderStatus = async (req, res) => {
+  const { riderId } = req.params;
+  const { is_online, approval_status } = req.body;
+  const updates = {};
+  if (is_online !== undefined) updates.is_online = is_online;
+  if (approval_status !== undefined) updates.approval_status = approval_status;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('riders')
+      .update(updates)
+      .eq('id', riderId)
+      .select()
+      .single();
+
+    if (error) return errorResponse(res, 'Failed to update rider', 400, error);
+    return successResponse(res, { rider: data }, 'Rider updated successfully');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+export const approveRider = async (req, res) => {
+  const { riderId } = req.params;
+  const { status } = req.body;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('riders')
+      .update({ approval_status: status })
+      .eq('id', riderId)
+      .select()
+      .single();
+
+    if (error) return errorResponse(res, 'Failed to update rider status', 400, error);
+    return successResponse(res, { rider: data }, `Rider ${status} successfully`);
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+export const listRiders = async (req, res) => {
+  const { page = 1, pageSize = 50, search } = req.query;
+  const storeIdToFetch = req.user.role === 'store_manager' ? req.user.store_id : req.query.store_id;
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  try {
+    let query = supabaseAdmin
+      .from('riders')
+      .select('*, user:profiles(*), store:stores(name)', { count: 'exact' });
+
+    if (storeIdToFetch) {
+      query = query.eq('assigned_store_id', storeIdToFetch);
+    }
+
+    if (search) {
+      query = query.or(`vehicle_type.ilike.%${search}%,vehicle_number.ilike.%${search}%`);
+      // Note: searching in joined profiles requires a separate approach or DB views in Supabase.
+      // For now, we prioritize the store filter as requested by the user.
+    }
+
+    const { data, count, error } = await query.range(from, to);
+
+    if (error) throw error;
+    return successResponse(res, { riders: data, pagination: { total: count, page: Number(page), pageSize: Number(pageSize) } });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch riders', 500, error);
+  }
+};
+
+/**
+ * --- DASHBOARD & ANALYTICS ---
+ */
+
+export const getDashboardStats = async (req, res) => {
+  const { startDate, endDate } = req.query;
+  const storeIdToFetch = req.user.role === 'store_manager' ? req.user.store_id : req.query.store_id;
+
+  try {
+    // 1. Core Metrics (Revenue, AOV, Cancelled)
+    const ordersQuery = supabaseAdmin.from('orders').select('total_amount, status, payment_status, created_at, store_id');
+    if (storeIdToFetch) ordersQuery.eq('store_id', storeIdToFetch);
+    if (startDate) ordersQuery.gte('created_at', startDate);
+    if (endDate) ordersQuery.lte('created_at', `${endDate} 23:59:59`);
+
+    const { data: ordersData } = await ordersQuery;
+
+    const paidOrders = ordersData?.filter(o => o.payment_status === 'paid') || [];
+    const revenue = paidOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+    const aov = paidOrders.length > 0 ? (revenue / paidOrders.length).toFixed(2) : 0;
+    const cancelledCount = ordersData?.filter(o => o.status === 'cancelled').length || 0;
+    const totalOrders = ordersData?.length || 0;
+
+    // 2. Customers (Global usually)
+    const custQuery = supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'customer');
+    if (startDate) custQuery.gte('created_at', startDate);
+    if (endDate) custQuery.lte('created_at', `${endDate} 23:59:59`);
+    const { count: customerCount } = await custQuery;
+
+    // 3. Riders (Active vs Total)
+    const riderQuery = supabaseAdmin.from('riders').select('is_online');
+    if (storeIdToFetch) riderQuery.eq('assigned_store_id', storeIdToFetch);
+    const { data: ridersData } = await riderQuery;
+    const activeRiders = ridersData?.filter(r => r.is_online).length || 0;
+    const totalRiders = ridersData?.length || 0;
+
+    // 4. Low Stock Products
+    const lowStockQuery = supabaseAdmin
+      .from('products')
+      .select('name, stock_quantity, weight_unit, store:stores(name)')
+      .lt('stock_quantity', 10);
+    if (storeIdToFetch) lowStockQuery.eq('store_id', storeIdToFetch);
+    const { data: lowStockProducts } = await lowStockQuery.limit(5);
+
+    // 5. Live Orders (Last 5)
+    const liveOrdersQuery = supabaseAdmin
+      .from('orders')
+      .select('id, order_number, total_amount, status, created_at, customer:profiles(full_name), store:stores(name)')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (storeIdToFetch) liveOrdersQuery.eq('store_id', storeIdToFetch);
+    const { data: liveOrders } = await liveOrdersQuery;
+
+    // 6. Top Stores (Admin Only)
+    let topStores = [];
+    if (!storeIdToFetch) {
+      const storeMap = {};
+      paidOrders.forEach(o => {
+        storeMap[o.store_id] = (storeMap[o.store_id] || 0) + Number(o.total_amount);
+      });
+    }
+
+    return successResponse(res, {
+      stats: {
+        revenue,
+        aov,
+        cancelled_orders: cancelledCount,
+        orders: totalOrders,
+        customers: customerCount || 0,
+        active_riders: activeRiders,
+        total_riders: totalRiders
+      },
+      live_orders: liveOrders || [],
+      low_stock: lowStockProducts || [],
+      top_performing: {
+        // We will implement these based on real data or analytics tables if needed
+        products: [],
+        stores: []
+      }
+    });
+  } catch (error) {
+    console.error('Stats Error:', error);
+    return errorResponse(res, 'Failed to fetch dashboard stats', 500, error);
+  }
+};
+
+/**
+ * --- ORDER MANAGEMENT ---
+ */
+
+export const listOrders = async (req, res) => {
+  const { page = 1, pageSize = 50, status, startDate, endDate, search } = req.query;
+  const storeIdToFetch = req.user.role === 'store_manager' ? req.user.store_id : req.query.store_id;
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  try {
+    let query = supabaseAdmin
+      .from('orders')
+      .select('*, customer:profiles(full_name, email), store:stores(name)', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', `${endDate} 23:59:59`);
+
+    query = query.range(from, to);
+
+    if (status && status !== 'all') query = query.eq('status', status);
+    if (storeIdToFetch) query = query.eq('store_id', storeIdToFetch);
+    if (search) query = query.or(`order_number.ilike.%${search}%,user_id.ilike.%${search}%`);
+
+    const { data, count, error } = await query;
+    if (error) throw error;
+
+    return successResponse(res, {
+      orders: data,
+      pagination: { total: count, page: Number(page), pageSize: Number(pageSize) }
+    });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch orders', 500, error);
+  }
+};
+
+export const updateOrderStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status, rider_id } = req.body;
+  const validStatuses = ['pending', 'confirmed', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'dispatched', 'delivered', 'cancelled'];
+
+  if (!validStatuses.includes(status)) {
+    return errorResponse(res, `Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400);
+  }
+
+  try {
+    const updates = { status, updated_at: new Date() };
+    if (rider_id) updates.rider_id = rider_id;
+
+    // RBAC: Store Managers can only update their own store's orders
+    let query = supabaseAdmin.from('orders').update(updates).eq('id', id);
+    if (req.user.role === 'store_manager') {
+      query = query.eq('store_id', req.user.store_id);
+    }
+
+    const { data: order, error: updateError } = await query.select('*, customer:profiles(full_name, email)').single();
+
+    if (updateError) return errorResponse(res, 'Failed to update order status or access denied', 400, updateError);
+
+    // --- LOG STATUS CHANGE ---
+    await supabaseAdmin.from('order_tracking').insert([{ order_id: id, status }]);
+
+    // --- PUSH NOTIFICATIONS ---
+    let title = '';
+    let body = '';
+    
+    switch (status) {
+      case 'confirmed':
+      case 'accepted':
+        title = 'Order Confirmed! ✅';
+        body = 'Your order has been accepted and will be prepared shortly.';
+        break;
+      case 'preparing':
+        title = 'Preparing Your Order 🥣';
+        body = 'We are now preparing your fresh items.';
+        break;
+      case 'ready':
+        title = 'Order Ready! 📦';
+        body = 'Your order is packed and ready for pickup.';
+        break;
+      case 'out_for_delivery':
+      case 'dispatched':
+        title = 'Order Dispatched! 🚚';
+        body = 'Your order has been picked up and is on the way.';
+        break;
+      case 'delivered':
+        title = 'Order Delivered! 🎉';
+        body = 'Your order has been delivered. Enjoy!';
+        break;
+      case 'cancelled':
+        title = 'Order Cancelled ❌';
+        body = 'Your order has been cancelled.';
+        break;
+      default:
+        title = 'Order Update';
+        body = `Your order status has been updated to ${status}.`;
+    }
+
+    if (title && order?.user_id) {
+      console.log(`[Admin] Sending status update notification to user ${order.user_id} for status: ${status}`);
+      await notificationService.sendToUser(order.user_id, title, body, { 
+        type: 'order_status_update', 
+        status: status, 
+        order_id: id 
+      });
+    } else {
+      console.warn(`[Admin] Could not send notification. Title: ${title}, UserID: ${order?.user_id}`);
+    }
+
+    return successResponse(res, { order }, `Order status updated to ${status}`);
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * --- USER MANAGEMENT ---
+ */
+
+export const listCustomers = async (req, res) => {
+  const { page = 1, pageSize = 50, search } = req.query;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  try {
+    let query = supabaseAdmin
+      .from('profiles')
+      .select('*', { count: 'exact' })
+      .eq('role', 'customer')
+      .order('created_at', { ascending: false });
+
+    if (search) {
+      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+    }
+
+    const { data, count, error } = await query.range(from, to);
+    
+    if (error) throw error;
+    return successResponse(res, { 
+      customers: data, 
+      pagination: { total: count, page: Number(page), pageSize: Number(pageSize) } 
+    });
+  } catch (error) {
+    console.error('List Customers Error:', error);
+    return errorResponse(res, 'Failed to fetch customers', 500, error);
+  }
+};
+
+export const listStaff = async (req, res) => {
+  const { role = 'store_manager', search } = req.query;
+  try {
+    let query = supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('role', role)
+      .order('full_name', { ascending: true });
+
+    if (search) {
+      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return successResponse(res, { staff: data });
+  } catch (error) {
+    console.error('List Staff Error:', error);
+    return errorResponse(res, 'Failed to fetch staff', 500, error);
+  }
+};
+
+/**
+ * --- CATALOGUE MANAGEMENT ---
+ */
+
+// Lists
+export const listCategories = async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('categories')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+    return successResponse(res, { categories: data });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch categories', 500, error);
+  }
+};
+
+export const listSubCategories = async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('sub_categories')
+      .select('*, category:categories(name)')
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+    return successResponse(res, { sub_categories: data });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch sub-categories', 500, error);
+  }
+};
+
+export const listProducts = async (req, res) => {
+  const { page = 1, pageSize = 50, search } = req.query;
+  const storeIdToFetch = req.user.role === 'store_manager' ? req.user.store_id : req.query.store_id;
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  try {
+    let query = supabaseAdmin
+      .from('products')
+      .select('*, store:stores(name), sub_category:sub_categories(name, category:categories(name))', { count: 'exact' });
+
+    if (storeIdToFetch) query = query.eq('store_id', storeIdToFetch);
+    if (search) query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,sku.ilike.%${search}%`);
+
+    const { data, count, error } = await query.range(from, to);
+    if (error) throw error;
+
+    return successResponse(res, {
+      products: data,
+      pagination: { total: count, page: Number(page), pageSize: Number(pageSize) }
+    });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch products', 500, error);
+  }
+};
+
+// Create
+export const createCategory = async (req, res) => {
+  const { name, slug, description, display_order, image_url: bodyUrl } = req.body;
+  if (!name) return errorResponse(res, 'Category name is required', 400);
+  if (!slug) return errorResponse(res, 'Slug is required', 400);
+
+  const image_url = getImageUrl(req.file, bodyUrl);
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('categories')
+      .insert([{ name, slug, description, image_url, display_order }])
+      .select()
+      .single();
+    if (error) return errorResponse(res, 'Failed to create category', 400, error);
+    return successResponse(res, { category: data }, 'Category created', 201);
+  } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+export const createSubCategory = async (req, res) => {
+  const { category_id, name, slug, description, display_order, image_url: bodyUrl } = req.body;
+  if (!category_id) return errorResponse(res, 'Parent category is required', 400);
+  if (!name) return errorResponse(res, 'Sub-category name is required', 400);
+
+  const image_url = getImageUrl(req.file, bodyUrl);
+
+  try {
+    const { data, error } = await supabaseAdmin.from('sub_categories').insert([{
+      category_id: category_id || null,
+      name, slug, description, image_url, display_order
+    }]).select().single();
+    if (error) return errorResponse(res, 'Failed to create sub-category', 400, error);
+    return successResponse(res, { sub_category: data }, 'Sub-category created', 201);
+  } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+export const createProduct = async (req, res) => {
+  let { store_id, sub_category_id, name, slug, price, weight_unit, stock_quantity, description, cooking_guide, product_highlights, image_url: bodyUrl } = req.body;
+
+  // If Store Manager, force their assigned store ID
+  if (req.user.role === 'store_manager') {
+    store_id = req.user.store_id;
+  }
+
+  if (!store_id) return errorResponse(res, 'Please select a store. This product must belong to a location.', 400);
+  if (!sub_category_id) return errorResponse(res, 'Please select a sub-category.', 400);
+  if (!name) return errorResponse(res, 'Product name is required.', 400);
+  if (price === undefined || price === null) return errorResponse(res, 'Price is required.', 400);
+
+  const image_url = getImageUrl(req.file, bodyUrl);
+
+  try {
+    const productData = {
+      store_id: store_id || null,
+      sub_category_id: sub_category_id || null,
+      name, slug, price, weight_unit, stock_quantity, image_url, description,
+      cooking_guide,
+      product_highlights: product_highlights ? (typeof product_highlights === 'string' ? JSON.parse(product_highlights) : product_highlights) : [],
+      is_deal: req.body.is_deal === 'true' || req.body.is_deal === true,
+      is_featured: req.body.is_featured === 'true' || req.body.is_featured === true,
+      is_flash_sale: req.body.is_flash_sale === 'true' || req.body.is_flash_sale === true,
+      is_exclusive: req.body.is_exclusive === 'true' || req.body.is_exclusive === true,
+      is_trending: req.body.is_trending === 'true' || req.body.is_trending === true,
+      is_frozen: req.body.is_frozen === 'true' || req.body.is_frozen === true,
+      is_new_launch: req.body.is_new_launch === 'true' || req.body.is_new_launch === true,
+      delivery_options: safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express'])
+    };
+
+    const { data, error } = await supabaseAdmin.from('products').insert([productData]).select().single();
+    if (error) return errorResponse(res, 'Failed to create product', 400, error);
+    return successResponse(res, { product: data }, 'Product created', 201);
+  } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+// Update
+export const updateCategory = async (req, res) => {
+  const { id } = req.params;
+  const { name, slug, description, image_url: bodyUrl, display_order, is_active } = req.body;
+  const updateData = { name, slug, description, display_order, is_active };
+
+  if (req.file) updateData.image_url = getImageUrl(req.file);
+  else if (bodyUrl !== undefined) updateData.image_url = bodyUrl;
+
+  Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+  try {
+    const { data, error } = await supabaseAdmin.from('categories').update(updateData).eq('id', id).select().single();
+    if (error) return errorResponse(res, 'Update failed', 400, error);
+    return successResponse(res, { category: data }, 'Category updated');
+  } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+export const updateSubCategory = async (req, res) => {
+  const { id } = req.params;
+  const { category_id, name, slug, description, image_url: bodyUrl, display_order, is_active } = req.body;
+  const updateData = {
+    category_id: category_id === "" ? null : category_id,
+    name, slug, description, display_order, is_active
+  };
+
+  if (req.file) updateData.image_url = getImageUrl(req.file);
+  else if (bodyUrl !== undefined) updateData.image_url = bodyUrl;
+
+  Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+  try {
+    const { data, error } = await supabaseAdmin.from('sub_categories').update(updateData).eq('id', id).select().single();
+    if (error) return errorResponse(res, 'Update failed', 400, error);
+    return successResponse(res, { sub_category: data }, 'Sub-category updated');
+  } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+export const updateProduct = async (req, res) => {
+  const { id } = req.params;
+  const { store_id, sub_category_id, name, slug, description, cooking_guide, product_highlights, image_url: bodyUrl, price, discount_price, weight_unit, stock_quantity, is_active, is_deal, is_featured } = req.body;
+  
+  const updateData = { 
+    store_id, 
+    sub_category_id, 
+    name, 
+    slug, 
+    description, 
+    price, 
+    discount_price, 
+    weight_unit, 
+    stock_quantity, 
+    is_active, 
+    is_deal, 
+    cooking_guide,
+    product_highlights: product_highlights ? (typeof product_highlights === 'string' ? JSON.parse(product_highlights) : product_highlights) : undefined,
+    is_featured: req.body.is_featured === 'true' || req.body.is_featured === true,
+    is_flash_sale: req.body.is_flash_sale === 'true' || req.body.is_flash_sale === true,
+    is_exclusive: req.body.is_exclusive === 'true' || req.body.is_exclusive === true,
+    is_trending: req.body.is_trending === 'true' || req.body.is_trending === true,
+    is_frozen: req.body.is_frozen === 'true' || req.body.is_frozen === true,
+    is_new_launch: req.body.is_new_launch === 'true' || req.body.is_new_launch === true,
+    delivery_options: req.body.delivery_options ? safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express']) : undefined
+  };
+
+  if (req.file) updateData.image_url = getImageUrl(req.file);
+  else if (bodyUrl !== undefined) updateData.image_url = bodyUrl;
+
+  // RBAC: Store Managers can only update specific fields (Catalog details like Name/SubCat are usually Admin-only)
+  if (req.user.role === 'store_manager') {
+    const fieldsToKeep = [
+      'stock_quantity', 'price', 'discount_price', 'is_active', 'image_url',
+      'is_deal', 'is_featured', 'is_flash_sale', 'is_exclusive', 'is_trending', 'is_frozen', 'is_new_launch', 'delivery_options'
+    ];
+    Object.keys(updateData).forEach(key => {
+      if (!fieldsToKeep.includes(key)) delete updateData[key];
+    });
+  } else {
+    // Standard cleanup for Admin
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+  }
+
+  // Ensure boolean flags are correctly parsed from potential string inputs (FormData)
+  ['is_deal', 'is_featured', 'is_flash_sale', 'is_exclusive', 'is_trending', 'is_frozen', 'is_new_launch', 'is_active'].forEach(flag => {
+    if (updateData[flag] !== undefined) {
+      updateData[flag] = updateData[flag] === 'true' || updateData[flag] === true;
+    }
+  });
+
+  try {
+    let query = supabaseAdmin.from('products').update(updateData).eq('id', id);
+    
+    // RBAC: Store Managers can only update their own store's products
+    if (req.user.role === 'store_manager') {
+      query = query.eq('store_id', req.user.store_id);
+    }
+
+    const { data, error } = await query.select().single();
+    if (error) return errorResponse(res, 'Update failed or access denied', 400, error);
+    return successResponse(res, { product: data }, 'Product updated');
+  } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+// Delete
+export const deleteCategory = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { count } = await supabaseAdmin.from('sub_categories').select('*', { count: 'exact', head: true }).eq('category_id', id);
+    if (count > 0) return errorResponse(res, 'Cannot delete category with active sub-categories', 400);
+
+    const { error } = await supabaseAdmin.from('categories').delete().eq('id', id);
+    if (error) throw error;
+    return successResponse(res, null, 'Category deleted');
+  } catch (error) { 
+    console.error('Delete Category Error:', error);
+    return errorResponse(res, `Delete failed: ${error.message || 'Internal server error'}`, 500, error); 
+  }
+};
+
+export const deleteSubCategory = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { count } = await supabaseAdmin.from('products').select('*', { count: 'exact', head: true }).eq('sub_category_id', id);
+    if (count > 0) return errorResponse(res, 'Cannot delete sub-category with active products', 400);
+
+    const { error } = await supabaseAdmin.from('sub_categories').delete().eq('id', id);
+    if (error) throw error;
+    return successResponse(res, null, 'Sub-category deleted');
+  } catch (error) { return errorResponse(res, 'Delete failed', 500, error); }
+};
+
+export const deleteProduct = async (req, res) => {
+  const { id } = req.params;
+  try {
+    let query = supabaseAdmin.from('products').delete().eq('id', id);
+
+    // RBAC: Store Managers can only delete their own store's products
+    if (req.user.role === 'store_manager') {
+      query = query.eq('store_id', req.user.store_id);
+    }
+
+    const { error } = await query;
+    if (error) throw error;
+    return successResponse(res, null, 'Product deleted');
+  } catch (error) { return errorResponse(res, 'Delete failed or access denied', 500, error); }
+};
+
+/**
+ * --- ONBOARDING ---
+ */
+
+export const onboardStaff = async (req, res) => {
+  const { email, password, full_name, phone, role, store_id, vehicle_type, vehicle_number } = req.body;
+
+  if (!email || !password || !full_name || !role) {
+    return errorResponse(res, 'Missing required onboarding data', 400);
+  }
+
+  try {
+    // 1. Create Auth User via Admin API
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name, role }
+    });
+
+    if (authError) {
+      let msg = 'Staff registration failed';
+      if (authError.message.includes('already been registered')) msg = 'An account with this email/ID already exists.';
+      if (authError.message.includes('password')) msg = 'Initial password is too weak.';
+      return errorResponse(res, msg, 400, authError);
+    }
+
+    const userId = authData.user.id;
+
+    // 2. Profile creation
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .insert([{ id: userId, full_name, phone, role, email }]);
+
+    if (profileError) {
+      // Cleanup: Delete auth user if profile fails? (Optional but recommended)
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      let msg = 'Profile creation failed';
+      if (profileError.message.includes('phone')) msg = 'This phone number is already linked to another account.';
+      return errorResponse(res, msg, 400, profileError);
+    }
+
+    // 3. If Rider, create rider record
+    if (role === 'rider') {
+      const { error: riderError } = await supabaseAdmin
+        .from('riders')
+        .insert([{
+          user_id: userId,
+          assigned_store_id: store_id || null,
+          vehicle_type,
+          vehicle_number,
+          approval_status: 'approved'
+        }]);
+
+      if (riderError) return errorResponse(res, 'Rider record creation failed', 400, riderError);
+    }
+
+    return successResponse(res, { user_id: userId }, `Staff (${role}) onboarded successfully`, 201);
+  } catch (error) {
+    return errorResponse(res, 'Onboarding error', 500, error);
+  }
+};
+
+/**
+ * --- PLATFORM SETTINGS ---
+ */
+
+export const getPlatformSettings = async (req, res) => {
+  try {
+    const { data: settings, error } = await supabaseAdmin
+      .from('settings')
+      .select('*');
+
+    if (error) return errorResponse(res, 'Failed to fetch settings', 400, error);
+
+    // Convert key-value array to a flat object
+    const config = {};
+    settings.forEach(s => {
+      config[s.key] = s.data_type === 'number' ? Number(s.value) : s.value;
+    });
+
+    // Map internal keys to frontend expected keys if different
+    const mappedConfig = {
+      gst_rate: config.gst_rate,
+      free_delivery_threshold: config.free_delivery_above,
+      standard_delivery_fee: config.default_delivery_charge,
+      min_order_value: config.min_order_value,
+      contact_support_phone: config.contact_support_phone || '',
+      contact_support_email: config.contact_support_email || ''
+    };
+
+    return successResponse(res, { settings: mappedConfig });
+  } catch (error) {
+    return errorResponse(res, 'Error', 500, error);
+  }
+};
+
+export const updatePlatformSettings = async (req, res) => {
+  const updates = req.body;
+
+  // Map frontend keys back to DB keys
+  const dbUpdates = [
+    { key: 'gst_rate', value: String(updates.gst_rate) },
+    { key: 'free_delivery_above', value: String(updates.free_delivery_threshold) },
+    { key: 'default_delivery_charge', value: String(updates.standard_delivery_fee) },
+    { key: 'min_order_value', value: String(updates.min_order_value) }
+  ];
+
+  if (updates.contact_support_phone) dbUpdates.push({ key: 'contact_support_phone', value: updates.contact_support_phone });
+  if (updates.contact_support_email) dbUpdates.push({ key: 'contact_support_email', value: updates.contact_support_email });
+
+  try {
+    const results = await Promise.all(dbUpdates.map(u =>
+      supabaseAdmin.from('settings').update({ value: u.value }).eq('key', u.key)
+    ));
+
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) return errorResponse(res, 'Some updates failed', 400, errors[0].error);
+
+    return successResponse(res, null, 'Settings updated successfully');
+  } catch (error) {
+    return errorResponse(res, 'Error', 500, error);
+  }
+};
+
+/**
+ * --- HOME SCREEN & BANNER MANAGEMENT ---
+ */
+
+export const listBanners = async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('banners')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('relation "banners" does not exist')) {
+        console.warn('[Supabase] banners table missing. Please run migrations.');
+        return successResponse(res, { banners: [] }, 'Table not found, please run migrations');
+      }
+      throw error;
+    }
+    return successResponse(res, { banners: data });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch banners', 500, error);
+  }
+};
+
+export const createBanner = async (req, res) => {
+  const { title, image_url: bodyUrl, link_url, placement, display_order, is_active } = req.body;
+  const image_url = getImageUrl(req.file, bodyUrl);
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('banners')
+      .insert([{ title, image_url, link_url, placement, display_order, is_active }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return successResponse(res, { banner: data }, 'Banner created', 201);
+  } catch (error) {
+    return errorResponse(res, 'Failed to create banner', 500, error);
+  }
+};
+
+export const updateBanner = async (req, res) => {
+  const { id } = req.params;
+  const updateData = { ...req.body };
+
+  if (req.file) updateData.image_url = getImageUrl(req.file);
+  delete updateData.imageFile; // Remove frontend-only field
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('banners')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return successResponse(res, { banner: data }, 'Banner updated');
+  } catch (error) {
+    return errorResponse(res, 'Update failed', 500, error);
+  }
+};
+
+export const deleteBanner = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { error } = await supabaseAdmin.from('banners').delete().eq('id', id);
+    if (error) throw error;
+    return successResponse(res, null, 'Banner deleted');
+  } catch (error) {
+    return errorResponse(res, 'Delete failed', 500, error);
+  }
+};
+
+export const listHomeSections = async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('home_sections')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      // If table doesn't exist yet, return empty array instead of 500
+      if (error.code === 'PGRST116' || error.message?.includes('relation "home_sections" does not exist')) {
+        console.warn('[Supabase] home_sections table missing. Please run migrations.');
+        return successResponse(res, { sections: [] }, 'Table not found, please run migrations');
+      }
+      throw error;
+    }
+    return successResponse(res, { sections: data });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch sections', 500, error);
+  }
+};
+
+export const updateHomeSection = async (req, res) => {
+  const { id } = req.params;
+  const { title, subtitle, display_order, is_active, config } = req.body;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('home_sections')
+      .update({ title, subtitle, display_order, is_active, config })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return successResponse(res, { section: data }, 'Section updated');
+  } catch (error) {
+    return errorResponse(res, 'Update failed', 500, error);
+  }
+};
+
