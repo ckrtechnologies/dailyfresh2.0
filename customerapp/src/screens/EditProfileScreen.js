@@ -1,0 +1,231 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  SafeAreaView,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { COLORS, SPACING, RADIUS } from '../constants/theme';
+
+const EditProfileScreen = ({ navigation }) => {
+  const { user } = useSelector((state) => state.auth);
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [loading, setLoading] = useState(false);
+
+  const handleUpdate = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Please enter your name');
+      return;
+    }
+    setLoading(true);
+    // Simulate API call
+    setTimeout(() => {
+      setLoading(false);
+      Alert.alert('Success', 'Profile updated successfully', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    }, 1500);
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Icon name="arrow-left" size={24} color={COLORS.dark} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.avatarSection}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{name.charAt(0) || 'U'}</Text>
+            <TouchableOpacity style={styles.cameraIcon}>
+              <Icon name="camera" size={18} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.changeText}>Change Profile Picture</Text>
+        </View>
+
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Full Name</Text>
+            <View style={styles.inputContainer}>
+              <Icon name="account-outline" size={20} color={COLORS.gray} />
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Enter your full name"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email Address</Text>
+            <View style={[styles.inputContainer, styles.disabledInput]}>
+              <Icon name="email-outline" size={20} color={COLORS.gray} />
+              <TextInput
+                style={styles.input}
+                value={email}
+                editable={false}
+                placeholder="Email address"
+              />
+            </View>
+            <Text style={styles.helperText}>Email cannot be changed</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            <View style={styles.inputContainer}>
+              <Icon name="phone-outline" size={20} color={COLORS.gray} />
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="Phone number"
+                keyboardType="phone-pad"
+              />
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity 
+          style={styles.updateBtn} 
+          onPress={handleUpdate}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={COLORS.white} />
+          ) : (
+            <Text style={styles.updateBtnText}>Update Profile</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.m,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  backBtn: {
+    padding: SPACING.s,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.dark,
+  },
+  scrollContent: {
+    padding: SPACING.xl,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  avatarText: {
+    fontSize: 40,
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  cameraIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: COLORS.dark,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  changeText: {
+    marginTop: SPACING.m,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  form: {
+    marginTop: SPACING.m,
+  },
+  inputGroup: {
+    marginBottom: SPACING.l,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.dark,
+    marginBottom: SPACING.s,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: RADIUS.m,
+    paddingHorizontal: SPACING.m,
+    height: 50,
+  },
+  disabledInput: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#F3F4F6',
+  },
+  input: {
+    flex: 1,
+    marginLeft: SPACING.s,
+    fontSize: 16,
+    color: COLORS.dark,
+  },
+  helperText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 4,
+  },
+  updateBtn: {
+    backgroundColor: COLORS.primary,
+    height: 56,
+    borderRadius: RADIUS.m,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: SPACING.xl,
+  },
+  updateBtnText: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+});
+
+export default EditProfileScreen;
