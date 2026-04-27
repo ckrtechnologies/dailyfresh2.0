@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   Image,
   Alert,
   Share,
+  StatusBar,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -88,15 +88,23 @@ const AccountScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <StatusBar barStyle="light-content" backgroundColor={activeTheme.primary} />
+      <View style={styles.mainContent}>
         {/* Profile Header */}
         <View style={styles.header}>
           <View style={styles.profileInfo}>
-            <View style={[styles.avatarContainer, { backgroundColor: activeTheme.primary }]}>
-              <Text style={styles.avatarText}>
-                {userInitials}
-              </Text>
-            </View>
+            {user?.avatar_url ? (
+              <Image 
+                source={{ uri: user.avatar_url }} 
+                style={[styles.avatarContainer, { width: 64, height: 64, borderRadius: 32 }]} 
+              />
+            ) : (
+              <View style={[styles.avatarContainer, { backgroundColor: activeTheme.primary }]}>
+                <Text style={styles.avatarText}>
+                  {userInitials}
+                </Text>
+              </View>
+            )}
             <View style={styles.userDetails}>
               <Text style={styles.userName}>{userName}</Text>
               <Text style={styles.userPhone}>{userPhone}</Text>
@@ -111,35 +119,21 @@ const AccountScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* User Specific Stats Row */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Icon name="shopping-outline" size={24} color={activeTheme.primary} />
-            <Text style={[styles.statValue, { color: activeTheme.text }]}>12</Text>
-            <Text style={[styles.statLabel, { color: activeTheme.textLight }]}>Total Orders</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Icon name="piggy-bank-outline" size={24} color={activeTheme.primary} />
-            <Text style={[styles.statValue, { color: activeTheme.text }]}>₹450</Text>
-            <Text style={[styles.statLabel, { color: activeTheme.textLight }]}>Total Savings</Text>
-          </View>
-        </View>
-
         {/* Menu Items */}
         <View style={styles.menuSection}>
           {menuItems.map(renderMenuItem)}
         </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Icon name="power" size={22} color="#B91C1C" />
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={styles.footerContainer}>
+          {/* Logout Button */}
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Icon name="power" size={22} color="#B91C1C" />
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
 
-        <Text style={styles.version}>Daily Fresh v1.0.4 - Premium</Text>
-        <View style={{ height: 40 }} />
-      </ScrollView>
+          <Text style={styles.version}>Daily Fresh v1.0.4 - Premium</Text>
+        </View>
+      </View>
     </View>
   );
 };
@@ -148,6 +142,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  mainContent: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   header: {
     backgroundColor: COLORS.white,
@@ -201,39 +199,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.white,
-    paddingVertical: SPACING.l,
-    marginTop: 2,
-    marginBottom: SPACING.s,
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-  },
-  statBox: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.dark,
-    marginTop: 6,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#F3F4F6',
-  },
   menuSection: {
     backgroundColor: COLORS.white,
     marginTop: SPACING.m,
     paddingHorizontal: SPACING.l,
+    flex: 1,
   },
   menuItem: {
     flexDirection: 'row',
@@ -261,12 +231,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: SPACING.m,
   },
+  footerContainer: {
+    paddingBottom: SPACING.xl,
+  },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.white,
-    marginTop: SPACING.xl,
     paddingVertical: SPACING.l,
     borderTopWidth: 1,
     borderBottomWidth: 1,
@@ -282,7 +254,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: COLORS.gray,
     fontSize: 12,
-    marginTop: SPACING.xl,
+    marginTop: SPACING.m,
   },
 });
 

@@ -228,23 +228,22 @@ const OrderDetailScreen = ({ route, navigation }) => {
             <Icon name="map-marker-outline" size={20} color={COLORS.primary} />
             <View style={{ flex: 1 }}>
               {/* Label if available */}
-              {(order.delivery_address?.label || order.address_label) && (
+              {((Array.isArray(order.delivery_address) ? order.delivery_address[0]?.label : order.delivery_address?.label) || order.address_label || order.shipping_address?.label) && (
                 <Text style={styles.addressLabel}>
-                  {order.delivery_address?.label || order.address_label}
+                  {(Array.isArray(order.delivery_address) ? order.delivery_address[0]?.label : order.delivery_address?.label) || order.address_label || order.shipping_address?.label}
                 </Text>
               )}
               <Text style={styles.addressText}>
-                {order.delivery_address?.line1
-                  || order.delivery_address?.address_line1
-                  || order.address_line1
-                  || order.address
-                  || 'No address on record'}
-                {(order.delivery_address?.line2 || order.address_line2)
-                  ? `\n${order.delivery_address?.line2 || order.address_line2}`
-                  : ''}
-                {(order.delivery_address?.city || order.city)
-                  ? `\n${order.delivery_address?.city || order.city}${(order.delivery_address?.pincode || order.pincode) ? ' - ' + (order.delivery_address?.pincode || order.pincode) : ''}`
-                  : ''}
+                {(() => {
+                  const addr = Array.isArray(order.delivery_address) ? order.delivery_address[0] : order.delivery_address;
+                  if (addr) {
+                    return `${addr.line1 || addr.address_line1 || ''}${addr.line2 ? `\n${addr.line2}` : ''}${addr.city ? `\n${addr.city}${addr.pincode ? ' - ' + addr.pincode : ''}` : ''}`;
+                  }
+                  if (order.shipping_address) {
+                    return `${order.shipping_address.address || ''}\n${order.shipping_address.city || ''} - ${order.shipping_address.pincode || ''}`;
+                  }
+                  return order.address_line1 || order.address || 'No address on record';
+                })()}
               </Text>
             </View>
           </View>

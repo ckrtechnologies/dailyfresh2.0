@@ -137,6 +137,32 @@ export const placeOrder = async (req, res) => {
       razorpay_order_id = rzpOrder.id;
     }
 
+    // 2.5 Resolve Address ID
+    let final_address_id = address_id;
+    if (!final_address_id && req.body.shipping_address) {
+      const { shipping_address } = req.body;
+      const { data: newAddr, error: addrErr } = await supabaseAdmin
+        .from('addresses')
+        .insert([{
+          user_id: req.user.id,
+          label: shipping_address.label || 'Home',
+          full_name: shipping_address.full_name || req.user.full_name || 'Customer',
+          phone: shipping_address.phone || req.user.phone || '0000000000',
+          line1: shipping_address.address || 'Unknown Address',
+          city: shipping_address.city || 'Unknown City',
+          state: 'State',
+          pincode: shipping_address.pincode || '000000',
+          latitude: lat,
+          longitude: lng
+        }])
+        .select()
+        .single();
+        
+      if (!addrErr && newAddr) {
+        final_address_id = newAddr.id;
+      }
+    }
+
     // 3. Create Order in DB
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -144,7 +170,7 @@ export const placeOrder = async (req, res) => {
         order_number: orderNumber,
         user_id: req.user.id,
         store_id: resolvedStoreId,
-        address_id: address_id || null,
+        address_id: final_address_id || null,
         latitude: lat,
         longitude: lng,
         total_items_price: subtotal,

@@ -79,7 +79,7 @@ const MiniCart = () => {
   };
 
   return (
-    <View style={[styles.outerContainer, { bottom: insets.bottom + 58 }]}>
+    <View style={[styles.outerContainer, { bottom: 70 }]}>
       <Swipeable
         renderRightActions={renderRightActions}
         friction={2}

@@ -54,7 +54,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
   const { items: cartItems } = useSelector((state) => state.cart);
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
-  
+
   const isFavorite = favorites.some(item => item.id === product.id);
   const cartItem = cartItems.find(item => item.id === product.id);
   const quantity = cartItem ? cartItem.quantity : 0;
@@ -89,13 +89,13 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
   const isTall = size === 'tall';
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
-        styles.container, 
+        styles.container,
         horizontal && styles.horizontalContainer,
         isTall ? styles.tallCard : styles.smallCard
-      ]} 
-      onPress={onPress} 
+      ]}
+      onPress={onPress}
       activeOpacity={0.8}
     >
       <View style={[styles.imageContainer, isTall && styles.tallImageContainer]}>
@@ -110,17 +110,17 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
           </View>
         )}
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.heartButton}
           onPress={handleToggleFavorite}
         >
-          <Icon 
-            name={isFavorite ? "heart" : "heart-outline"} 
-            size={20} 
-            color={isFavorite ? activeTheme.primary : activeTheme.textLight} 
+          <Icon
+            name={isFavorite ? "heart" : "heart-outline"}
+            size={20}
+            color={isFavorite ? activeTheme.primary : activeTheme.textLight}
           />
         </TouchableOpacity>
-        
+
         {/* Only show floating ADD on TALL cards. SMALL cards will have it at bottom */}
         {isTall && (
           quantity > 0 ? (
@@ -136,7 +136,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.floatingAddButton, { borderColor: activeTheme.primary }]}
               onPress={handleAddToCart}
             >
@@ -193,7 +193,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.smallAddBtn, { backgroundColor: activeTheme.primary }]}
                 onPress={handleAddToCart}
               >

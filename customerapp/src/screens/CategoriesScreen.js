@@ -51,6 +51,7 @@ const CategoriesScreen = ({ navigation }) => {
         renderItem={renderCategoryItem}
         keyExtractor={(item) => item.id}
         numColumns={3}
+        columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -86,13 +87,17 @@ const styles = StyleSheet.create({
     color: COLORS.dark,
   },
   listContent: {
-    padding: SPACING.l,
+    paddingHorizontal: SPACING.l,
+    paddingTop: SPACING.m,
+    paddingBottom: 100,
+  },
+  row: {
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xl,
   },
   categoryCard: {
     width: ITEM_WIDTH,
     alignItems: 'center',
-    marginBottom: SPACING.xl,
-    marginHorizontal: SPACING.s,
   },
   imageContainer: {
     width: ITEM_WIDTH,

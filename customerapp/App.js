@@ -82,11 +82,31 @@ const AppContent = () => {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           try {
             const res = await authService.getUserProfile();
-            if (res.success) {
-              dispatch(setCredentials({ user: res.data, token: session.access_token }));
-            } else {
-              dispatch(setCredentials({ user: session.user, token: session.access_token }));
+            let backendUser = res.success ? res.data : session.user;
+
+            if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
+              const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
+              const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
+              
+              if (providerName || providerAvatar) {
+                try {
+                  const updatePayload = {};
+                  if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
+                  if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
+                  
+                  if (Object.keys(updatePayload).length > 0) {
+                    const updateRes = await authService.updateProfile(updatePayload);
+                    if (updateRes.success) {
+                      backendUser = { ...backendUser, ...updatePayload };
+                    }
+                  }
+                } catch (err) {
+                  console.error('Auto profile update failed', err);
+                }
+              }
             }
+
+            dispatch(setCredentials({ user: backendUser, token: session.access_token }));
           } catch (e) {
             console.error('Error fetching profile after auth change:', e);
             dispatch(setCredentials({ user: session.user, token: session.access_token }));
@@ -111,11 +131,31 @@ const AppContent = () => {
 
           // Fetch real profile from backend with the fresh token
           const res = await authService.getUserProfile();
-          if (res.success) {
-            dispatch(setCredentials({ user: res.data, token: session.access_token }));
-          } else {
-            dispatch(setCredentials({ user: session.user, token: session.access_token }));
+          let backendUser = res.success ? res.data : session.user;
+          
+          if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
+            const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
+            const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
+            
+            if (providerName || providerAvatar) {
+              try {
+                const updatePayload = {};
+                if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
+                if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
+                
+                if (Object.keys(updatePayload).length > 0) {
+                  const updateRes = await authService.updateProfile(updatePayload);
+                  if (updateRes.success) {
+                    backendUser = { ...backendUser, ...updatePayload };
+                  }
+                }
+              } catch (err) {
+                console.error('Auto profile update failed', err);
+              }
+            }
           }
+          
+          dispatch(setCredentials({ user: backendUser, token: session.access_token }));
         }
 
         // Only hydrate with null if we don't have anything in storage

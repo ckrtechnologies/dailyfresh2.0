@@ -40,18 +40,57 @@ const AddAddressScreen = ({ route, navigation }) => {
       return;
     }
 
+    if (formData.pincode.length !== 6) {
+      Alert.alert('Invalid Pincode', 'Please enter a valid 6-digit pincode');
+      return;
+    }
+
     try {
       setLoading(true);
+
+      // If lat/lng missing, try to resolve it from the pincode BEFORE checking serviceability
+      let lat = formData.latitude;
+      let lng = formData.longitude;
+      if (!lat || !lng) {
+        try {
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${formData.pincode}&country=India`, {
+            headers: { 'User-Agent': 'DailyFreshApp' }
+          });
+          const geoData = await geoRes.json();
+          if (geoData && geoData[0]) {
+            lat = parseFloat(geoData[0].lat);
+            lng = parseFloat(geoData[0].lon);
+          }
+        } catch (e) {
+          console.warn('Geocoding in AddAddress failed', e);
+        }
+      }
+
+      // Validate pincode serviceability using lat/lng if available
+      const { default: apiClient } = await import('../api/apiClient');
+      const storeRes = await apiClient.get('/customer/stores/nearest', { 
+        params: { pincode: formData.pincode, lat, lng } 
+      });
+      const store = storeRes.data?.data?.store;
+
+      if (!store) {
+        Alert.alert('Not Serviceable', 'Sorry, we do not currently deliver to this pincode.');
+        setLoading(false);
+        return;
+      }
+
+      const addressPayload = { ...formData, latitude: lat, longitude: lng };
+
       let res;
       if (editAddress) {
-        res = await addressService.updateAddress(editAddress.id, formData);
+        res = await addressService.updateAddress(editAddress.id, addressPayload);
       } else {
-        res = await addressService.addAddress(formData);
+        res = await addressService.addAddress(addressPayload);
       }
 
       if (res.success) {
         Alert.alert('Success', editAddress ? 'Address updated' : 'Address saved successfully');
-        navigation.navigate('SavedAddresses');
+        navigation.goBack();
       }
     } catch (error) {
       console.error('Save address error:', error);
@@ -94,7 +133,7 @@ const AddAddressScreen = ({ route, navigation }) => {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -150,17 +189,21 @@ const AddAddressScreen = ({ route, navigation }) => {
             <View style={[styles.inputGroup, { flex: 1, marginRight: SPACING.s }]}>
               <Text style={styles.label}>City</Text>
               <TextInput
-                style={[styles.input, styles.disabledInput]}
+                style={styles.input}
                 value={formData.city}
-                editable={false}
+                onChangeText={(val) => setFormData({ ...formData, city: val })}
+                placeholder="e.g. Kolkata"
               />
             </View>
             <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.s }]}>
               <Text style={styles.label}>Pincode *</Text>
               <TextInput
-                style={[styles.input, styles.disabledInput]}
+                style={styles.input}
                 value={formData.pincode}
-                editable={false}
+                onChangeText={(val) => setFormData({ ...formData, pincode: val })}
+                placeholder="e.g. 700001"
+                keyboardType="numeric"
+                maxLength={6}
               />
             </View>
           </View>

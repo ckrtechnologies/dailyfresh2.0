@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -38,14 +39,20 @@ const EditProfileScreen = ({ navigation }) => {
     setLoading(true);
     
     try {
+      const { default: authService } = await import('../api/authService');
+      const res = await authService.updateProfile({ full_name: name, phone });
+
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to update profile');
+      }
+
+      // Also update the local auth session so it shows immediately
       const { data, error } = await supabase.auth.updateUser({
         data: { full_name: name, phone: phone }
       });
 
-      if (error) throw error;
-
       // Update Redux state with the new user object
-      dispatch(setCredentials({ user: data.user, token }));
+      dispatch(setCredentials({ user: data?.user || user, token }));
 
       Alert.alert('Success', 'Profile updated successfully', [
         { text: 'OK', onPress: () => navigation.goBack() }
@@ -69,13 +76,20 @@ const EditProfileScreen = ({ navigation }) => {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.avatarSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{name.charAt(0) || 'U'}</Text>
+            <View style={[styles.avatar, { overflow: 'hidden' }]}>
+              {user?.avatar_url ? (
+                <Image 
+                  source={{ uri: user.avatar_url }} 
+                  style={{ width: '100%', height: '100%' }} 
+                />
+              ) : (
+                <Text style={styles.avatarText}>{name.charAt(0) || 'U'}</Text>
+              )}
               <TouchableOpacity style={styles.cameraIcon}>
                 <Icon name="camera" size={18} color={COLORS.white} />
               </TouchableOpacity>

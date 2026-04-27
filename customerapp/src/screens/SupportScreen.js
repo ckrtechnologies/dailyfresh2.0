@@ -83,9 +83,9 @@ const SupportScreen = ({ navigation }) => {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.chatBtn}>
-          <Icon name="chat-processing-outline" size={24} color={COLORS.white} />
-          <Text style={styles.chatBtnText}>Live Chat with Agent</Text>
+        <TouchableOpacity style={styles.chatBtn} onPress={() => Linking.openURL('whatsapp://send?phone=919876543210')}>
+          <Icon name="whatsapp" size={24} color={COLORS.white} />
+          <Text style={styles.chatBtnText}>Chat on WhatsApp</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

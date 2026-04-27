@@ -163,32 +163,38 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
 
   const handleCheckPincode = async () => {
     if (pincode.length !== 6) {
-      Alert.alert('Invalid Pincode', 'Please enter a valid 6-digit pincode.');
+      Alert.alert('Invalid Pincode', 'Please enter a valid 6-digit pincode');
       return;
     }
 
     setLoading(true);
     try {
       console.log('🔍 Checking Pincode:', pincode);
-      const store = await fetchNearestStore({ pincode });
+      
+      // Geocode the pincode FIRST so the backend can use lat/lng for radius checks
+      let pincodeCoords = null;
+      try {
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${pincode}&country=India`, {
+          headers: { 'User-Agent': 'DailyFreshApp' }
+        });
+        const geoData = await geoRes.json();
+        if (geoData && geoData[0]) {
+          pincodeCoords = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
+          console.log('📍 Resolved Pincode Coords:', pincodeCoords);
+        }
+      } catch (e) {
+        console.warn('Pincode geocoding failed:', e);
+      }
+
+      // Pass lat/lng so backend can calculate distance against delivery_radius_km
+      const store = await fetchNearestStore({ 
+        pincode, 
+        lat: pincodeCoords?.lat, 
+        lng: pincodeCoords?.lng 
+      });
       console.log('🏢 Found Store Mapping:', store ? `${store.name} (ID: ${store.id})` : 'None');
 
       if (store) {
-        // Try to get coordinates for the pincode to calculate distance on Home
-        let pincodeCoords = null;
-        try {
-          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${pincode}&country=India`, {
-            headers: { 'User-Agent': 'DailyFreshApp' }
-          });
-          const geoData = await geoRes.json();
-          if (geoData && geoData[0]) {
-            pincodeCoords = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
-            console.log('📍 Resolved Pincode Coords:', pincodeCoords);
-          }
-        } catch (e) {
-          console.warn('Pincode geocoding failed:', e);
-        }
-
         const locationData = {
           pincode,
           address: store.address || `Store: ${store.name}`,

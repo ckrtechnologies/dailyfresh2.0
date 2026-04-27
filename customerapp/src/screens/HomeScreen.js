@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Animated,
   Modal,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -28,6 +29,7 @@ import {
 } from '../store/slices/productSlice';
 import { setSelectedSlot } from '../store/slices/configSlice';
 import productService from '../api/productService';
+import apiClient from '../api/apiClient';
 import ProductCard from '../components/ProductCard';
 import LogoLoader from '../components/LogoLoader';
 
@@ -77,10 +79,30 @@ const HomeScreen = ({ navigation }) => {
   });
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const { address, storeId, coords, storeName } = useSelector((state) => state.location);
+  const { isAuthenticated } = useSelector((state) => state.auth);
 
   const [storeDetail, setStoreDetail] = useState(null);
   const [isStoreModalVisible, setIsStoreModalVisible] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [distance, setDistance] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUnreadCount = async () => {
+        if (!isAuthenticated) return;
+        try {
+          const response = await apiClient.get('/customer/notifications');
+          if (response.data?.success) {
+            const unread = response.data.data.notifications.filter(n => !n.is_read).length;
+            setUnreadCount(unread);
+          }
+        } catch (error) {
+          console.log('Failed to fetch unread notifications count:', error);
+        }
+      };
+      fetchUnreadCount();
+    }, [isAuthenticated])
+  );
 
   const totalHeaderHeight = 120;
   // Header Animations
@@ -356,6 +378,20 @@ const HomeScreen = ({ navigation }) => {
               )}
             </View>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.notificationBtn}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Icon name="bell-outline" size={24} color={COLORS.white} />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadgeContainer}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
@@ -367,7 +403,7 @@ const HomeScreen = ({ navigation }) => {
           style={styles.searchBar}
           onPress={() => navigation.navigate('Search')}
         >
-          <View style={[styles.searchIconWrapper, { backgroundColor: activeTheme.primary + '10' }]}>
+          <View style={styles.searchIconWrapper}>
             <Icon name="magnify" size={22} color={activeTheme.primary} />
           </View>
           <Text style={styles.searchText}>Search "Chicken" or "Fish"</Text>
@@ -728,6 +764,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 60,
+  },
+  notificationBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: SPACING.m,
+  },
+  notificationBadgeContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#FF4B6E',
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+  },
+  notificationBadgeText: {
+    color: COLORS.white,
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   searchBarContainer: {
     height: 60,

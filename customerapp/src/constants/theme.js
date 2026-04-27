@@ -9,7 +9,7 @@ export const THEMES = {
     accent: '#A16207',      // Dark Gold
     border: '#FEF08A',
     badge: '#FEF9C3',
-    statusBar: 'dark-content',
+    statusBar: 'light-content',
   },
   afternoon: {
     primary: '#166534',     // Forest Green

@@ -35,6 +35,7 @@ router.get('/coupons', couponController.listCoupons);
 
 // Profile & Address
 router.get('/profile', customerController.getProfile);
+router.put('/profile', customerController.updateProfile);
 router.get('/addresses', customerController.getAddresses);
 router.post('/addresses', customerController.addAddress);
 router.patch('/addresses/:id', customerController.updateAddress);

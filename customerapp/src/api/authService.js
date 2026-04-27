@@ -152,10 +152,24 @@ const authService = {
     try {
       const { default: apiClient } = await import('./apiClient');
       const response = await apiClient.get('/customer/profile');
-      return { success: true, data: response.data.data };
+      return { success: true, data: response.data.data.user };
     } catch (error) {
       console.error('Error fetching user profile:', error);
       return { success: false, error: error.response?.data?.message || 'Failed to fetch profile' };
+    }
+  },
+
+  /**
+   * Update user profile in backend
+   */
+  updateProfile: async (profileData) => {
+    try {
+      const { default: apiClient } = await import('./apiClient');
+      const response = await apiClient.put('/customer/profile', profileData);
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to update profile' };
     }
   },
 

@@ -70,10 +70,36 @@ const SavedAddressesScreen = ({ route, navigation }) => {
     navigation.getState().routes.some(r => ['Cart', 'Checkout', 'LocationPicker'].includes(r.name))
   );
 
-  const handleSelect = (item) => {
-    dispatch(setSelectedAddress(item));
-    // User requested to be taken to Home screen upon selection
-    navigation.navigate('AppTabs', { screen: 'Home' });
+  const handleSelect = async (item) => {
+    try {
+      setLoading(true);
+      const { default: apiClient } = await import('../api/apiClient');
+      const storeRes = await apiClient.get('/customer/stores/nearest', { 
+        params: { pincode: item.pincode, lat: item.latitude, lng: item.longitude } 
+      });
+      const store = storeRes.data?.data?.store;
+
+      if (!store) {
+        Alert.alert('Not Serviceable', 'Sorry, we do not currently deliver to this address.');
+        return;
+      }
+
+      // Attach store info to the selected address item before dispatching
+      const addressWithStore = {
+        ...item,
+        store_id: store.id,
+        store_name: store.name
+      };
+
+      dispatch(setSelectedAddress(addressWithStore));
+      // User requested to be taken to Home screen upon selection
+      navigation.navigate('AppTabs', { screen: 'Home' });
+    } catch (error) {
+      console.error('Error resolving store for address:', error);
+      Alert.alert('Error', 'Failed to select address. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderAddressItem = ({ item }) => (
@@ -96,7 +122,17 @@ const SavedAddressesScreen = ({ route, navigation }) => {
             </View>
           )}
         </View>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => {
+          Alert.alert(
+            'Address Options',
+            'What would you like to do?',
+            [
+              { text: 'Edit', onPress: () => navigation.navigate('AddAddress', { editAddress: item }) },
+              { text: 'Delete', onPress: () => handleDelete(item.id), style: 'destructive' },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+        }}>
           <Icon name="dots-vertical" size={20} color={COLORS.gray} />
         </TouchableOpacity>
       </View>
@@ -168,7 +204,7 @@ const SavedAddressesScreen = ({ route, navigation }) => {
           ListFooterComponent={
             <TouchableOpacity 
               style={styles.addBtn}
-              onPress={() => navigation.navigate('LocationPicker', { from: 'SavedAddresses' })}
+              onPress={() => navigation.navigate('AddAddress')}
             >
               <Icon name="plus" size={24} color={COLORS.primary} />
               <Text style={styles.addBtnText}>Add New Address</Text>

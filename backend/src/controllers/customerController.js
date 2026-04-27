@@ -9,6 +9,51 @@ export const getProfile = async (req, res) => {
 };
 
 /**
+ * Update authenticated user profile
+ */
+export const updateProfile = async (req, res) => {
+  const { full_name, avatar_url, phone } = req.body;
+  if (!full_name && !avatar_url && !phone) {
+    return errorResponse(res, 'No profile data to update', 400);
+  }
+  
+  try {
+    const metaUpdate = {};
+    const dbUpdate = {};
+    if (full_name) {
+      metaUpdate.full_name = full_name;
+      dbUpdate.full_name = full_name;
+    }
+    if (avatar_url) {
+      metaUpdate.avatar_url = avatar_url;
+      dbUpdate.avatar_url = avatar_url;
+    }
+    if (phone !== undefined) {
+      metaUpdate.phone = phone;
+      dbUpdate.phone = phone;
+    }
+
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
+      req.user.id,
+      { user_metadata: metaUpdate }
+    );
+    if (error) throw error;
+    
+    // Also update the profiles table if it exists (assuming triggered or explicit)
+    if (Object.keys(dbUpdate).length > 0) {
+      await supabaseAdmin
+        .from('profiles')
+        .update(dbUpdate)
+        .eq('id', req.user.id);
+    }
+      
+    return successResponse(res, { user: data.user }, 'Profile updated successfully');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
  * List all addresses for the customer
  */
 export const getAddresses = async (req, res) => {
