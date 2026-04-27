@@ -17,8 +17,15 @@ import productService from '../api/productService';
 const ProductListScreen = ({ route, navigation }) => {
   const { title, type, initialProducts, searchQuery, categoryId, subCategoryId } = route.params;
   const { storeId } = useSelector((state) => state.location);
+  const { selectedSlot } = useSelector((state) => state.config);
   const [products, setProducts] = useState(initialProducts || []);
   const [loading, setLoading] = useState(!initialProducts);
+
+  const filteredProducts = products.filter(p => 
+    selectedSlot === 'all' || 
+    p.delivery_options?.includes(selectedSlot) || 
+    (!p.delivery_options && selectedSlot === 'express')
+  );
 
   useEffect(() => {
     if (!initialProducts || searchQuery || categoryId || subCategoryId) {
@@ -75,7 +82,7 @@ const ProductListScreen = ({ route, navigation }) => {
     <SafeAreaView style={styles.container}>
       {renderHeader()}
       <FlatList
-        data={products}
+        data={filteredProducts}
         keyExtractor={(item) => item.id}
         numColumns={2}
         contentContainerStyle={styles.listContent}

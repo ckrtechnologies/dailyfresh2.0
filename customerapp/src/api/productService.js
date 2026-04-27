@@ -94,6 +94,22 @@ const productService = {
     }
   },
 
+  getStoreDetail: async (storeId) => {
+    try {
+      const { data, error } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('id', storeId)
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error fetching store detail:', error);
+      return { success: false, error };
+    }
+  },
+
   /**
    * Get application settings (GST, Delivery Fees, etc.)
    */

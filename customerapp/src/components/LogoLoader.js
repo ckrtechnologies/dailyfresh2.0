@@ -38,14 +38,21 @@ const LogoLoader = ({ size = 80 }) => {
 
   return (
     <View style={styles.container}>
+      <Animated.View style={[
+        styles.ring,
+        {
+          width: size + 15,
+          height: size + 15,
+          borderRadius: (size + 15) / 2,
+          borderColor: COLORS.primary,
+          transform: [{ rotate: rotation }]
+        }
+      ]} />
       <Animated.View style={{ 
-        transform: [
-          { scale: scaleAnim },
-          // { rotate: rotation } // Optional: add slow rotation
-        ] 
+        transform: [{ scale: scaleAnim }] 
       }}>
         <Image
-          source={require('../assets/logo.jpg')}
+          source={require('../assets/logo.png')}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           resizeMode="contain"
         />
@@ -59,6 +66,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  ring: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    opacity: 0.6,
+  }
 });
 
 export default LogoLoader;

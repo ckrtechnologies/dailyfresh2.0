@@ -3,13 +3,13 @@ import { Provider as StoreProvider, useDispatch } from 'react-redux';
 import { store } from './src/store';
 import RootNavigator from './src/navigation/RootNavigator';
 import { StatusBar, ActivityIndicator, View, Platform } from 'react-native';
-import { COLORS } from './src/constants/theme';
+import { COLORS, THEMES } from './src/constants/theme';
 import storage from './src/utils/storage';
 import { hydrateAuth } from './src/store/slices/authSlice';
 import { hydrateLocation } from './src/store/slices/locationSlice';
 
 import SplashScreen from './src/screens/SplashScreen';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import authService from './src/api/authService';
 import cartService from './src/api/cartService';
@@ -25,8 +25,11 @@ const AppContent = () => {
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
 
-  const { user, token } = useSelector((state) => state.auth);
   const { items } = useSelector((state) => state.cart);
+  const { selectedSlot } = useSelector((state) => state.config);
+  const { user, token } = useSelector((state) => state.auth);
+
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
   useEffect(() => {
     // Handle deep links (for Google SSO)
@@ -122,8 +125,8 @@ const AppContent = () => {
         const savedStoreName = await storage.getItem('store_name');
 
         if (savedPincode) {
-          dispatch(hydrateLocation({ 
-            pincode: savedPincode, 
+          dispatch(hydrateLocation({
+            pincode: savedPincode,
             address: savedAddress,
             storeId: savedStoreId,
             storeName: savedStoreName
@@ -137,7 +140,7 @@ const AppContent = () => {
       } finally {
         const endTime = Date.now();
         const elapsedTime = endTime - startTime;
-        const minDuration = 2000; // 2 seconds
+        const minDuration = 4000; // 4 seconds
 
         if (elapsedTime < minDuration) {
           setTimeout(() => setLoading(false), minDuration - elapsedTime);
@@ -209,16 +212,21 @@ const AppContent = () => {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <View style={{ flex: 1, backgroundColor: activeTheme.primary }}>
       <StatusBar
-        backgroundColor={COLORS.primary}
-        barStyle="light-content"
-        translucent={true}
+        backgroundColor={activeTheme.primary}
+        barStyle={activeTheme.statusBar}
+        translucent={false}
       />
-      <View style={{ height: insets.top, backgroundColor: COLORS.primary }} />
-      <View style={{ flex: 1, paddingBottom: insets.bottom }}>
-        <RootNavigator />
-      </View>
+
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: activeTheme.primary }}
+        edges={['top', 'bottom']}
+      >
+        <View style={{ flex: 1, backgroundColor: activeTheme.background }}>
+          <RootNavigator />
+        </View>
+      </SafeAreaView>
     </View>
   );
 };

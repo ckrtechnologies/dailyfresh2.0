@@ -45,10 +45,12 @@ const MiniCart = () => {
   // Hide MiniCart on specific screens where it's redundant or covers UI
   const hiddenScreens = [
     'Cart', 'Checkout', 'Login', 'Signup', 'SplashScreen', 
-    'OrderDetail', 'ProductDetail', 'LocationPicker', 'Search'
+    'OrderDetail', 'ProductDetail', 'LocationPicker', 'Search',
+    'SavedAddresses', 'AddAddress', 'Account', 'EditProfile',
+    'Orders', 'Referrals', 'Notifications', 'Support', 'About'
   ];
   
-  if (totalCount === 0 || hiddenScreens.includes(currentRouteName)) {
+  if (totalCount === 0 || !currentRouteName || hiddenScreens.includes(currentRouteName)) {
     return null;
   }
 

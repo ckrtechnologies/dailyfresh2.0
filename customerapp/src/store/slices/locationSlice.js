@@ -35,7 +35,14 @@ const locationSlice = createSlice({
       if (action.payload) {
         state.pincode = action.payload.pincode;
         state.address = action.payload.line1 + (action.payload.line2 ? `, ${action.payload.line2}` : '');
+        state.coords = action.payload.latitude ? { lat: action.payload.latitude, lng: action.payload.longitude } : null;
+        state.storeId = action.payload.store_id || null;
+        state.isServiceable = true;
+        
         storage.setItem('selected_address', JSON.stringify(action.payload));
+        if (action.payload.pincode) storage.setItem('pincode', action.payload.pincode);
+        if (state.address) storage.setItem('address', state.address);
+        if (action.payload.store_id) storage.setItem('store_id', action.payload.store_id);
       } else {
         storage.removeItem('selected_address');
       }

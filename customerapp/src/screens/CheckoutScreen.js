@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -135,6 +137,7 @@ const CheckoutScreen = ({ navigation }) => {
         discount_amount: discount,
         coupon_id: couponData?.coupon_id,
         total_amount: grandTotal,
+        address_id: selectedAddress.id, // Add this so backend links the address
         shipping_address: {
           label: selectedAddress.label,
           full_name: selectedAddress.full_name,

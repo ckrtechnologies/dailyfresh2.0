@@ -64,19 +64,23 @@ const SavedAddressesScreen = ({ route, navigation }) => {
     );
   };
 
+  // Determine if we're in address-selection mode
+  const isSelectMode = !!(
+    route.params?.selectMode ||
+    navigation.getState().routes.some(r => ['Cart', 'Checkout', 'LocationPicker'].includes(r.name))
+  );
+
   const handleSelect = (item) => {
-    // If we came from CartScreen or explicitly in selectMode
-    if (route.params?.selectMode || navigation.getState().routes.find(r => r.name === 'Cart')) {
-      dispatch(setSelectedAddress(item));
-      navigation.goBack();
-    }
+    dispatch(setSelectedAddress(item));
+    // User requested to be taken to Home screen upon selection
+    navigation.navigate('AppTabs', { screen: 'Home' });
   };
 
   const renderAddressItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.addressCard} 
-      onPress={() => handleSelect(item)}
-      disabled={!route.params?.selectMode && !navigation.getState().routes.find(r => r.name === 'Cart')}
+      onPress={isSelectMode ? () => handleSelect(item) : undefined}
+      activeOpacity={isSelectMode ? 0.7 : 1}
     >
       <View style={styles.addressHeader}>
         <View style={styles.labelContainer}>
@@ -100,19 +104,33 @@ const SavedAddressesScreen = ({ route, navigation }) => {
       <Text style={styles.addressSub}>{item.city}, {item.state} - {item.pincode}</Text>
       
       <View style={styles.actions}>
-        <TouchableOpacity 
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate('AddAddress', { editAddress: item })}
-        >
-          <Text style={styles.actionText}>Edit</Text>
-        </TouchableOpacity>
-        <View style={styles.vDivider} />
-        <TouchableOpacity 
-          style={styles.actionBtn}
-          onPress={() => handleDelete(item.id)}
-        >
-          <Text style={[styles.actionText, { color: '#EF4444' }]}>Remove</Text>
-        </TouchableOpacity>
+        {isSelectMode ? (
+          // In selection mode: show a clear primary CTA
+          <TouchableOpacity
+            style={styles.selectBtn}
+            onPress={() => handleSelect(item)}
+          >
+            <Icon name="check-circle-outline" size={16} color={COLORS.white} />
+            <Text style={styles.selectBtnText}>Deliver Here</Text>
+          </TouchableOpacity>
+        ) : (
+          // In browse mode: show Edit / Remove
+          <>
+            <TouchableOpacity 
+              style={styles.actionBtn}
+              onPress={() => navigation.navigate('AddAddress', { editAddress: item })}
+            >
+              <Text style={styles.actionText}>Edit</Text>
+            </TouchableOpacity>
+            <View style={styles.vDivider} />
+            <TouchableOpacity 
+              style={styles.actionBtn}
+              onPress={() => handleDelete(item.id)}
+            >
+              <Text style={[styles.actionText, { color: '#EF4444' }]}>Remove</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -124,7 +142,9 @@ const SavedAddressesScreen = ({ route, navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Icon name="arrow-left" size={24} color={COLORS.dark} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Saved Addresses</Text>
+        <Text style={styles.headerTitle}>
+          {isSelectMode ? 'Choose Delivery Address' : 'Saved Addresses'}
+        </Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -274,6 +294,21 @@ const styles = StyleSheet.create({
   vDivider: {
     width: 1,
     backgroundColor: '#F3F4F6',
+  },
+  selectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.s,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  selectBtnText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 14,
   },
   addBtn: {
     flexDirection: 'row',

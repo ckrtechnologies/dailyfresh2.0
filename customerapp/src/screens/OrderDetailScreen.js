@@ -226,11 +226,27 @@ const OrderDetailScreen = ({ route, navigation }) => {
           <Text style={styles.sectionTitle}>Delivery Address</Text>
           <View style={styles.addressRow}>
             <Icon name="map-marker-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.addressText}>
-              {order.address_id ? 'Saved Address' : 'Current Location Pin'}
-              {"\n"}
-              {order.address || 'Address details fetching...'}
-            </Text>
+            <View style={{ flex: 1 }}>
+              {/* Label if available */}
+              {(order.delivery_address?.label || order.address_label) && (
+                <Text style={styles.addressLabel}>
+                  {order.delivery_address?.label || order.address_label}
+                </Text>
+              )}
+              <Text style={styles.addressText}>
+                {order.delivery_address?.line1
+                  || order.delivery_address?.address_line1
+                  || order.address_line1
+                  || order.address
+                  || 'No address on record'}
+                {(order.delivery_address?.line2 || order.address_line2)
+                  ? `\n${order.delivery_address?.line2 || order.address_line2}`
+                  : ''}
+                {(order.delivery_address?.city || order.city)
+                  ? `\n${order.delivery_address?.city || order.city}${(order.delivery_address?.pincode || order.pincode) ? ' - ' + (order.delivery_address?.pincode || order.pincode) : ''}`
+                  : ''}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -432,11 +448,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
+  addressLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
   addressText: {
     flex: 1,
     fontSize: 13,
     color: COLORS.dark,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   billRow: {
     flexDirection: 'row',

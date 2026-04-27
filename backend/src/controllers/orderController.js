@@ -439,6 +439,7 @@ export const getMyOrders = async (req, res) => {
       .select(`
         *,
         store:stores(name),
+        delivery_address:addresses(*),
         items:order_items(
           *,
           product:products!fk_order_items_product(name, image_url)
@@ -468,6 +469,7 @@ export const getOrderById = async (req, res) => {
       .select(`
         *,
         store:stores(*),
+        delivery_address:addresses(*),
         items:order_items(
           *,
           product:products!fk_order_items_product(*)

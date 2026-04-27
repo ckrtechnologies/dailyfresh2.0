@@ -9,17 +9,17 @@ import { fetchActiveOrder } from '../store/slices/orderSlice';
 export const navigationRef = createNavigationContainerRef();
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS } from '../constants/theme';
+import { COLORS, THEMES } from '../constants/theme';
 import MiniCart from '../components/MiniCart';
 
 
 // Basic Icon Mapping
 const ICON_MAP = {
-  Home: { active: 'home', inactive: 'home-outline' },
-  Favorites: { active: 'heart', inactive: 'heart-outline' },
-  Categories: { active: 'view-dashboard', inactive: 'view-dashboard-outline' },
-  Cart: { active: 'shopping', inactive: 'shopping-outline' },
-  Account: { active: 'account', inactive: 'account-outline' }
+  Home: { active: 'home-variant', inactive: 'home-variant-outline' },
+  Favorites: { active: 'heart-multiple', inactive: 'heart-multiple-outline' },
+  Categories: { active: 'view-grid', inactive: 'view-grid-outline' },
+  Cart: { active: 'cart', inactive: 'cart-outline' },
+  Account: { active: 'account-circle', inactive: 'account-circle-outline' }
 };
 
 
@@ -49,6 +49,7 @@ import SearchScreen from '../screens/SearchScreen';
 import AddAddressScreen from '../screens/AddAddressScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import MiniOrderStatus from '../components/MiniOrderStatus';
+import FloatingDeliverySlot from '../components/FloatingDeliverySlot';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -65,12 +66,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AppTabs = () => {
   const { items: cartItems } = useSelector((state) => state.cart);
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarActiveTintColor: '#10b981', // Consistent Emerald Green
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: activeTheme.primary, 
+        tabBarInactiveTintColor: '#94A3B8',
         headerShown: false,
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
@@ -108,7 +111,7 @@ const AppTabs = () => {
         options={{ 
           tabBarBadge: cartItems.length > 0 ? cartItems.length : null,
           tabBarBadgeStyle: {
-            backgroundColor: COLORS.secondary || '#F97316',
+            backgroundColor: activeTheme.primary,
             color: COLORS.white,
             fontSize: 10,
           }
@@ -202,6 +205,10 @@ const RootNavigator = () => {
       <NavigationContainer 
         linking={linking} 
         ref={navigationRef}
+        onReady={() => {
+          const route = navigationRef.getCurrentRoute();
+          setCurrentRoute(route?.name);
+        }}
         onStateChange={() => {
           const route = navigationRef.getCurrentRoute();
           setCurrentRoute(route?.name);
@@ -217,10 +224,11 @@ const RootNavigator = () => {
           )}
         </Stack.Navigator>
       </NavigationContainer>
-      {isAuthenticated && !['LocationPicker', 'OrderSuccess'].includes(currentRoute) && (
+      {isAuthenticated && currentRoute && !['LocationPicker', 'OrderSuccess', 'Cart', 'Checkout', 'Account', 'EditProfile', 'SavedAddresses', 'AddAddress', 'Orders', 'OrderDetail', 'Referrals', 'Notifications', 'Support', 'About'].includes(currentRoute) && (
         <>
           <MiniCart />
           <MiniOrderStatus />
+          <FloatingDeliverySlot />
         </>
       )}
     </GestureHandlerRootView>

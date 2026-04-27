@@ -6,6 +6,8 @@ import cartReducer from './slices/cartSlice';
 import favoritesReducer from './slices/favoritesSlice';
 import orderReducer from './slices/orderSlice';
 
+import configReducer from './slices/configSlice';
+
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -14,6 +16,7 @@ export const store = configureStore({
     cart: cartReducer,
     favorites: favoritesReducer,
     order: orderReducer,
+    config: configReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

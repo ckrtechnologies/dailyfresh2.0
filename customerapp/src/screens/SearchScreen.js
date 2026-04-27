@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -95,47 +97,52 @@ const SearchScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
-      {renderHeader()}
-      
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <LogoLoader size={100} />
-        </View>
-      ) : searchQuery.length === 0 ? (
-        <View style={styles.centerContainer}>
-          <Icon name="magnify" size={80} color="#F3F4F6" />
-          <Text style={styles.emptyTitle}>What are you looking for?</Text>
-          <Text style={styles.emptySubtitle}>Search for your favorite fresh meat and fish.</Text>
-        </View>
-      ) : products.length === 0 ? (
-        <View style={styles.centerContainer}>
-          <Icon name="emoticon-sad-outline" size={80} color="#F3F4F6" />
-          <Text style={styles.emptyTitle}>No Results Found</Text>
-          <Text style={styles.emptySubtitle}>Try searching for something else like "Mutton" or "Prawns".</Text>
-        </View>
-      ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {products.map((section) => (
-            <View key={section.title} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitleLine} />
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <View style={styles.sectionTitleLine} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        {renderHeader()}
+        
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <LogoLoader size={100} />
+          </View>
+        ) : searchQuery.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <Icon name="magnify" size={80} color="#F3F4F6" />
+            <Text style={styles.emptyTitle}>What are you looking for?</Text>
+            <Text style={styles.emptySubtitle}>Search for your favorite fresh meat and fish.</Text>
+          </View>
+        ) : products.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <Icon name="emoticon-sad-outline" size={80} color="#F3F4F6" />
+            <Text style={styles.emptyTitle}>No Results Found</Text>
+            <Text style={styles.emptySubtitle}>Try searching for something else like "Mutton" or "Prawns".</Text>
+          </View>
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            {products.map((section) => (
+              <View key={section.title} style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleLine} />
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <View style={styles.sectionTitleLine} />
+                </View>
+                <View style={styles.productGrid}>
+                  {section.data.map((item) => (
+                    <View key={item.id} style={styles.productWrapper}>
+                      <ProductCard
+                        product={item}
+                        onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+                      />
+                    </View>
+                  ))}
+                </View>
               </View>
-              <View style={styles.productGrid}>
-                {section.data.map((item) => (
-                  <View key={item.id} style={styles.productWrapper}>
-                    <ProductCard
-                      product={item}
-                      onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-                    />
-                  </View>
-                ))}
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      )}
+            ))}
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

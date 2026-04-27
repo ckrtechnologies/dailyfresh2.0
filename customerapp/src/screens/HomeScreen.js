@@ -12,10 +12,12 @@ import {
   Dimensions,
   RefreshControl,
   Animated,
+  Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, THEMES, SPACING, RADIUS } from '../constants/theme';
 import {
   setCategories,
   setBanners,
@@ -24,6 +26,7 @@ import {
   setCategorySections,
   setLoading
 } from '../store/slices/productSlice';
+import { setSelectedSlot } from '../store/slices/configSlice';
 import productService from '../api/productService';
 import ProductCard from '../components/ProductCard';
 import LogoLoader from '../components/LogoLoader';
@@ -33,12 +36,51 @@ const BANNER_ITEM_GAP = 12;
 const BANNER_WIDTH = width * 0.88; // 88% wide — 12% peeks through on right
 const BANNER_SNAP = BANNER_WIDTH + BANNER_ITEM_GAP;
 
+// Haversine formula to calculate distance in KM
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d.toFixed(1);
+};
+
 const HomeScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const flowAnim = useRef(new Animated.Value(0)).current; // For header flow effect
   const bannerRef = useRef(null);
+
+  useEffect(() => {
+    // Continuous flow animation for the header glow
+    Animated.loop(
+      Animated.timing(flowAnim, {
+        toValue: 1,
+        duration: 4000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  const flowTranslateX = flowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-width, width],
+  });
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const { address, storeId } = useSelector((state) => state.location);
+  const { address, storeId, coords, storeName } = useSelector((state) => state.location);
+
+  const [storeDetail, setStoreDetail] = useState(null);
+  const [isStoreModalVisible, setIsStoreModalVisible] = useState(false);
+  const [distance, setDistance] = useState(null);
 
   const totalHeaderHeight = 120;
   // Header Animations
@@ -48,7 +90,10 @@ const HomeScreen = ({ navigation }) => {
     extrapolate: 'clamp',
   });
 
-  const headerColor = COLORS.primary;
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
+
+  const headerColor = activeTheme.primary;
 
   const searchBarTranslateY = scrollY.interpolate({
     inputRange: [0, 80],
@@ -70,6 +115,16 @@ const HomeScreen = ({ navigation }) => {
     loading
   } = useSelector((state) => state.products);
   const { totalCount, totalAmount } = useSelector((state) => state.cart);
+
+  // Filter helper
+  const filterBySlot = (products) => {
+    if (!products) return [];
+    if (selectedSlot === 'all') return products;
+    return products.filter(p =>
+      p.delivery_options?.includes(selectedSlot) ||
+      (!p.delivery_options && selectedSlot === 'express') // Fallback if no options
+    );
+  };
   const [refreshing, setRefreshing] = useState(false);
   const [flashSaleTimer, setFlashSaleTimer] = useState('');
 
@@ -107,8 +162,8 @@ const HomeScreen = ({ navigation }) => {
       dispatch(setLoading(true));
 
       const [
-        categoriesRes, 
-        bannersRes, 
+        categoriesRes,
+        bannersRes,
         featuredRes,
         flashRes,
         trendingRes,
@@ -140,7 +195,7 @@ const HomeScreen = ({ navigation }) => {
         newLaunch: newLaunchRes.success ? newLaunchRes.data : [],
         todaysDeals: dealsRes.success ? dealsRes.data : [],
       }));
-      
+
       // 2. Fetch products for each category to create sections
       if (categoriesRes.success && categoriesRes.data.length > 0) {
         const categoryData = await Promise.all(
@@ -166,6 +221,45 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     loadData();
   }, [dispatch, storeId]);
+
+  useEffect(() => {
+    const fetchStore = async () => {
+      if (storeId) {
+        const res = await productService.getStoreDetail(storeId);
+        if (res.success) {
+          setStoreDetail(res.data);
+          if (res.data.latitude && res.data.longitude) {
+            if (coords) {
+              // User GPS coords available — precise distance
+              const dist = getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude);
+              setDistance(dist);
+            } else if (res.data.pincode) {
+              // No GPS — try to geocode the user's pincode for an approximate distance
+              try {
+                const savedPincode = await import('../utils/storage').then(m => m.default.getItem('pincode'));
+                if (savedPincode) {
+                  const geoRes = await fetch(
+                    `https://nominatim.openstreetmap.org/search?format=json&postalcode=${savedPincode}&country=India`,
+                    { headers: { 'User-Agent': 'DailyFreshApp' } }
+                  );
+                  const geoData = await geoRes.json();
+                  if (geoData && geoData[0]) {
+                    const approxLat = parseFloat(geoData[0].lat);
+                    const approxLng = parseFloat(geoData[0].lon);
+                    const dist = getDistance(approxLat, approxLng, res.data.latitude, res.data.longitude);
+                    setDistance(dist);
+                  }
+                }
+              } catch (e) {
+                console.warn('Distance geocoding fallback failed:', e);
+              }
+            }
+          }
+        }
+      }
+    };
+    fetchStore();
+  }, [storeId, coords]);
 
   // Live flash sale countdown — resets at midnight
   useEffect(() => {
@@ -208,6 +302,12 @@ const HomeScreen = ({ navigation }) => {
         height: headerHeight,
       }
     ]}>
+      {/* Dynamic Flow Glow Effect */}
+      <Animated.View style={[
+        styles.headerFlowGlow,
+        { transform: [{ translateX: flowTranslateX }] }
+      ]} />
+
       <Animated.View style={[
         styles.headerTop,
         {
@@ -223,26 +323,39 @@ const HomeScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('LocationPicker')}
         >
           <View style={styles.locationIconWrapper}>
-            <Icon name="map-marker-radius" size={22} color={COLORS.primary} />
+            <Icon name="map-marker" size={18} color={activeTheme.primary} />
           </View>
           <View style={styles.locationTextContainer}>
             <View style={styles.locationTitleRow}>
-              <Text style={styles.locationTitle}>Home</Text>
-              <Icon name="chevron-down" size={16} color={COLORS.white} style={{ marginLeft: 2 }} />
+              <Text style={styles.locationTitle}>{address?.split(',')[0] || 'Pick Location'}</Text>
+              <Icon name="chevron-down" size={14} color={COLORS.white} />
             </View>
             <Text style={styles.addressText} numberOfLines={1}>
-              {address || 'Select Address'}
+              {address || 'Select your delivery address'}
             </Text>
           </View>
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
-          <View style={styles.storeBadge}>
-            <Icon name="store-outline" size={14} color={COLORS.white} />
-            <Text style={styles.storeNameText} numberOfLines={1}>
-              {location.storeName || 'Daily Fresh'}
-            </Text>
-          </View>
+          <TouchableOpacity
+            style={styles.storeBadge}
+            onPress={() => setIsStoreModalVisible(true)}
+          >
+            <View style={styles.storeIconCircle}>
+              <Icon name="store" size={14} color={activeTheme.primary} />
+            </View>
+            <View>
+              <Text style={styles.storeNameText} numberOfLines={1}>
+                {storeName || 'Daily Fresh'}
+              </Text>
+              {distance && (
+                <View style={styles.distanceBadge}>
+                  <Icon name="map-marker-distance" size={10} color={COLORS.white} />
+                  <Text style={styles.distanceText}>{distance} km away</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
@@ -250,12 +363,12 @@ const HomeScreen = ({ navigation }) => {
         styles.searchBarContainer,
         { transform: [{ translateY: searchBarTranslateY }] }
       ]}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.searchBar}
           onPress={() => navigation.navigate('Search')}
         >
-          <View style={styles.searchIconWrapper}>
-            <Icon name="magnify" size={22} color={COLORS.primary} />
+          <View style={[styles.searchIconWrapper, { backgroundColor: activeTheme.primary + '10' }]}>
+            <Icon name="magnify" size={22} color={activeTheme.primary} />
           </View>
           <Text style={styles.searchText}>Search "Chicken" or "Fish"</Text>
         </TouchableOpacity>
@@ -265,7 +378,7 @@ const HomeScreen = ({ navigation }) => {
 
   const handleBannerPress = (banner) => {
     if (!banner.link_url) return;
-    
+
     const url = banner.link_url;
     // Supported formats: /product/:id, /category/:id, /search/:query
     if (url.startsWith('/product/')) {
@@ -273,14 +386,14 @@ const HomeScreen = ({ navigation }) => {
       navigation.navigate('ProductDetail', { productId: id });
     } else if (url.startsWith('/category/')) {
       const id = url.split('/category/')[1];
-      navigation.navigate('ProductList', { 
+      navigation.navigate('ProductList', {
         title: banner.title || 'Category',
         type: 'category',
-        categoryId: id 
+        categoryId: id
       });
     } else if (url.startsWith('/search/')) {
       const query = url.split('/search/')[1];
-      navigation.navigate('ProductList', { 
+      navigation.navigate('ProductList', {
         title: `Search: ${query}`,
         type: 'search',
         searchQuery: query
@@ -311,8 +424,8 @@ const HomeScreen = ({ navigation }) => {
             setCurrentBannerIndex(index);
           }}
           renderItem={({ item }) => (
-            <TouchableOpacity 
-              activeOpacity={0.9} 
+            <TouchableOpacity
+              activeOpacity={0.9}
               style={styles.bannerWrapper}
               onPress={() => handleBannerPress(item)}
             >
@@ -341,14 +454,32 @@ const HomeScreen = ({ navigation }) => {
     );
   };
 
+  const getSectionIcon = (title) => {
+    const t = title.toLowerCase();
+    if (t.includes('flash')) return 'lightning-bolt';
+    if (t.includes('deal')) return 'tag-heart';
+    if (t.includes('frozen')) return 'snowflake';
+    if (t.includes('exclusive')) return 'crown';
+    if (t.includes('trending')) return 'trending-up';
+    if (t.includes('new')) return 'star-face';
+    if (t.includes('fresh')) return 'fish';
+    if (t.includes('category')) return 'format-list-bulleted-type';
+    return 'star';
+  };
+
   const renderProductSection = (title, data, timer = null, type = 'all', extraParams = {}) => {
     if (!data || data.length === 0) return null;
+
+    const iconName = getSectionIcon(title);
 
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <View style={styles.flashSaleTitleRow}>
-            <Text style={styles.sectionTitle}>{title}</Text>
+          <View style={styles.sectionTitleRow}>
+            <View style={[styles.sectionIconCircle, { backgroundColor: activeTheme.primary + '10', shadowColor: activeTheme.primary }]}>
+              <Icon name={iconName} size={18} color={activeTheme.primary} />
+            </View>
+            <Text style={[styles.sectionTitle, { color: activeTheme.text }]}>{title}</Text>
             {timer && (
               <View style={styles.timerBadge}>
                 <Icon name="timer-outline" size={14} color={COLORS.white} />
@@ -356,15 +487,15 @@ const HomeScreen = ({ navigation }) => {
               </View>
             )}
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('ProductList', { 
-            title, 
+          <TouchableOpacity onPress={() => navigation.navigate('ProductList', {
+            title,
             type,
             initialProducts: data,
             ...extraParams
           })}>
             <View style={styles.viewAllContainer}>
-              <Text style={styles.viewAll}>View All</Text>
-              <Icon name="arrow-right-circle-outline" size={20} color={COLORS.primary} />
+              <Text style={[styles.viewAll, { color: activeTheme.primary }]}>View All</Text>
+              <Icon name="chevron-right" size={18} color={activeTheme.primary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -390,9 +521,17 @@ const HomeScreen = ({ navigation }) => {
   const renderCategories = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Shop by Category</Text>
+        <View style={styles.sectionTitleRow}>
+          <View style={[styles.sectionIconCircle, { backgroundColor: activeTheme.primary + '10', shadowColor: activeTheme.primary }]}>
+            <Icon name="format-list-bulleted-type" size={18} color={activeTheme.primary} />
+          </View>
+          <Text style={[styles.sectionTitle, { color: activeTheme.text }]}>Shop by Category</Text>
+        </View>
         <TouchableOpacity onPress={() => navigation.navigate('Categories')}>
-          <Text style={styles.viewAll}>View All</Text>
+          <View style={styles.viewAllContainer}>
+            <Text style={[styles.viewAll, { color: activeTheme.primary }]}>View All</Text>
+            <Icon name="chevron-right" size={18} color={activeTheme.primary} />
+          </View>
         </TouchableOpacity>
       </View>
       <FlatList
@@ -405,15 +544,15 @@ const HomeScreen = ({ navigation }) => {
           return (
             <TouchableOpacity
               style={styles.categoryConsistantCard}
-              onPress={() => navigation.navigate('ProductList', { 
-                title: item.name, 
-                type: 'category', 
-                categoryId: item.id 
+              onPress={() => navigation.navigate('ProductList', {
+                title: item.name,
+                type: 'category',
+                categoryId: item.id
               })}
             >
               <View style={styles.categoryImageWrapper}>
-                <Image 
-                  source={{ uri: item.image_url }} 
+                <Image
+                  source={{ uri: item.image_url }}
                   style={styles.categoryCardImage}
                   resizeMode="cover"
                 />
@@ -430,6 +569,68 @@ const HomeScreen = ({ navigation }) => {
 
 
 
+  const renderStoreModal = () => (
+    <Modal
+      visible={isStoreModalVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setIsStoreModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Store Details</Text>
+            <TouchableOpacity onPress={() => setIsStoreModalVisible(false)}>
+              <Icon name="close" size={24} color={activeTheme.text} />
+            </TouchableOpacity>
+          </View>
+
+          {storeDetail ? (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.storeDetailCard}>
+                <Image
+                  source={{ uri: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?q=80&w=1000&auto=format&fit=crop' }}
+                  style={styles.storeDetailImage}
+                />
+                <View style={styles.storeDetailInfo}>
+                  <Text style={styles.storeDetailName}>{storeDetail.name}</Text>
+                  <View style={styles.storeDistanceBadge}>
+                    <Icon name="map-marker" size={14} color={activeTheme.primary} />
+                    <Text style={[styles.storeDistanceBadgeText, { color: activeTheme.primary }]}>{distance} km away from you</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Icon name="phone" size={20} color={activeTheme.primary} />
+                    <Text style={[styles.detailValue, { color: activeTheme.textLight }]}>{storeDetail.phone || 'N/A'}</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Icon name="email" size={20} color={activeTheme.primary} />
+                    <Text style={[styles.detailValue, { color: activeTheme.textLight }]}>{storeDetail.email || 'N/A'}</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Icon name="map-marker-outline" size={20} color={activeTheme.primary} />
+                    <Text style={[styles.detailValue, { color: activeTheme.textLight }]}>{storeDetail.address || 'Kolkata, West Bengal'}</Text>
+                  </View>
+
+                  <View style={styles.aboutSection}>
+                    <Text style={styles.aboutTitle}>About Store</Text>
+                    <Text style={styles.aboutText}>
+                      Serving fresh meat and seafood daily. Quality guaranteed from our local farms to your doorstep.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          ) : (
+            <ActivityIndicator size="large" color={COLORS.primary} style={{ margin: 50 }} />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
@@ -438,8 +639,9 @@ const HomeScreen = ({ navigation }) => {
     );
   }
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: activeTheme.background }]}>
       {renderHeader()}
+      {renderStoreModal()}
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
@@ -448,39 +650,39 @@ const HomeScreen = ({ navigation }) => {
         )}
         scrollEventThrottle={16}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
         }
       >
         <View style={{ height: 120 }} />
         {renderBanners()}
-        {renderProductSection('Flash Sale', flashSale, flashSaleTimer, 'flash_sale')}
-        {renderProductSection('Todays Deals', todaysDeals, null, 'deals')}
-        {renderProductSection('Frozen Products', frozenProducts, null, 'frozen')}
-        {renderProductSection('Exclusive Offers', exclusiveOffers, null, 'exclusive')}
-        {renderProductSection('Trending Products', trendingProducts, null, 'trending')}
-        {renderProductSection('New Launch', newLaunch, null, 'new_launch')}
-        {renderProductSection('Fresh Catch', featuredProducts, null, 'featured')}
         {renderCategories()}
-        
+        {renderProductSection('Flash Sale', filterBySlot(flashSale), flashSaleTimer, 'flash_sale')}
+        {renderProductSection('Todays Deals', filterBySlot(todaysDeals), null, 'deals')}
+        {renderProductSection('Frozen Products', filterBySlot(frozenProducts), null, 'frozen')}
+        {renderProductSection('Exclusive Offers', filterBySlot(exclusiveOffers), null, 'exclusive')}
+        {renderProductSection('Trending Products', filterBySlot(trendingProducts), null, 'trending')}
+        {renderProductSection('New Launch', filterBySlot(newLaunch), null, 'new_launch')}
+        {renderProductSection('Fresh Catch', filterBySlot(featuredProducts), null, 'featured')}
+
         {/* Dynamic Category Sections */}
         {categorySections.map((section) => (
           <React.Fragment key={section.id}>
-            {renderProductSection(section.title, section.products, null, 'category', { categoryId: section.id })}
+            {renderProductSection(section.title, filterBySlot(section.products), null, 'category', { categoryId: section.id })}
           </React.Fragment>
         ))}
-        
+
         <View style={styles.trustStrip}>
           <View style={styles.trustItem}>
-            <Icon name="check-decagram" size={28} color={COLORS.primary} />
-            <Text style={styles.trustText}>100% Fresh</Text>
+            <Icon name="check-decagram" size={28} color={activeTheme.primary} />
+            <Text style={[styles.trustText, { color: activeTheme.text }]}>100% Fresh</Text>
           </View>
           <View style={styles.trustItem}>
-            <Icon name="shield-check" size={28} color={COLORS.primary} />
-            <Text style={styles.trustText}>Chemical-Free</Text>
+            <Icon name="shield-check" size={28} color={activeTheme.primary} />
+            <Text style={[styles.trustText, { color: activeTheme.text }]}>Chemical-Free</Text>
           </View>
           <View style={styles.trustItem}>
-            <Icon name="truck-delivery" size={28} color={COLORS.primary} />
-            <Text style={styles.trustText}>Fast Delivery</Text>
+            <Icon name="truck-delivery" size={28} color={activeTheme.primary} />
+            <Text style={[styles.trustText, { color: activeTheme.text }]}>Fast Delivery</Text>
           </View>
         </View>
 
@@ -508,12 +710,28 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     paddingHorizontal: SPACING.l,
     backgroundColor: COLORS.primary,
+    overflow: 'hidden', // Contain the glow
+  },
+  headerFlowGlow: {
+    position: 'absolute',
+    top: -50,
+    left: 0,
+    width: 200,
+    height: 250,
+    backgroundColor: COLORS.secondary,
+    opacity: 0.15,
+    borderRadius: 100,
+    transform: [{ rotate: '45deg' }],
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 60,
+  },
+  searchBarContainer: {
+    height: 60,
+    justifyContent: 'center',
   },
   locationContainer: {
     flex: 1,
@@ -575,7 +793,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.s,
     height: 48,
     borderRadius: RADIUS.button,
-    marginTop: SPACING.s,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -633,13 +850,27 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.m,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: COLORS.dark,
+    letterSpacing: 0.2,
   },
-  flashSaleTitleRow: {
+  sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+  },
+  sectionIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   timerBadge: {
     flexDirection: 'row',
@@ -659,43 +890,50 @@ const styles = StyleSheet.create({
   viewAllContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
   viewAll: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.dark,
-    marginRight: 6,
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '700',
   },
   categoryList: {
     paddingLeft: SPACING.l,
   },
   categoryConsistantCard: {
-    width: 120,
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.card,
+    width: 110,
+    alignItems: 'center',
     marginRight: SPACING.m,
-    overflow: 'hidden',
   },
   categoryImageWrapper: {
-    width: '100%',
-    height: 90,
+    width: 100,
+    height: 100,
     backgroundColor: '#F3F4F6',
-    borderRadius: RADIUS.card,
+    borderRadius: 50,
     overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 3,
+    borderColor: COLORS.white,
   },
   categoryCardImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
   },
   categoryInfo: {
     paddingVertical: 8,
     alignItems: 'center',
   },
   categoryCardName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: COLORS.dark,
     textAlign: 'center',
+    marginTop: 4,
   },
   horizontalList: {
     paddingLeft: SPACING.l,
@@ -756,18 +994,145 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    maxWidth: 120,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.card,
+    maxWidth: 160,
+  },
+  storeIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
   },
   storeNameText: {
     color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  distanceText: {
+    color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 10,
+    fontWeight: '600',
+  },
+  slotPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  slotPickerText: {
+    color: COLORS.primary,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: SPACING.l,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.l,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    marginBottom: SPACING.m,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.dark,
+  },
+  storeDetailCard: {
+    width: '100%',
+  },
+  storeDetailImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 16,
+    marginBottom: SPACING.m,
+  },
+  storeDetailInfo: {
+    paddingBottom: SPACING.xl,
+  },
+  storeDetailName: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.dark,
+    marginBottom: 4,
+  },
+  storeDistanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: SPACING.l,
+  },
+  storeDistanceBadgeText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: COLORS.primary,
     marginLeft: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.m,
+    gap: 12,
+  },
+  detailValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.gray,
+  },
+  aboutSection: {
+    marginTop: SPACING.m,
+    padding: SPACING.m,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  aboutTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.dark,
+    marginBottom: 4,
+  },
+  distanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 1,
+  },
+  distanceText: {
+    fontSize: 11,
+    color: COLORS.white,
+    fontWeight: 'bold',
+    includeFontPadding: false,
+  },
+  aboutText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    lineHeight: 20,
   },
 });
 
 export default HomeScreen;
-

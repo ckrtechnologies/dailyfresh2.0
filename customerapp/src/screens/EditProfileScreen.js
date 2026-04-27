@@ -9,6 +9,8 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -66,72 +68,77 @@ const EditProfileScreen = ({ navigation }) => {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{name.charAt(0) || 'U'}</Text>
-            <TouchableOpacity style={styles.cameraIcon}>
-              <Icon name="camera" size={18} color={COLORS.white} />
-            </TouchableOpacity>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.avatarSection}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{name.charAt(0) || 'U'}</Text>
+              <TouchableOpacity style={styles.cameraIcon}>
+                <Icon name="camera" size={18} color={COLORS.white} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.changeText}>Change Profile Picture</Text>
           </View>
-          <Text style={styles.changeText}>Change Profile Picture</Text>
-        </View>
 
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name</Text>
-            <View style={styles.inputContainer}>
-              <Icon name="account-outline" size={20} color={COLORS.gray} />
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="Enter your full name"
-              />
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Full Name</Text>
+              <View style={styles.inputContainer}>
+                <Icon name="account-outline" size={20} color={COLORS.gray} />
+                <TextInput
+                  style={styles.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Enter your full name"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email Address</Text>
+              <View style={[styles.inputContainer, styles.disabledInput]}>
+                <Icon name="email-outline" size={20} color={COLORS.gray} />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  editable={false}
+                  placeholder="Email address"
+                />
+              </View>
+              <Text style={styles.helperText}>Email cannot be changed</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Phone Number</Text>
+              <View style={styles.inputContainer}>
+                <Icon name="phone-outline" size={20} color={COLORS.gray} />
+                <TextInput
+                  style={styles.input}
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="Phone number"
+                  keyboardType="phone-pad"
+                />
+              </View>
             </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email Address</Text>
-            <View style={[styles.inputContainer, styles.disabledInput]}>
-              <Icon name="email-outline" size={20} color={COLORS.gray} />
-              <TextInput
-                style={styles.input}
-                value={email}
-                editable={false}
-                placeholder="Email address"
-              />
-            </View>
-            <Text style={styles.helperText}>Email cannot be changed</Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <View style={styles.inputContainer}>
-              <Icon name="phone-outline" size={20} color={COLORS.gray} />
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="Phone number"
-                keyboardType="phone-pad"
-              />
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity 
-          style={styles.updateBtn} 
-          onPress={handleUpdate}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={COLORS.white} />
-          ) : (
-            <Text style={styles.updateBtnText}>Update Profile</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity 
+            style={styles.updateBtn} 
+            onPress={handleUpdate}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={COLORS.white} />
+            ) : (
+              <Text style={styles.updateBtnText}>Update Profile</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

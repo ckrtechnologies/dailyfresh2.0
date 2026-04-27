@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, THEMES, SPACING, RADIUS } from '../constants/theme';
 import { logout } from '../store/slices/authSlice';
 import { clearCart } from '../store/slices/cartSlice';
 import { clearLocation } from '../store/slices/locationSlice';
@@ -19,6 +19,8 @@ import { clearLocation } from '../store/slices/locationSlice';
 const AccountScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
   
   // Safely extract user details from Supabase user_metadata
   const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.full_name || user?.name || 'Daily Fresh User';
@@ -54,13 +56,13 @@ const AccountScreen = ({ navigation }) => {
   };
 
   const menuItems = [
-    { icon: 'package-variant-closed', label: 'My Orders', screen: 'Orders' },
-    { icon: 'account-edit-outline', label: 'Edit Profile', screen: 'EditProfile' },
-    { icon: 'map-marker-radius-outline', label: 'Saved Addresses', screen: 'SavedAddresses' },
-    { icon: 'share-variant-outline', label: 'Share App', action: handleShareApp },
-    { icon: 'bell-ring-outline', label: 'Notifications', screen: 'Notifications' },
-    { icon: 'chat-question-outline', label: 'Help & Support', screen: 'Support' },
-    { icon: 'information-outline', label: 'About Daily Fresh', screen: 'About' },
+    { icon: 'package-variant', label: 'My Orders', screen: 'Orders' },
+    { icon: 'account-cog', label: 'Account Settings', screen: 'EditProfile' },
+    { icon: 'map-marker-path', label: 'Saved Addresses', screen: 'SavedAddresses' },
+    { icon: 'share-all', label: 'Invite Friends', action: handleShareApp },
+    { icon: 'bell-badge', label: 'Notifications', screen: 'Notifications' },
+    { icon: 'headphones', label: 'Help & Support', screen: 'Support' },
+    { icon: 'information-variant', label: 'About Us', screen: 'About' },
   ];
 
   const renderMenuItem = (item) => {
@@ -75,7 +77,7 @@ const AccountScreen = ({ navigation }) => {
       >
         <View style={styles.menuItemLeft}>
           <View style={styles.iconContainer}>
-            <Icon name={item.icon} size={22} color={COLORS.primary} />
+            <Icon name={item.icon} size={22} color={activeTheme.primary} />
           </View>
           <Text style={styles.menuLabel}>{item.label}</Text>
         </View>
@@ -90,7 +92,7 @@ const AccountScreen = ({ navigation }) => {
         {/* Profile Header */}
         <View style={styles.header}>
           <View style={styles.profileInfo}>
-            <View style={styles.avatarContainer}>
+            <View style={[styles.avatarContainer, { backgroundColor: activeTheme.primary }]}>
               <Text style={styles.avatarText}>
                 {userInitials}
               </Text>
@@ -102,25 +104,25 @@ const AccountScreen = ({ navigation }) => {
             </View>
           </View>
           <TouchableOpacity 
-            style={styles.editBtn}
+            style={[styles.editBtn, { backgroundColor: activeTheme.primary + '15' }]}
             onPress={() => navigation.navigate('EditProfile')}
           >
-            <Icon name="pencil-box-outline" size={22} color={COLORS.primary} />
+            <Icon name="pencil" size={20} color={activeTheme.primary} />
           </TouchableOpacity>
         </View>
 
         {/* User Specific Stats Row */}
         <View style={styles.statsContainer}>
           <View style={styles.statBox}>
-            <Icon name="shopping-outline" size={24} color={COLORS.primary} />
-            <Text style={styles.statValue}>12</Text>
-            <Text style={styles.statLabel}>Total Orders</Text>
+            <Icon name="shopping-outline" size={24} color={activeTheme.primary} />
+            <Text style={[styles.statValue, { color: activeTheme.text }]}>12</Text>
+            <Text style={[styles.statLabel, { color: activeTheme.textLight }]}>Total Orders</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Icon name="piggy-bank-outline" size={24} color={COLORS.primary} />
-            <Text style={styles.statValue}>₹450</Text>
-            <Text style={styles.statLabel}>Total Savings</Text>
+            <Icon name="piggy-bank-outline" size={24} color={activeTheme.primary} />
+            <Text style={[styles.statValue, { color: activeTheme.text }]}>₹450</Text>
+            <Text style={[styles.statLabel, { color: activeTheme.textLight }]}>Total Savings</Text>
           </View>
         </View>
 

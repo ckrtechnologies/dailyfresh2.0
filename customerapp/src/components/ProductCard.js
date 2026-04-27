@@ -6,20 +6,54 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, THEMES, SPACING, RADIUS } from '../constants/theme';
 import { addItem, removeItem } from '../store/slices/cartSlice';
 import { toggleFavorite } from '../store/slices/favoritesSlice';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - SPACING.xl * 2 - SPACING.m) / 2;
 
+const ScooterAnimation = () => {
+  const moveAnim = React.useRef(new Animated.Value(-20)).current;
+
+  React.useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(moveAnim, {
+          toValue: 20,
+          duration: 2000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        Animated.timing(moveAnim, {
+          toValue: -20,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [moveAnim]);
+
+  return (
+    <Animated.View style={{ transform: [{ translateX: moveAnim }] }}>
+      <Icon name="moped" size={16} color={COLORS.secondary} />
+    </Animated.View>
+  );
+};
+
 const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) => {
   const dispatch = useDispatch();
   const { items: favorites } = useSelector((state) => state.favorites);
   const { items: cartItems } = useSelector((state) => state.cart);
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
   
   const isFavorite = favorites.some(item => item.id === product.id);
   const cartItem = cartItems.find(item => item.id === product.id);
@@ -83,7 +117,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
           <Icon 
             name={isFavorite ? "heart" : "heart-outline"} 
             size={20} 
-            color={isFavorite ? COLORS.primary : COLORS.gray} 
+            color={isFavorite ? activeTheme.primary : activeTheme.textLight} 
           />
         </TouchableOpacity>
         
@@ -92,36 +126,54 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
           quantity > 0 ? (
             <View style={styles.quantitySelector}>
               <TouchableOpacity style={styles.qtyBtn} onPress={handleRemove}>
-                <Icon name="minus" size={18} color={COLORS.primary} />
+                <Icon name="minus" size={18} color={activeTheme.primary} />
 
               </TouchableOpacity>
-              <Text style={styles.quantityText}>{quantity}</Text>
+              <Text style={[styles.quantityText, { color: activeTheme.primary }]}>{quantity}</Text>
               <TouchableOpacity style={styles.qtyBtn} onPress={handleAddToCart}>
-                <Icon name="plus" size={18} color={COLORS.primary} />
+                <Icon name="plus" size={18} color={activeTheme.primary} />
 
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity 
-              style={styles.floatingAddButton}
+              style={[styles.floatingAddButton, { borderColor: activeTheme.primary }]}
               onPress={handleAddToCart}
             >
-              <Text style={styles.addButtonText}>ADD</Text>
+              <Text style={[styles.addButtonText, { color: activeTheme.primary }]}>ADD</Text>
             </TouchableOpacity>
           )
         )}
       </View>
 
       <View style={styles.info}>
-        <Text style={styles.weight}>{weight_unit || '500g pack'}</Text>
-        <Text style={styles.name} numberOfLines={isTall ? 2 : 1}>
+        <Text style={[styles.weight, { color: activeTheme.textLight }]}>{weight_unit || '500g pack'}</Text>
+        <Text style={[styles.name, { color: activeTheme.text }]} numberOfLines={isTall ? 2 : 1}>
           {name}
         </Text>
 
+        <View style={styles.deliveryInfoRow}>
+          <View style={styles.scooterBox}>
+            <ScooterAnimation />
+          </View>
+          <View style={styles.slotsContainer}>
+            {(product.delivery_options || ['express']).map((slot, idx) => {
+              const slotTheme = THEMES[slot] || THEMES.all;
+              return (
+                <View key={idx} style={[styles.slotBadge, { backgroundColor: slotTheme.primary + '15' }]}>
+                  <Text style={[styles.slotText, { color: slotTheme.primary }]}>
+                    {slot === 'all' ? 'Standard' : slot.charAt(0).toUpperCase() + slot.slice(1)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
         <View style={styles.priceRow}>
-          <Text style={styles.price}>₹{sellingPrice}</Text>
+          <Text style={[styles.price, { color: activeTheme.text }]}>₹{sellingPrice}</Text>
           {hasDiscount && (
-            <Text style={styles.comparePrice}>₹{price}</Text>
+            <Text style={[styles.comparePrice, { color: activeTheme.textLight }]}>₹{price}</Text>
           )}
         </View>
 
@@ -129,7 +181,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
         {!isTall && (
           <View style={styles.smallCardFooter}>
             {quantity > 0 ? (
-              <View style={styles.inlineQtySelector}>
+              <View style={[styles.inlineQtySelector, { backgroundColor: activeTheme.primary }]}>
                 <TouchableOpacity style={styles.inlineQtyBtn} onPress={handleRemove}>
                   <Icon name="minus" size={18} color={COLORS.white} />
 
@@ -142,7 +194,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
               </View>
             ) : (
               <TouchableOpacity 
-                style={styles.smallAddBtn}
+                style={[styles.smallAddBtn, { backgroundColor: activeTheme.primary }]}
                 onPress={handleAddToCart}
               >
                 <Text style={styles.smallAddBtnText}>ADD TO CART</Text>
@@ -270,6 +322,37 @@ const styles = StyleSheet.create({
     height: 36,
     lineHeight: 18,
   },
+  deliveryInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
+  scooterBox: {
+    width: 40,
+    height: 20,
+    justifyContent: 'center',
+  },
+  slotsContainer: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  slotBadge: {
+    backgroundColor: COLORS.primary + '20',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 2,
+  },
+  slotText: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,7 +396,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.primary,
     borderRadius: 6,
     paddingHorizontal: 4,
     paddingVertical: 2,

@@ -17,12 +17,12 @@ const authService = {
       });
 
       if (error) throw error;
-      
+
       if (data?.url) {
         // This is what actually opens the browser on the phone
         await Linking.openURL(data.url);
       }
-      
+
       return { success: true, data };
     } catch (error) {
       console.error('Google Login Error:', error);
@@ -105,14 +105,14 @@ const authService = {
       }
 
       if (result.error) throw result.error;
-      
-      return { 
-        success: true, 
-        data: { 
-          user: result.data.user, 
+
+      return {
+        success: true,
+        data: {
+          user: result.data.user,
           access_token: result.data.session?.access_token,
           refresh_token: result.data.session?.refresh_token
-        } 
+        }
       };
     } catch (error) {
       console.error('Supabase verifyOTP error:', error);

@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import Geolocation from 'react-native-geolocation-service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -42,6 +42,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   const [loading, setLoading] = useState(false);
   const [isComingSoon, setIsComingSoon] = useState(false);
   const dispatch = useDispatch();
+  const { isAuthenticated } = useSelector((state) => state.auth);
 
   const params = route.params || {};
 
@@ -80,25 +81,25 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
       async (position) => {
         const { latitude, longitude } = position.coords;
         console.log('GPS Success:', latitude, longitude);
-        
+
         try {
           const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
           console.log('Fetching from:', url);
-          
+
           const response = await fetch(url, {
             headers: { 'User-Agent': 'DailyFreshApp' },
           });
-          
+
           const data = await response.json();
           console.log('Full Geocode Data:', JSON.stringify(data, null, 2));
-          
+
           const addr = data.address || {};
-          
+
           // Build a specific address: "Sector 4, Noida"
           const neighborhood = addr.suburb || addr.neighbourhood || addr.city_district || addr.residential || '';
           const city = addr.city || addr.town || addr.village || addr.state_district || '';
           const state = addr.state || '';
-          
+
           let displayAddress = '';
           if (neighborhood && city) {
             displayAddress = `${neighborhood}, ${city}`;
@@ -157,7 +158,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
 
   useEffect(() => {
     console.log('LocationPickerScreen mounted');
-    handleCurrentLocation();
+    // REMOVED: handleCurrentLocation(); - No more auto-picking location
   }, []);
 
   const handleCheckPincode = async () => {
@@ -171,11 +172,27 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
       console.log('🔍 Checking Pincode:', pincode);
       const store = await fetchNearestStore({ pincode });
       console.log('🏢 Found Store Mapping:', store ? `${store.name} (ID: ${store.id})` : 'None');
+
       if (store) {
+        // Try to get coordinates for the pincode to calculate distance on Home
+        let pincodeCoords = null;
+        try {
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${pincode}&country=India`, {
+            headers: { 'User-Agent': 'DailyFreshApp' }
+          });
+          const geoData = await geoRes.json();
+          if (geoData && geoData[0]) {
+            pincodeCoords = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
+            console.log('📍 Resolved Pincode Coords:', pincodeCoords);
+          }
+        } catch (e) {
+          console.warn('Pincode geocoding failed:', e);
+        }
+
         const locationData = {
           pincode,
           address: store.address || `Store: ${store.name}`,
-          coords: null,
+          coords: pincodeCoords,
           isServiceable: true,
           storeId: store.id,
           storeName: store.name,
@@ -205,8 +222,8 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
         style={styles.content}
       >
         <View style={styles.header}>
-          <Image 
-            source={require('../assets/logo.jpg')} 
+          <Image
+            source={require('../assets/logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -218,8 +235,8 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Instant Delivery</Text>
-          <TouchableOpacity 
-            style={styles.locationButton} 
+          <TouchableOpacity
+            style={styles.locationButton}
             onPress={handleCurrentLocation}
             disabled={loading}
           >
@@ -232,6 +249,18 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
               </View>
             )}
           </TouchableOpacity>
+
+          {isAuthenticated && (
+            <TouchableOpacity
+              style={[styles.locationButton, { marginTop: SPACING.m, borderStyle: 'solid', backgroundColor: COLORS.white }]}
+              onPress={() => navigation.navigate('SavedAddresses', { from: 'LocationPicker' })}
+            >
+              <View style={styles.buttonContent}>
+                <Icon name="notebook-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.locationButtonText}>Use Saved Address</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.divider}>
             <View style={styles.line} />
@@ -250,8 +279,8 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
               onChangeText={setPincode}
               placeholderTextColor={COLORS.gray}
             />
-            <TouchableOpacity 
-              style={[styles.checkButton, loading && styles.disabledButton]} 
+            <TouchableOpacity
+              style={[styles.checkButton, loading && styles.disabledButton]}
               onPress={handleCheckPincode}
               disabled={loading}
             >
@@ -275,7 +304,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
               <Text style={styles.comingSoonText}>
                 We are not currently delivering to your area, but we're expanding fast.
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.retryButton}
                 onPress={() => setIsComingSoon(false)}
               >
