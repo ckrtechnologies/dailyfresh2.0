@@ -143,16 +143,18 @@ export const placeOrder = async (req, res) => {
       .insert([{
         order_number: orderNumber,
         user_id: req.user.id,
-        store_id: resolvedStoreId,   // may differ from preferred if stock was insufficient
+        store_id: resolvedStoreId,
         address_id: address_id || null,
-        latitude: lat,               // Capturing customer GPS on order
-        longitude: lng,              // Capturing customer GPS on order
-        total_items_price: subtotal, // schema column name
+        latitude: lat,
+        longitude: lng,
+        total_items_price: subtotal,
         delivery_charge: delivery_charge || 0,
         gst_amount: gst_amount || 0,
         total_amount,
+        discount_amount: req.body.discount_amount || 0,
+        coupon_id: req.body.coupon_id || null,
         payment_method: payment_method === 'razorpay' ? 'upi' : payment_method,
-        payment_status: 'unpaid',    // CHECK constraint: 'unpaid'|'paid'|'failed'|'refunded'
+        payment_status: 'unpaid',
         status: 'pending',
         delivery_slot,
         razorpay_order_id,
@@ -163,6 +165,16 @@ export const placeOrder = async (req, res) => {
     if (orderError) {
       console.error('[Order Error] DB Insertion failed:', JSON.stringify(orderError, null, 2));
       return errorResponse(res, `Order creation failed: ${orderError.message}`, 400, orderError);
+    }
+
+    // Increment coupon used_count if applied
+    if (req.body.coupon_id) {
+      await supabaseAdmin.rpc('increment_coupon_usage', { coupon_id_param: req.body.coupon_id });
+      // If RPC is missing, fallback to standard update
+      await supabaseAdmin
+        .from('coupons')
+        .update({ used_count: supabaseAdmin.rpc('increment_val', { x: 1 }) }) // Note: Supabase increment pattern
+        .eq('id', req.body.coupon_id);
     }
 
     // 4. Create Order Items
@@ -191,7 +203,7 @@ export const placeOrder = async (req, res) => {
 
     console.log(`[Order Success] Order #${order.order_number} created with ${orderItems.length} items`);
     
-    // 5. If COD, decrement stock immediately
+    // 5. If COD, decrement stock immediately and send notification
     if (payment_method === 'cod') {
       try {
         for (const item of orderItems) {
@@ -202,21 +214,33 @@ export const placeOrder = async (req, res) => {
           }
         }
         console.log('[Order COD] Stock decremented successfully');
-      } catch (err) {
-        console.error('[Order COD] Stock decrement failed:', err);
-      }
-    }
 
-    // 6. Send Initial Notification (Customer & Store)
-    try {
-      await notificationService.sendToUser(
-        req.user.id,
-        'Order Received! 🛍️',
-        `Your order #${order.order_number} has been placed successfully.`,
-        { type: 'order_update', order_id: order.id }
-      );
-    } catch (err) {
-      console.error('[Order Notification Error] Failed to send initial notification:', err);
+        // Send Initial Notification for COD
+        await notificationService.sendToUser(
+          req.user.id,
+          'Order Received! 🛍️',
+          `Your order #${order.order_number} has been placed successfully.`,
+          { type: 'order_update', order_id: order.id }
+        );
+
+        // Notify Store Manager
+        const { data: storeInfo } = await supabaseAdmin
+          .from('stores')
+          .select('manager_user_id')
+          .eq('id', resolvedStoreId)
+          .single();
+
+        if (storeInfo?.manager_user_id) {
+          await notificationService.sendToUser(
+            storeInfo.manager_user_id,
+            'New Order Received! 📦',
+            `Order #${order.order_number} has been assigned to your store.`,
+            { type: 'new_order', order_id: order.id }
+          );
+        }
+      } catch (err) {
+        console.error('[Order COD Error] Stock decrement or notification failed:', err);
+      }
     }
 
     // 7. Success Response
@@ -359,13 +383,29 @@ export const verifyPayment = async (req, res) => {
         }
         
         console.log('[Payment Background] Sending notifications...');
-        if (req.user && req.user.id) {
-          await notificationService.sendToUser(
-            req.user.id,
-            'Order Confirmed! 📦',
-            `Your order #${order.order_number} has been received.`,
-            { type: 'order_update', order_id: order.id }
-          );
+        await notificationService.sendToUser(
+          order.user_id,
+          'Order Confirmed! 🛍️',
+          `Your order #${order.order_number} has been received.`,
+          { type: 'order_update', order_id: order.id }
+        );
+
+        // Notify Store Manager
+        if (order.store_id) {
+          const { data: storeInfo } = await supabaseAdmin
+            .from('stores')
+            .select('manager_user_id')
+            .eq('id', order.store_id)
+            .single();
+
+          if (storeInfo?.manager_user_id) {
+            await notificationService.sendToUser(
+              storeInfo.manager_user_id,
+              'New Paid Order! 💰',
+              `Order #${order.order_number} has been paid and assigned to your store.`,
+              { type: 'new_order', order_id: order.id }
+            );
+          }
         }
       } catch (bgErr) {
         console.error('[Payment Background Error]', bgErr);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,62 +6,106 @@ import {
   FlatList,
   TouchableOpacity,
   SafeAreaView,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { formatDistanceToNow } from 'date-fns';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import apiClient from '../api/apiClient';
 
 const NotificationsScreen = ({ navigation }) => {
-  const notifications = [
-    {
-      id: '1',
-      title: 'Order Delivered!',
-      body: 'Your order RN-20260423-1234 has been delivered successfully.',
-      time: '2 hours ago',
-      type: 'order',
-      isRead: false,
-    },
-    {
-      id: '2',
-      title: 'Weekend Sale is Here!',
-      body: 'Get up to 30% off on all frozen meat products this weekend.',
-      time: '1 day ago',
-      type: 'promo',
-      isRead: true,
-    },
-    {
-      id: '3',
-      title: 'Profile Updated',
-      body: 'Your profile information was updated successfully.',
-      time: '3 days ago',
-      type: 'system',
-      isRead: true,
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchNotifications = async (showLoading = true) => {
+    try {
+      if (showLoading) setLoading(true);
+      const response = await apiClient.get('/customer/notifications');
+      if (response.data?.success) {
+        setNotifications(response.data.data.notifications || []);
+      }
+    } catch (error) {
+      console.error('Fetch notifications error:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchNotifications(false);
+  }, []);
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      // Optimistic update
+      setNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+      );
+      await apiClient.patch(`/customer/notifications/${id}/read`);
+    } catch (error) {
+      console.error('Mark as read error:', error);
+      // Rollback or handle error
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      // Note: Backend might need a bulk mark-all-read endpoint, for now we do it sequentially or wait
+      const unread = notifications.filter(n => !n.is_read);
+      await Promise.all(unread.map(n => apiClient.patch(`/customer/notifications/${n.id}/read`)));
+    } catch (error) {
+      console.error('Mark all as read error:', error);
+    }
+  };
 
   const getIcon = (type) => {
     switch (type) {
-      case 'order': return 'package-variant-closed';
-      case 'promo': return 'tag-outline';
-      default: return 'bell-outline';
+      case 'order':
+      case 'order_status_update': 
+        return 'package-variant-closed';
+      case 'promo': 
+        return 'tag-outline';
+      case 'alert':
+      case 'danger':
+        return 'alert-circle-outline';
+      default: 
+        return 'bell-outline';
     }
   };
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity style={[styles.notificationCard, !item.isRead && styles.unreadCard]}>
-      <View style={[styles.iconContainer, { backgroundColor: item.isRead ? '#F3F4F6' : 'rgba(125, 180, 52, 0.1)' }]}>
+    <TouchableOpacity 
+      style={[styles.notificationCard, !item.is_read && styles.unreadCard]}
+      onPress={() => !item.is_read && handleMarkAsRead(item.id)}
+    >
+      <View style={[
+        styles.iconContainer, 
+        { backgroundColor: item.is_read ? '#F3F4F6' : 'rgba(125, 180, 52, 0.1)' }
+      ]}>
         <Icon 
           name={getIcon(item.type)} 
           size={24} 
-          color={item.isRead ? COLORS.gray : COLORS.primary} 
+          color={item.is_read ? COLORS.gray : COLORS.primary} 
         />
       </View>
       <View style={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={[styles.title, !item.isRead && styles.unreadText]}>{item.title}</Text>
-          {!item.isRead && <View style={styles.unreadDot} />}
+          <Text style={[styles.title, !item.is_read && styles.unreadText]}>{item.title}</Text>
+          {!item.is_read && <View style={styles.unreadDot} />}
         </View>
         <Text style={styles.body}>{item.body}</Text>
-        <Text style={styles.time}>{item.time}</Text>
+        <Text style={styles.time}>
+          {item.created_at ? formatDistanceToNow(new Date(item.created_at), { addSuffix: true }) : 'Just now'}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -73,24 +117,33 @@ const NotificationsScreen = ({ navigation }) => {
           <Icon name="arrow-left" size={24} color={COLORS.dark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleMarkAllRead}>
           <Text style={styles.markRead}>Mark all as read</Text>
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={notifications}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="bell-off-outline" size={80} color="#E5E7EB" />
-            <Text style={styles.emptyTitle}>No Notifications</Text>
-            <Text style={styles.emptySubtitle}>We'll notify you about your orders and special offers.</Text>
-          </View>
-        }
-      />
+      {loading && !refreshing ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Icon name="bell-off-outline" size={80} color="#E5E7EB" />
+              <Text style={styles.emptyTitle}>No Notifications</Text>
+              <Text style={styles.emptySubtitle}>We'll notify you about your orders and special offers.</Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -121,6 +174,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.primary,
     fontWeight: '600',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listContent: {
     flexGrow: 1,
@@ -197,3 +255,4 @@ const styles = StyleSheet.create({
 });
 
 export default NotificationsScreen;
+

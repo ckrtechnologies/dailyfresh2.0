@@ -19,6 +19,11 @@ import { clearLocation } from '../store/slices/locationSlice';
 const AccountScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  
+  // Safely extract user details from Supabase user_metadata
+  const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.full_name || user?.name || 'Daily Fresh User';
+  const userPhone = user?.phone || user?.user_metadata?.phone || 'No phone linked';
+  const userInitials = userName !== 'Daily Fresh User' ? userName.charAt(0).toUpperCase() : 'U';
 
   const handleLogout = () => {
     Alert.alert(
@@ -31,7 +36,6 @@ const AccountScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: () => {
             dispatch(logout());
-            dispatch(clearCart());
             dispatch(clearLocation());
           }
         },
@@ -54,7 +58,6 @@ const AccountScreen = ({ navigation }) => {
     { icon: 'account-edit-outline', label: 'Edit Profile', screen: 'EditProfile' },
     { icon: 'map-marker-radius-outline', label: 'Saved Addresses', screen: 'SavedAddresses' },
     { icon: 'share-variant-outline', label: 'Share App', action: handleShareApp },
-    { icon: 'ticket-percent-outline', label: 'Refer & Earn', screen: 'Referrals' },
     { icon: 'bell-ring-outline', label: 'Notifications', screen: 'Notifications' },
     { icon: 'chat-question-outline', label: 'Help & Support', screen: 'Support' },
     { icon: 'information-outline', label: 'About Daily Fresh', screen: 'About' },
@@ -89,12 +92,12 @@ const AccountScreen = ({ navigation }) => {
           <View style={styles.profileInfo}>
             <View style={styles.avatarContainer}>
               <Text style={styles.avatarText}>
-                {user?.full_name?.charAt(0) || user?.name?.charAt(0) || 'U'}
+                {userInitials}
               </Text>
             </View>
             <View style={styles.userDetails}>
-              <Text style={styles.userName}>{user?.full_name || user?.name || 'Daily Fresh User'}</Text>
-              <Text style={styles.userPhone}>{user?.phone || 'No phone linked'}</Text>
+              <Text style={styles.userName}>{userName}</Text>
+              <Text style={styles.userPhone}>{userPhone}</Text>
               {user?.email && <Text style={styles.userEmail}>{user.email}</Text>}
             </View>
           </View>
@@ -104,6 +107,21 @@ const AccountScreen = ({ navigation }) => {
           >
             <Icon name="pencil-box-outline" size={22} color={COLORS.primary} />
           </TouchableOpacity>
+        </View>
+
+        {/* User Specific Stats Row */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statBox}>
+            <Icon name="shopping-outline" size={24} color={COLORS.primary} />
+            <Text style={styles.statValue}>12</Text>
+            <Text style={styles.statLabel}>Total Orders</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Icon name="piggy-bank-outline" size={24} color={COLORS.primary} />
+            <Text style={styles.statValue}>₹450</Text>
+            <Text style={styles.statLabel}>Total Savings</Text>
+          </View>
         </View>
 
         {/* Menu Items */}
@@ -180,6 +198,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(125, 180, 52, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    paddingVertical: SPACING.l,
+    marginTop: 2,
+    marginBottom: SPACING.s,
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+  },
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.dark,
+    marginTop: 6,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#F3F4F6',
   },
   menuSection: {
     backgroundColor: COLORS.white,

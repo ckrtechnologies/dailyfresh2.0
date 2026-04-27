@@ -33,6 +33,7 @@ router.get('/products', authorize(['admin', 'store_manager']), adminController.l
 // --- ADMIN ONLY ---
 router.post('/onboard-staff', authorize(['admin']), adminController.onboardStaff);
 router.get('/staff', authorize(['admin']), adminController.listStaff);
+router.delete('/staff/:id', authorize(['admin']), adminController.deleteStaff);
 router.get('/customers', authorize(['admin']), adminController.listCustomers);
 
 // Notification Management System (NMS)
@@ -73,6 +74,13 @@ router.delete('/banners/:id', authorize(['admin']), adminController.deleteBanner
 
 router.get('/home-sections', authorize(['admin']), adminController.listHomeSections);
 router.patch('/home-sections/:id', authorize(['admin']), adminController.updateHomeSection);
+
+// Coupon Management
+import * as couponController from '../controllers/couponController.js';
+router.get('/coupons', authorize(['admin']), couponController.listCoupons);
+router.post('/coupons', authorize(['admin']), couponController.createCoupon);
+router.patch('/coupons/:id', authorize(['admin']), couponController.updateCoupon);
+router.delete('/coupons/:id', authorize(['admin']), couponController.deleteCoupon);
 
 
 export default router;

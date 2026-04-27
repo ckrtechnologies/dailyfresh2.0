@@ -13,12 +13,19 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { supabase } from '../api/supabase';
+import { setCredentials } from '../store/slices/authSlice';
 
 const EditProfileScreen = ({ navigation }) => {
-  const { user } = useSelector((state) => state.auth);
-  const [name, setName] = useState(user?.name || '');
+  const { user, token } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  
+  const initialName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.full_name || user?.name || '';
+  const initialPhone = user?.phone || user?.user_metadata?.phone || '';
+  
+  const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone || '');
+  const [phone, setPhone] = useState(initialPhone);
   const [loading, setLoading] = useState(false);
 
   const handleUpdate = async () => {
@@ -27,13 +34,26 @@ const EditProfileScreen = ({ navigation }) => {
       return;
     }
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        data: { full_name: name, phone: phone }
+      });
+
+      if (error) throw error;
+
+      // Update Redux state with the new user object
+      dispatch(setCredentials({ user: data.user, token }));
+
       Alert.alert('Success', 'Profile updated successfully', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
-    }, 1500);
+    } catch (err) {
+      console.error('Update Profile Error:', err);
+      Alert.alert('Error', err.message || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

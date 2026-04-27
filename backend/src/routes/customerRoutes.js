@@ -26,9 +26,12 @@ router.post('/products/decrement-stock', productController.decrementStock);
 router.use(authenticate);
 router.use(authorize(['customer']));
 
-// Notifications
+// Notifications & Coupons
 router.get('/notifications', notificationController.getNotifications);
 router.patch('/notifications/:id/read', notificationController.markAsRead);
+import * as couponController from '../controllers/couponController.js';
+router.post('/coupons/validate', couponController.validateCoupon);
+router.get('/coupons', couponController.listCoupons);
 
 // Profile & Address
 router.get('/profile', customerController.getProfile);

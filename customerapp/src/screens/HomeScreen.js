@@ -216,51 +216,33 @@ const HomeScreen = ({ navigation }) => {
             outputRange: [1, 0],
             extrapolate: 'clamp',
           }),
-          transform: [{
-            translateY: scrollY.interpolate({
-              inputRange: [0, 80],
-              outputRange: [0, -40],
-              extrapolate: 'clamp',
-            })
-          }]
         }
       ]}>
         <TouchableOpacity
           style={styles.locationContainer}
           onPress={() => navigation.navigate('LocationPicker')}
         >
-          <View style={styles.locationIcon}>
-            <Icon name="map-marker-radius" size={24} color={COLORS.white} />
+          <View style={styles.locationIconWrapper}>
+            <Icon name="map-marker-radius" size={22} color={COLORS.primary} />
           </View>
           <View style={styles.locationTextContainer}>
             <View style={styles.locationTitleRow}>
-               <Text style={styles.locationTitle} numberOfLines={2}>
-                {address || 'Select Location'}
-              </Text>
-              <Icon name="chevron-down" size={16} color={COLORS.white} style={{ marginTop: 2 }} />
+              <Text style={styles.locationTitle}>Home</Text>
+              <Icon name="chevron-down" size={16} color={COLORS.white} style={{ marginLeft: 2 }} />
             </View>
+            <Text style={styles.addressText} numberOfLines={1}>
+              {address || 'Select Address'}
+            </Text>
           </View>
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
-          {location.storeName && (
-            <View style={styles.storeBadge}>
-              <Icon name="storefront-outline" size={14} color={COLORS.white} />
-              <Text style={styles.storeNameText} numberOfLines={1}>{location.storeName}</Text>
-            </View>
-          )}
-          
-          <TouchableOpacity
-            style={styles.cartButton}
-            onPress={() => navigation.navigate('Cart')}
-          >
-            <Icon name="shopping-outline" size={26} color={COLORS.white} />
-            {totalCount > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.badgeText}>{totalCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.storeBadge}>
+            <Icon name="store-outline" size={14} color={COLORS.white} />
+            <Text style={styles.storeNameText} numberOfLines={1}>
+              {location.storeName || 'Daily Fresh'}
+            </Text>
+          </View>
         </View>
       </Animated.View>
 
@@ -272,8 +254,9 @@ const HomeScreen = ({ navigation }) => {
           style={styles.searchBar}
           onPress={() => navigation.navigate('Search')}
         >
-          <Icon name="magnify" size={24} color={COLORS.gray} />
-
+          <View style={styles.searchIconWrapper}>
+            <Icon name="magnify" size={22} color={COLORS.primary} />
+          </View>
           <Text style={styles.searchText}>Search "Chicken" or "Fish"</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -445,22 +428,7 @@ const HomeScreen = ({ navigation }) => {
     </View>
   );
 
-  const renderReferFriend = () => (
-    <TouchableOpacity style={styles.referContainer} onPress={() => navigation.navigate('Referrals')}>
-      <View style={styles.referContent}>
-        <View style={styles.referTextContainer}>
-          <View style={styles.referTitleRow}>
-             <Icon name="gift-outline" size={24} color="#4338CA" style={{ marginRight: 8 }} />
-             <Text style={styles.referTitle}>Refer & Earn</Text>
-          </View>
-          <Text style={styles.referSubtitle}>Get ₹100 for every friend you refer!</Text>
-        </View>
-        <View style={styles.referBadge}>
-          <Text style={styles.referBadgeText}>INVITE NOW</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+
 
   if (loading && !refreshing) {
     return (
@@ -500,9 +468,7 @@ const HomeScreen = ({ navigation }) => {
             {renderProductSection(section.title, section.products, null, 'category', { categoryId: section.id })}
           </React.Fragment>
         ))}
-
-        {renderReferFriend()}
-
+        
         <View style={styles.trustStrip}>
           <View style={styles.trustItem}>
             <Icon name="check-decagram" size={28} color={COLORS.primary} />
@@ -554,8 +520,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  locationIcon: {
+  locationIconWrapper: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: SPACING.s,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   locationTextContainer: {
     flex: 1,
@@ -565,32 +542,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   locationTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: COLORS.white,
-    marginRight: 4,
   },
-  address: {
-    fontSize: 12,
+  addressText: {
+    fontSize: 11,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 1,
+    fontWeight: '500',
+    marginTop: -2,
   },
-  cartButton: {
-    padding: SPACING.s,
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  headerIconButton: {
+    padding: 2,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    paddingHorizontal: SPACING.m,
-    height: 44,
+    paddingHorizontal: SPACING.s,
+    height: 48,
     borderRadius: RADIUS.button,
     marginTop: SPACING.s,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  searchIconWrapper: {
+    padding: 8,
   },
   searchText: {
-    marginLeft: SPACING.s,
     color: COLORS.gray,
     fontSize: 14,
+    fontWeight: '500',
   },
   bannerContainer: {
     marginTop: SPACING.m,
@@ -733,60 +731,26 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     textAlign: 'center',
   },
-  referContainer: {
-    backgroundColor: '#EEF2FF',
-    marginHorizontal: SPACING.l,
-    marginVertical: SPACING.xl,
-    borderRadius: RADIUS.card,
-    padding: SPACING.l,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E0E7FF',
-  },
-  referContent: {
-    flex: 1,
-  },
-  referTextContainer: {
-    marginBottom: SPACING.m,
-  },
-  referTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  referTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#4338CA',
-  },
-  referSubtitle: {
-    fontSize: 12,
-    color: '#6366F1',
-    marginTop: 2,
-  },
-  referBadge: {
-    backgroundColor: '#4338CA',
-    paddingHorizontal: SPACING.m,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  referBadgeText: {
-    color: COLORS.white,
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  referImage: {
-    width: 80,
-    height: 80,
-    marginLeft: SPACING.m,
-  },
+
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.s,
+  },
+  headerIconButton: {
+    padding: SPACING.s,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
+    borderColor: COLORS.white,
   },
   storeBadge: {
     flexDirection: 'row',

@@ -1,10 +1,12 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import { deleteFileByUrl } from '../utils/fileHelper.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import * as notificationService from '../services/notificationService.js';
 
 const getImageUrl = (file, bodyUrl) => {
   if (file) {
-    return `https://assets.dailyfreshkolkata.in/uploads/${file.filename}`;
+    const baseUrl = (process.env.CDN_BASE_URL || 'https://assets.dailyfreshkolkata.in/uploads').replace(/\/$/, '');
+    return `${baseUrl}/${file.filename}`;
   }
   return bodyUrl || null;
 };
@@ -91,14 +93,89 @@ export const updateStore = async (req, res) => {
 
 export const deleteStore = async (req, res) => {
   const { id } = req.params;
-  try {
-    const { count } = await supabaseAdmin.from('products').select('*', { count: 'exact', head: true }).eq('store_id', id);
-    if (count > 0) return errorResponse(res, 'Cannot delete store with active products', 400);
 
-    const { error } = await supabaseAdmin.from('stores').delete().eq('id', id);
-    if (error) throw error;
-    return successResponse(res, null, 'Store deleted');
-  } catch (error) { return errorResponse(res, 'Delete failed', 500, error); }
+  try {
+    // 1. Get store details (for images and manager ID)
+    const { data: store, error: fetchError } = await supabaseAdmin
+      .from('stores')
+      .select('manager_user_id, logo_url, cover_url')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) return errorResponse(res, 'Store not found', 404);
+
+    // 2. Check for orders (Safety)
+    const { count: orderCount } = await supabaseAdmin
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('store_id', id);
+
+    if (orderCount > 0) {
+      return errorResponse(res, 'Cannot delete store with existing orders. Please "Deactivate" it instead.', 400);
+    }
+
+    // 3. Smart Manager Deletion: Check if this is the only store they manage
+    let managerDeleted = false;
+    if (store.manager_user_id) {
+      const { count: storeCount } = await supabaseAdmin
+        .from('stores')
+        .select('*', { count: 'exact', head: true })
+        .eq('manager_user_id', store.manager_user_id);
+
+      // If they only manage this 1 store, delete the account entirely
+      if (storeCount === 1) {
+        const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(store.manager_user_id);
+        if (authError) console.error('[Cleanup] Manager auth delete failed:', authError.message);
+        else managerDeleted = true;
+      }
+    }
+
+    // 4. If manager was not deleted (multiple stores), delete only the store record
+    if (!managerDeleted) {
+      const { error: deleteError } = await supabaseAdmin.from('stores').delete().eq('id', id);
+      if (deleteError) throw deleteError;
+    }
+
+    // 5. Always cleanup VPS images
+    deleteFileByUrl(store.logo_url);
+    deleteFileByUrl(store.cover_url);
+
+    return successResponse(res, null, managerDeleted ? 'Store and unique Manager deleted successfully' : 'Store deleted successfully (Manager remains for other stores)');
+  } catch (error) {
+    console.error('Delete Store Error:', error);
+    return errorResponse(res, 'Delete failed', 500, error);
+  }
+};
+
+export const deleteStaff = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Fetch profile and related info for cleanup
+    const { data: profile, error: fetchError } = await supabaseAdmin
+      .from('profiles')
+      .select('*, riders(govt_id_url, license_url)')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) return errorResponse(res, 'Staff member not found', 404);
+    if (profile.role === 'admin') return errorResponse(res, 'Cannot delete admin accounts', 403);
+
+    // 2. Delete Auth User (Cascades to profile, riders, etc.)
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+    if (authError) return errorResponse(res, 'Auth delete failed', 400, authError);
+
+    // 3. Cleanup Files
+    deleteFileByUrl(profile.avatar_url);
+    if (profile.riders?.[0]) {
+      deleteFileByUrl(profile.riders[0].govt_id_url);
+      deleteFileByUrl(profile.riders[0].license_url);
+    }
+
+    return successResponse(res, null, 'Staff deleted successfully');
+  } catch (error) {
+    return errorResponse(res, 'Delete failed', 500, error);
+  }
 };
 
 /**
@@ -199,11 +276,15 @@ export const getDashboardStats = async (req, res) => {
     const cancelledCount = ordersData?.filter(o => o.status === 'cancelled').length || 0;
     const totalOrders = ordersData?.length || 0;
 
-    // 2. Customers (Global usually)
-    const custQuery = supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'customer');
-    if (startDate) custQuery.gte('created_at', startDate);
-    if (endDate) custQuery.lte('created_at', `${endDate} 23:59:59`);
-    const { count: customerCount } = await custQuery;
+    // 2. Customers (Super Admin Only)
+    let customerCount = 0;
+    if (!storeIdToFetch) {
+      const custQuery = supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'customer');
+      if (startDate) custQuery.gte('created_at', startDate);
+      if (endDate) custQuery.lte('created_at', `${endDate} 23:59:59`);
+      const { count } = await custQuery;
+      customerCount = count || 0;
+    }
 
     // 3. Riders (Active vs Total)
     const riderQuery = supabaseAdmin.from('riders').select('is_online');
@@ -538,7 +619,10 @@ export const createProduct = async (req, res) => {
     store_id = req.user.store_id;
   }
 
-  if (!store_id) return errorResponse(res, 'Please select a store. This product must belong to a location.', 400);
+  // Sanitize store_id (prevent "undefined" string from frontend or logic)
+  if (store_id === 'undefined' || store_id === '') store_id = null;
+
+  if (!store_id) return errorResponse(res, 'Access Denied: You must be assigned to a store to manage products.', 403);
   if (!sub_category_id) return errorResponse(res, 'Please select a sub-category.', 400);
   if (!name) return errorResponse(res, 'Product name is required.', 400);
   if (price === undefined || price === null) return errorResponse(res, 'Price is required.', 400);
@@ -551,7 +635,17 @@ export const createProduct = async (req, res) => {
       sub_category_id: sub_category_id || null,
       name, slug, price, weight_unit, stock_quantity, image_url, description,
       cooking_guide,
-      product_highlights: product_highlights ? (typeof product_highlights === 'string' ? JSON.parse(product_highlights) : product_highlights) : [],
+      product_highlights: (() => {
+        if (!product_highlights) return [];
+        if (typeof product_highlights === 'object') return product_highlights;
+        if (product_highlights === '[object Object]') return [];
+        try {
+          return JSON.parse(product_highlights);
+        } catch (e) {
+          console.warn('[Admin] Failed to parse product_highlights JSON:', e.message);
+          return [];
+        }
+      })(),
       is_deal: req.body.is_deal === 'true' || req.body.is_deal === true,
       is_featured: req.body.is_featured === 'true' || req.body.is_featured === true,
       is_flash_sale: req.body.is_flash_sale === 'true' || req.body.is_flash_sale === true,
@@ -610,9 +704,13 @@ export const updateProduct = async (req, res) => {
   const { id } = req.params;
   const { store_id, sub_category_id, name, slug, description, cooking_guide, product_highlights, image_url: bodyUrl, price, discount_price, weight_unit, stock_quantity, is_active, is_deal, is_featured } = req.body;
   
+  // Sanitize UUID inputs
+  const clean_store_id = (store_id === 'undefined' || store_id === '') ? null : store_id;
+  const clean_sub_cat_id = (sub_category_id === 'undefined' || sub_category_id === '') ? null : sub_category_id;
+
   const updateData = { 
-    store_id, 
-    sub_category_id, 
+    store_id: clean_store_id, 
+    sub_category_id: clean_sub_cat_id, 
     name, 
     slug, 
     description, 
@@ -623,7 +721,17 @@ export const updateProduct = async (req, res) => {
     is_active, 
     is_deal, 
     cooking_guide,
-    product_highlights: product_highlights ? (typeof product_highlights === 'string' ? JSON.parse(product_highlights) : product_highlights) : undefined,
+    product_highlights: (() => {
+      if (!product_highlights) return undefined;
+      if (typeof product_highlights === 'object') return product_highlights;
+      if (product_highlights === '[object Object]') return [];
+      try {
+        return JSON.parse(product_highlights);
+      } catch (e) {
+        console.warn('[Admin] Failed to parse product_highlights JSON:', e.message);
+        return [];
+      }
+    })(),
     is_featured: req.body.is_featured === 'true' || req.body.is_featured === true,
     is_flash_sale: req.body.is_flash_sale === 'true' || req.body.is_flash_sale === true,
     is_exclusive: req.body.is_exclusive === 'true' || req.body.is_exclusive === true,
@@ -662,6 +770,7 @@ export const updateProduct = async (req, res) => {
     
     // RBAC: Store Managers can only update their own store's products
     if (req.user.role === 'store_manager') {
+      if (!req.user.store_id) return errorResponse(res, 'Access Denied: You are not assigned to a store.', 403);
       query = query.eq('store_id', req.user.store_id);
     }
 
@@ -675,26 +784,42 @@ export const updateProduct = async (req, res) => {
 export const deleteCategory = async (req, res) => {
   const { id } = req.params;
   try {
+    // 1. Fetch for cleanup
+    const { data: category, error: fetchError } = await supabaseAdmin.from('categories').select('image_url').eq('id', id).single();
+    if (fetchError) return errorResponse(res, 'Category not found', 404);
+
     const { count } = await supabaseAdmin.from('sub_categories').select('*', { count: 'exact', head: true }).eq('category_id', id);
     if (count > 0) return errorResponse(res, 'Cannot delete category with active sub-categories', 400);
 
     const { error } = await supabaseAdmin.from('categories').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23503') return errorResponse(res, 'Category is still linked to products.', 400);
+      throw error;
+    }
+
+    // 2. Cleanup file
+    deleteFileByUrl(category.image_url);
+
     return successResponse(res, null, 'Category deleted');
   } catch (error) { 
-    console.error('Delete Category Error:', error);
-    return errorResponse(res, `Delete failed: ${error.message || 'Internal server error'}`, 500, error); 
+    return errorResponse(res, 'Delete failed', 500, error); 
   }
 };
 
 export const deleteSubCategory = async (req, res) => {
   const { id } = req.params;
   try {
+    const { data: subcat, error: fetchError } = await supabaseAdmin.from('sub_categories').select('image_url').eq('id', id).single();
+    if (fetchError) return errorResponse(res, 'Sub-category not found', 404);
+
     const { count } = await supabaseAdmin.from('products').select('*', { count: 'exact', head: true }).eq('sub_category_id', id);
     if (count > 0) return errorResponse(res, 'Cannot delete sub-category with active products', 400);
 
     const { error } = await supabaseAdmin.from('sub_categories').delete().eq('id', id);
     if (error) throw error;
+
+    deleteFileByUrl(subcat.image_url);
+
     return successResponse(res, null, 'Sub-category deleted');
   } catch (error) { return errorResponse(res, 'Delete failed', 500, error); }
 };
@@ -702,17 +827,22 @@ export const deleteSubCategory = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   const { id } = req.params;
   try {
-    let query = supabaseAdmin.from('products').delete().eq('id', id);
+    const { data: product, error: fetchError } = await supabaseAdmin.from('products').select('image_url').eq('id', id).single();
+    if (fetchError) return errorResponse(res, 'Product not found', 404);
 
-    // RBAC: Store Managers can only delete their own store's products
-    if (req.user.role === 'store_manager') {
-      query = query.eq('store_id', req.user.store_id);
-    }
+    let query = supabaseAdmin.from('products').delete().eq('id', id);
+    if (req.user.role === 'store_manager') query = query.eq('store_id', req.user.store_id);
 
     const { error } = await query;
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23503') return errorResponse(res, 'Cannot delete product with existing orders. Deactivate it instead.', 400);
+      throw error;
+    }
+
+    deleteFileByUrl(product.image_url);
+
     return successResponse(res, null, 'Product deleted');
-  } catch (error) { return errorResponse(res, 'Delete failed or access denied', 500, error); }
+  } catch (error) { return errorResponse(res, 'Delete failed', 500, error); }
 };
 
 /**
@@ -744,10 +874,10 @@ export const onboardStaff = async (req, res) => {
 
     const userId = authData.user.id;
 
-    // 2. Profile creation
+    // 2. Profile creation (using upsert to prevent trigger conflicts)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert([{ id: userId, full_name, phone, role, email }]);
+      .upsert([{ id: userId, full_name, phone, role, email }], { onConflict: 'id' });
 
     if (profileError) {
       // Cleanup: Delete auth user if profile fails? (Optional but recommended)
@@ -907,8 +1037,14 @@ export const updateBanner = async (req, res) => {
 export const deleteBanner = async (req, res) => {
   const { id } = req.params;
   try {
+    const { data: banner, error: fetchError } = await supabaseAdmin.from('banners').select('image_url').eq('id', id).single();
+    if (fetchError) return errorResponse(res, 'Banner not found', 404);
+
     const { error } = await supabaseAdmin.from('banners').delete().eq('id', id);
     if (error) throw error;
+
+    deleteFileByUrl(banner.image_url);
+
     return successResponse(res, null, 'Banner deleted');
   } catch (error) {
     return errorResponse(res, 'Delete failed', 500, error);
@@ -941,9 +1077,19 @@ export const updateHomeSection = async (req, res) => {
   const { title, subtitle, display_order, is_active, config } = req.body;
 
   try {
+    const sectionConfig = (() => {
+      if (!config) return undefined;
+      if (typeof config === 'object') return config;
+      try {
+        return JSON.parse(config);
+      } catch (e) {
+        return undefined;
+      }
+    })();
+
     const { data, error } = await supabaseAdmin
       .from('home_sections')
-      .update({ title, subtitle, display_order, is_active, config })
+      .update({ title, subtitle, display_order, is_active, config: sectionConfig })
       .eq('id', id)
       .select()
       .single();

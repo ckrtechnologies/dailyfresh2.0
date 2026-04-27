@@ -59,8 +59,14 @@ export const authenticate = async (req, res, next) => {
         .from('stores')
         .select('id')
         .eq('manager_user_id', profile.id)
-        .single();
-      if (store) profile.store_id = store.id;
+        .maybeSingle(); // Use maybeSingle to avoid errors if not found
+      
+      if (store) {
+        profile.store_id = store.id;
+      } else {
+        // If they are a manager but have no store, we set it to null clearly
+        profile.store_id = null;
+      }
     }
 
     // 4. Attach user and profile to request object

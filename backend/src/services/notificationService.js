@@ -31,33 +31,42 @@ export const sendToUser = async (userId, title, body, data = {}) => {
     }
 
     // 3. Send Firebase Push
+    // NOTE: FCM data payload values must be strings
+    const fcmData = {};
+    if (data) {
+      Object.keys(data).forEach(key => {
+        if (data[key] !== undefined && data[key] !== null) {
+          fcmData[key] = String(data[key]);
+        }
+      });
+    }
+
     const message = {
       notification: { title, body },
       data: { 
-        ...data, 
-        title, // Redundancy for some handlers
-        body,
+        ...fcmData, 
+        title: String(title),
+        body: String(body),
         timestamp: new Date().toISOString() 
       },
       android: {
         priority: 'high',
         notification: {
-          channelId: 'default',
-          sound: 'notification_sound',
+          channelId: (data.type?.includes('order') || data.type?.includes('confirmed')) ? 'orders' : 'default',
           priority: 'high',
-          clickAction: 'FLUTTER_NOTIFICATION_CLICK' // Standard for some frameworks, safe to include
+          sound: 'ding',
         }
       },
       apns: {
         payload: {
           aps: {
-            sound: 'notification_sound.wav', // APNS usually requires extension, assuming it's available
+            sound: 'ding.wav',
             badge: 1,
-            contentAvailable: true // Critical for background/killed delivery
+            contentAvailable: true
           }
         },
         headers: {
-          'apns-priority': '10' // High priority
+          'apns-priority': '10'
         }
       },
       token: profile.fcm_token

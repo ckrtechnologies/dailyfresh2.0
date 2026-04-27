@@ -36,14 +36,18 @@ const HomeManagement = () => {
       const url = `/admin/${type}${id ? `/${id}` : ''}`;
       let payload = data;
 
-      // Use FormData for banners (images)
-      if (type === 'banners' && !(data instanceof FormData)) {
+      // Use FormData for banners (images), but skip for DELETE requests
+      if (type === 'banners' && method !== 'DELETE' && !(data instanceof FormData)) {
         payload = new FormData();
         Object.keys(data).forEach(key => {
           if (key === 'imageFile') {
             if (data[key]) payload.append('image', data[key]);
           } else if (data[key] !== undefined && data[key] !== null) {
-            payload.append(key, data[key]);
+            // Stringify objects/arrays so they don't become "[object Object]"
+            const value = (typeof data[key] === 'object' && !(data[key] instanceof File)) 
+              ? JSON.stringify(data[key]) 
+              : data[key];
+            payload.append(key, value);
           }
         });
       }
@@ -53,8 +57,12 @@ const HomeManagement = () => {
         : (id ? apiClient.patch(url, payload) : apiClient.post(url, payload));
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries([`admin-${variables.type}`]);
+      queryClient.invalidateQueries({ queryKey: [`admin-${variables.type}`] });
       setModal({ show: false, type: null, data: null });
+    },
+    onError: (error) => {
+      console.error('Home management mutation error:', error);
+      alert(error.response?.data?.message || error.message || 'Operation failed');
     }
   });
 
@@ -152,6 +160,7 @@ const HomeManagement = () => {
         columns={columns[activeTab === 'banners' ? 'banners' : 'sections']} 
         data={activeTab === 'banners' ? bannerResp || [] : sectionResp || []} 
         loading={bannersLoading || sectionsLoading} 
+        pagination={{ total: activeTab === 'banners' ? (bannerResp?.length || 0) : (sectionResp?.length || 0), page: 1, pageSize: 50 }}
       />
 
       {modal.show && modal.type === 'banners' && (

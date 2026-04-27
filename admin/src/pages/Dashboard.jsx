@@ -69,8 +69,12 @@ const Dashboard = () => {
         <StatsCard title="AOV" value={`₹${stats.aov || 0}`} icon={TrendingUp} color="#3b82f6" loading={dashboardLoading} />
         <StatsCard title="Total Orders" value={stats.orders || 0} icon={ShoppingCart} color="#6366f1" loading={dashboardLoading} />
         <StatsCard title="Cancelled" value={stats.cancelled_orders || 0} icon={AlertTriangle} color="#ef4444" loading={dashboardLoading} />
-        <StatsCard title="Active Riders" value={`${stats.active_riders || 0} / ${stats.total_riders || 0}`} icon={Package} color="#f59e0b" loading={dashboardLoading} />
-        <StatsCard title="Customers" value={stats.customers || 0} icon={Users} color="#8b5cf6" loading={dashboardLoading} />
+        {isAdmin && (
+          <>
+            <StatsCard title="Active Riders" value={`${stats.active_riders || 0} / ${stats.total_riders || 0}`} icon={Package} color="#f59e0b" loading={dashboardLoading} />
+            <StatsCard title="Customers" value={stats.customers || 0} icon={Users} color="#8b5cf6" loading={dashboardLoading} />
+          </>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 1.2fr', gap: '12px' }}>

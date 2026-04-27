@@ -10,7 +10,7 @@ const getAssignedStoreId = async (managerId) => {
     .select('id')
     .eq('manager_user_id', managerId)
     .single();
-  
+
   if (error || !data) return null;
   return data.id;
 };
@@ -28,12 +28,69 @@ export const getDashboard = async (req, res) => {
       .select('id, name, stock_quantity')
       .eq('store_id', storeId);
 
-    const lowStockCount = products.filter(p => p.stock_quantity < 10).length;
+    const lowStockCount = products ? products.filter(p => p.stock_quantity < 10).length : 0;
+
+    const { startDate, endDate } = req.query;
+
+    let orderQuery = supabaseAdmin
+      .from('orders')
+      .select('status, total_amount, created_at')
+      .eq('store_id', storeId);
+
+    if (startDate) orderQuery = orderQuery.gte('created_at', startDate);
+    if (endDate) orderQuery = orderQuery.lte('created_at', endDate);
+
+    const { data: orders } = await orderQuery;
+
+    let totalRevenue = 0;
+    let activeOrders = 0;
+    let totalOrders = 0;
+
+    if (orders) {
+      totalOrders = orders.length;
+      orders.forEach(o => {
+        if (o.status !== 'cancelled') totalRevenue += Number(o.total_amount) || 0;
+        if (o.status !== 'delivered' && o.status !== 'cancelled') activeOrders++;
+      });
+    }
+
+    // 2. Latest 5 Orders
+    const { data: latestOrders } = await supabaseAdmin
+      .from('orders')
+      .select('id, order_number, total_amount, status, created_at, customer:profiles!user_id(full_name)')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    // 3. Top 5 Selling Products
+    // We'll aggregate from order_items
+    const { data: topProductsData } = await supabaseAdmin
+      .from('order_items')
+      .select('product_id, name, quantity')
+      .eq('store_id', storeId);
+
+    const productSales = {};
+    if (topProductsData) {
+      topProductsData.forEach(item => {
+        if (!productSales[item.product_id]) {
+          productSales[item.product_id] = { id: item.product_id, name: item.name, total_qty: 0 };
+        }
+        productSales[item.product_id].total_qty += item.quantity;
+      });
+    }
+    const topProducts = Object.values(productSales)
+      .sort((a, b) => b.total_qty - a.total_qty)
+      .slice(0, 5);
 
     return successResponse(res, {
       store_id: storeId,
-      total_products: products.length,
-      low_stock_alerts: lowStockCount
+      total_products: products ? products.length : 0,
+      low_stock_alerts: lowStockCount,
+      total_revenue: totalRevenue,
+      active_orders: activeOrders,
+      total_orders: totalOrders,
+      latest_orders: latestOrders || [],
+      top_products: topProducts
     }, 'Dashboard stats fetched');
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
@@ -48,10 +105,18 @@ export const getInventory = async (req, res) => {
     const storeId = await getAssignedStoreId(req.user.id);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
-    const { data, error } = await supabaseAdmin
+    const { startDate, endDate } = req.query;
+
+    let query = supabaseAdmin
       .from('products')
-      .select('*, sub_category:sub_categories(name)')
-      .eq('store_id', storeId);
+      .select('*, sub_category:sub_categories(name, category_id, category:categories(name))')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false });
+
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    const { data, error } = await query;
 
     if (error) return errorResponse(res, 'Failed to fetch inventory', 400, error);
     return successResponse(res, { products: data });
@@ -69,7 +134,7 @@ export const updateStock = async (req, res) => {
 
   try {
     const storeId = await getAssignedStoreId(req.user.id);
-    
+
     const { data: product } = await supabaseAdmin
       .from('products')
       .select('store_id')
@@ -95,20 +160,174 @@ export const updateStock = async (req, res) => {
 };
 
 /**
+ * Toggle product active status
+ */
+export const updateProductStatus = async (req, res) => {
+  const { productId } = req.params;
+  const { is_active } = req.body;
+
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+
+    const { data: product } = await supabaseAdmin
+      .from('products')
+      .select('store_id')
+      .eq('id', productId)
+      .single();
+
+    if (!product || product.store_id !== storeId) {
+      return errorResponse(res, 'Access denied: Product does not belong to your store', 403);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('products')
+      .update({ is_active })
+      .eq('id', productId)
+      .select()
+      .single();
+
+    if (error) return errorResponse(res, 'Update failed', 400, error);
+    return successResponse(res, { product: data }, 'Product status updated');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Get store profile
+ */
+export const getStoreProfile = async (req, res) => {
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+    if (!storeId) return errorResponse(res, 'No store assigned', 404);
+
+    const { data, error } = await supabaseAdmin
+      .from('stores')
+      .select('*')
+      .eq('id', storeId)
+      .single();
+
+    if (error) return errorResponse(res, 'Failed to fetch store profile', 400, error);
+    return successResponse(res, { store: data });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Update store online status
+ */
+export const updateStoreStatus = async (req, res) => {
+  const { is_active } = req.body;
+
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+    if (!storeId) return errorResponse(res, 'No store assigned', 404);
+
+    const { data, error } = await supabaseAdmin
+      .from('stores')
+      .update({ is_active })
+      .eq('id', storeId)
+      .select()
+      .single();
+
+    if (error) return errorResponse(res, 'Update failed', 400, error);
+    return successResponse(res, { store: data }, 'Store status updated');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
  * List orders for the manager's store
  */
 export const getOrders = async (req, res) => {
   try {
     const storeId = await getAssignedStoreId(req.user.id);
-    
-    const { data, error } = await supabaseAdmin
+
+    const { startDate, endDate, search } = req.query;
+
+    let query = supabaseAdmin
       .from('orders')
-      .select('*, items:order_items(*)')
+      .select('*, items:order_items(*, product:products!fk_order_items_product(image_url)), customer:profiles!user_id(full_name, phone)')
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
 
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    if (search) {
+      // Search in order_number or status
+      query = query.or(`order_number.ilike.%${search}%,status.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
+
     if (error) return errorResponse(res, 'Failed to fetch orders', 400, error);
     return successResponse(res, { orders: data });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * List unique customers who have ordered from this store
+ */
+export const getCustomers = async (req, res) => {
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+    if (!storeId) return errorResponse(res, 'No store assigned', 404);
+
+    const { startDate, endDate } = req.query;
+
+    let query = supabaseAdmin
+      .from('orders')
+      .select('user_id, total_amount, created_at, customer:profiles!user_id(id, full_name, email, phone, avatar_url)')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false });
+
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    const { data, error } = await query;
+
+    if (error) return errorResponse(res, 'Failed to fetch customers', 400, error);
+
+    const customerMap = {};
+    data.forEach(order => {
+      const cid = order.user_id;
+      if (!cid) return; // Skip if no user_id (guest orders if any)
+
+      if (!customerMap[cid]) {
+        customerMap[cid] = {
+          ...order.customer,
+          total_orders: 0,
+          total_spent: 0,
+          last_order_at: order.created_at
+        };
+      }
+      customerMap[cid].total_orders += 1;
+      customerMap[cid].total_spent += Number(order.total_amount) || 0;
+    });
+
+    const customers = Object.values(customerMap).sort((a, b) => b.total_orders - a.total_orders);
+
+    return successResponse(res, { customers });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+export const updateOrderStatus = async (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+    const { data: order } = await supabaseAdmin.from('orders').select('store_id').eq('id', orderId).single();
+    if (!order || order.store_id !== storeId) return errorResponse(res, 'Access denied', 403);
+    const { data, error } = await supabaseAdmin.from('orders').update({ status }).eq('id', orderId).select().single();
+    if (error) return errorResponse(res, 'Update failed', 400, error);
+    return successResponse(res, { order: data }, 'Order status updated');
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
   }
@@ -131,11 +350,6 @@ const haversine = (lat1, lng1, lat2, lng2) => {
 
 /**
  * GET /customer/stores/nearest?lat=&lng=&pincode=
- *
- * Priority:
- *  1. GPS lat/lng → nearest store within delivery_radius_km
- *  2. Pincode match → exact pincode store
- *  3. Fallback → first active store (single-store / test mode)
  */
 export const getNearestStore = async (req, res) => {
   const { lat, lng, pincode } = req.query;
@@ -153,7 +367,6 @@ export const getNearestStore = async (req, res) => {
 
     let selected = null;
 
-    // Strategy 1: GPS-based — nearest store within delivery radius
     if (lat && lng) {
       const userLat = parseFloat(lat);
       const userLng = parseFloat(lng);
@@ -168,43 +381,258 @@ export const getNearestStore = async (req, res) => {
         .sort((a, b) => a.distance_km - b.distance_km);
 
       selected = withDistance[0] || null;
-      
-      // If GPS is provided, it is our source of truth. 
-      // If no store is found within radius, we stop here (don't fallback to pincode)
+
       if (selected || (lat && lng)) {
-         return successResponse(res, { 
-            store: selected,
-            is_serviceable: !!selected,
-            distance: selected ? selected.distance_km.toFixed(2) : null
-          }, selected ? 'Nearest store found via GPS' : 'No store within 10km radius');
+        return successResponse(res, {
+          store: selected,
+          is_serviceable: !!selected,
+          distance: selected ? selected.distance_km.toFixed(2) : null
+        }, selected ? 'Nearest store found via GPS' : 'No store within 10km radius');
       }
     }
 
-    // Strategy 2: Pincode match fallback
     if (!selected && pincode) {
       const pStr = pincode.toString();
-      // 2a. Priority: Exact primary pincode match
       selected = stores.find(s => s.pincode === pStr) || null;
-      
-      // 2b. Fallback: Check serviceable_pincodes array
+
       if (!selected) {
-        selected = stores.find(s => 
-          s.serviceable_pincodes && 
-          Array.isArray(s.serviceable_pincodes) && 
+        selected = stores.find(s =>
+          s.serviceable_pincodes &&
+          Array.isArray(s.serviceable_pincodes) &&
           s.serviceable_pincodes.includes(pStr)
         ) || null;
       }
     }
 
-    // Strategy 3: Removed fallback — if not in range/pincode, return null
-    // This allows the frontend to show "Coming Soon" or "Not Serviceable"
-
-    return successResponse(res, { 
+    return successResponse(res, {
       store: selected,
-      is_serviceable: !!selected 
+      is_serviceable: !!selected
     }, selected ? 'Nearest store found' : 'Location not serviceable');
   } catch (error) {
-    console.error('[getNearestStore]', error);
     return errorResponse(res, 'Failed to find nearest store', 500, error);
   }
 };
+
+/**
+ * Create a new product for the store
+ */
+export const createProduct = async (req, res) => {
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+    if (!storeId) return errorResponse(res, 'No store assigned', 404);
+
+    const { name } = req.body;
+    if (!name) return errorResponse(res, 'Product name is required', 400);
+
+    // Generate slug from name
+    const slug = name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '') + '-' + Date.now().toString().slice(-4);
+
+    const newProduct = {
+      ...req.body,
+      store_id: storeId,
+      slug: req.body.slug || slug
+    };
+
+    const { data, error } = await supabaseAdmin.from('products').insert([newProduct]).select().single();
+
+    if (error) return errorResponse(res, 'Failed to create product', 400, error);
+    return successResponse(res, { product: data }, 'Product created');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Update product details
+ */
+export const updateProduct = async (req, res) => {
+  const { productId } = req.params;
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+
+    const { data: product } = await supabaseAdmin.from('products').select('store_id').eq('id', productId).single();
+    if (!product || product.store_id !== storeId) {
+      return errorResponse(res, 'Access denied: Product does not belong to your store', 403);
+    }
+
+    // Only allow specific fields to be updated by store managers to prevent SKU conflicts
+    const allowedFields = ['stock_quantity', 'price', 'sale_price', 'description', 'is_active', 'weight_unit'];
+    const updateData = {};
+
+    Object.keys(req.body).forEach(key => {
+      if (allowedFields.includes(key)) {
+        updateData[key] = req.body[key];
+      }
+    });
+
+    const { data, error } = await supabaseAdmin.from('products').update(updateData).eq('id', productId).select().single();
+
+    if (error) return errorResponse(res, 'Update failed', 400, error);
+    return successResponse(res, { product: data }, 'Product updated');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Export Inventory as CSV
+ */
+export const exportInventoryCSV = async (req, res) => {
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+    const { startDate, endDate } = req.query;
+
+    let query = supabaseAdmin
+      .from('products')
+      .select('name, sku, price, stock_quantity, is_active, created_at')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false });
+
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    let csv = 'Name,SKU,Price,Stock,Status,Added Date\n';
+    data.forEach(p => {
+      csv += `"${p.name}","${p.sku || ''}",${p.price},${p.stock_quantity},${p.is_active ? 'Active' : 'Inactive'},"${new Date(p.created_at).toLocaleDateString()}"\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=inventory.csv');
+    return res.status(200).send(csv);
+  } catch (error) {
+    return errorResponse(res, 'Export failed', 500, error);
+  }
+};
+
+/**
+ * Export Orders as CSV
+ */
+export const exportOrdersCSV = async (req, res) => {
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+    const { startDate, endDate } = req.query;
+
+    let query = supabaseAdmin
+      .from('orders')
+      .select('id, total_amount, status, payment_status, created_at, customer:profiles(full_name)')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false });
+
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    let csv = 'Order ID,Customer,Amount,Status,Payment,Date\n';
+    data.forEach(o => {
+      csv += `"${o.id.slice(0, 8)}","${o.customer?.full_name || 'N/A'}",${o.total_amount},"${o.status}","${o.payment_status}","${new Date(o.created_at).toLocaleDateString()}"\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=orders.csv');
+    return res.status(200).send(csv);
+  } catch (error) {
+    return errorResponse(res, 'Export failed', 500, error);
+  }
+};
+
+/**
+ * Delete a product
+ */
+export const deleteProduct = async (req, res) => {
+  const { productId } = req.params;
+  try {
+    const storeId = await getAssignedStoreId(req.user.id);
+
+    const { data: product } = await supabaseAdmin.from('products').select('store_id').eq('id', productId).single();
+    if (!product || product.store_id !== storeId) {
+      return errorResponse(res, 'Access denied', 403);
+    }
+
+    const { error } = await supabaseAdmin.from('products').delete().eq('id', productId);
+
+    if (error) {
+      if (error.code === '23503') {
+        return errorResponse(res, 'Cannot delete product as it has been ordered in the past. Please deactivate it instead.', 400, error);
+      }
+      return errorResponse(res, 'Deletion failed', 400, error);
+    }
+    return successResponse(res, null, 'Product deleted');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Update FCM Token for push notifications
+ */
+export const updateFcmToken = async (req, res) => {
+  const { fcm_token } = req.body;
+  if (!fcm_token) return errorResponse(res, 'FCM token is required', 400);
+
+  try {
+    // 1. Remove this token from any other profiles to prevent duplicates
+    await supabaseAdmin
+      .from('profiles')
+      .update({ fcm_token: null })
+      .eq('fcm_token', fcm_token);
+
+    // 2. Assign token to current user
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ fcm_token })
+      .eq('id', req.user.id);
+
+    if (error) throw error;
+    return successResponse(res, null, 'FCM token updated successfully');
+  } catch (error) {
+    return errorResponse(res, 'Failed to update FCM token', 500, error);
+  }
+};
+
+/**
+ * Get all categories
+ */
+export const getCategories = async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+
+    if (error) throw error;
+    return successResponse(res, { categories: data });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch categories', 500, error);
+  }
+};
+
+/**
+ * Get sub-categories for a category
+ */
+export const getSubCategories = async (req, res) => {
+  const { categoryId } = req.query;
+  try {
+    let query = supabaseAdmin
+      .from('sub_categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+
+    if (categoryId) {
+      query = query.eq('category_id', categoryId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return successResponse(res, { sub_categories: data });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch sub-categories', 500, error);
+  }
+};
+

@@ -51,6 +51,30 @@ const orderService = {
       console.error('Error fetching order detail:', error);
       return { success: false, error: error.response?.data?.message || 'Failed to fetch order details' };
     }
+  },
+
+  /**
+   * Validate a coupon code
+   */
+  validateCoupon: async (code, orderAmount) => {
+    try {
+      const response = await apiClient.post('/customer/coupons/validate', { code, order_amount: orderAmount });
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.message || 'Invalid coupon' };
+    }
+  },
+
+  /**
+   * Get list of active coupons for customers
+   */
+  getAvailableCoupons: async () => {
+    try {
+      const response = await apiClient.get('/customer/coupons');
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      return { success: false, error: 'Failed to load coupons' };
+    }
   }
 };
 

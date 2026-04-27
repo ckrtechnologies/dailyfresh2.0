@@ -31,8 +31,9 @@ const Stores = () => {
 
   // 3. CRUD Mutation
   const mutation = useMutation({
-    mutationFn: async ({ method, id, data }) => {
-      const url = `/admin/stores${id ? `/${id}` : ''}`;
+    mutationFn: async ({ method, id, data, deleteManager }) => {
+      let url = `/admin/stores${id ? `/${id}` : ''}`;
+      if (deleteManager) url += '?delete_manager=true';
       return method === 'DELETE' ? apiClient.delete(url) : (id ? apiClient.patch(url, data) : apiClient.post(url, data));
     },
     onSuccess: () => {
@@ -52,10 +53,20 @@ const Stores = () => {
     onError: (err) => alert(err.response?.data?.message || 'Onboarding failed')
   });
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this store? All linked data might be affected.')) {
-      mutation.mutate({ method: 'DELETE', id });
+  const handleDelete = (id, hasManager) => {
+    let deleteManager = false;
+    if (hasManager) {
+      const choice = window.confirm('This store has an assigned manager. \n\nClick OK to delete BOTH Store and Manager. \nClick CANCEL to delete ONLY the Store.');
+      if (choice) deleteManager = true;
+      else {
+        // If they clicked cancel, ask if they still want to delete the store at least
+        if (!window.confirm('Are you sure you want to delete the store only?')) return;
+      }
+    } else {
+      if (!window.confirm('Are you sure you want to delete this store?')) return;
     }
+
+    mutation.mutate({ method: 'DELETE', id, deleteManager });
   };
 
   const columns = [
@@ -69,7 +80,7 @@ const Stores = () => {
     { header: 'Actions', accessor: 'id', align: 'center', render: (row) => (
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
         <button onClick={() => setModal({ show: true, data: row })} className="btn-icon"><Pencil size={12} /></button>
-        <button onClick={() => handleDelete(row.id)} className="btn-icon" style={{ color: 'var(--danger)' }}><Trash2 size={12} /></button>
+        <button onClick={() => handleDelete(row.id, !!row.manager_user_id)} className="btn-icon" style={{ color: 'var(--danger)' }}><Trash2 size={12} /></button>
       </div>
     )}
   ];

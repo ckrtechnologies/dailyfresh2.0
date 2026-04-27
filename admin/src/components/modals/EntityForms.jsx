@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Loader2, Save, X, Image as ImageIcon, Link as LinkIcon, Upload, Tag, Layers, Package, User, Store as StoreIcon, Shield, FileText } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 // Common Components
 const Input = ({ label, value, ...props }) => (
@@ -331,9 +332,12 @@ export const CategoryForm = ({ initialData, onSave, onClose, loading }) => {
 };
 
 export const ProductForm = ({ initialData, onSave, onClose, loading, stores = [], subcategories = [], isManager = false }) => {
+  const { user } = useAuth();
+  
   const [formData, setFormData] = useState(initialData || { 
     name: '', slug: '', price: 0, discount_price: '', stock_quantity: 0, weight_unit: 'kg', 
-    store_id: stores[0]?.id || '', sub_category_id: subcategories[0]?.id || '', description: '',
+    store_id: isManager ? user?.store_id : (stores[0]?.id || ''), 
+    sub_category_id: subcategories[0]?.id || '', description: '',
     is_deal: false, is_featured: false
   });
   const [activeTab, setActiveTab] = useState('general');
@@ -471,31 +475,34 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
       )}
 
       {activeTab === 'guide' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Cooking Guide / Instructions</label>
+            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cooking Guide / Recipe Instructions</label>
             <textarea 
               value={formData.cooking_guide || ''} 
               onChange={(e) => setFormData({ ...formData, cooking_guide: e.target.value })} 
               className="form-control" 
-              style={{ resize: 'none', minHeight: '250px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }} 
+              style={{ 
+                resize: 'none', 
+                minHeight: '320px', 
+                padding: '16px', 
+                borderRadius: '12px', 
+                border: '1px solid var(--border)', 
+                fontSize: '14px',
+                lineHeight: '1.6',
+                fontFamily: 'inherit',
+                background: 'white',
+                outline: 'none',
+                boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)'
+              }} 
               placeholder="Step 1: Clean the fish...
-Step 2: Marinate with salt and turmeric..."
+Step 2: Marinate with salt and turmeric...
+Step 3: Fry until golden brown..."
             />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Cooking Guide Highlights (JSON Array)</label>
-            <textarea 
-              value={typeof formData.product_highlights === 'string' ? formData.product_highlights : JSON.stringify(formData.product_highlights || [], null, 2)} 
-              onChange={(e) => setFormData({ ...formData, product_highlights: e.target.value })} 
-              className="form-control" 
-              style={{ resize: 'none', minHeight: '250px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '12px', fontFamily: 'monospace' }} 
-              placeholder='[
-  {"icon": "ChefHat", "text": "Wash thoroughly"},
-  {"icon": "Fire", "text": "Cook for 10 mins"}
-]'
-            />
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Enter a JSON array of objects with "icon" and "text" keys. Icons: ChefHat, Fire, Knife, Timer, Scale.</p>
+          <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', gap: '12px' }}>
+             <div style={{ background: '#3b82f6', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', flexShrink: 0 }}>i</div>
+             <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>This recipe will be displayed in the <b>Cooking Guide</b> tab on the mobile app product page.</p>
           </div>
         </div>
       )}
@@ -515,6 +522,8 @@ Step 2: Marinate with salt and turmeric..."
   );
 };
 
+import GoogleMapPicker from '../common/GoogleMapPicker';
+
 export const StoreForm = ({ initialData, onSave, onClose, loading, managers = [] }) => {
   const [formData, setFormData] = useState(initialData || { 
     name: '', pincode: '', address: '', phone: '', email: '', 
@@ -523,6 +532,7 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
   });
   const [activeTab, setActiveTab] = useState('details');
   const [locating, setLocating] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   const managerOptions = [{ id: '', name: 'Unassigned' }, ...managers];
 
@@ -577,29 +587,46 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
             <Input label="Store Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
             <Input label="PIN Code" value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} required />
             <Input label="Delivery Radius (KM)" type="number" value={formData.delivery_radius_km} onChange={(e) => setFormData({ ...formData, delivery_radius_km: e.target.value })} />
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+               <button 
+                type="button" 
+                onClick={() => setShowMap(!showMap)}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--primary)', color: 'var(--primary)', background: showMap ? '#f0f9ff' : 'white', fontWeight: '600', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+               >
+                 <ImageIcon size={14} /> {showMap ? 'Hide Map' : 'Pin on Map'}
+               </button>
+               <button 
+                type="button" 
+                onClick={handleCaptureLocation}
+                disabled={locating}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', color: 'white', background: 'var(--primary)', fontWeight: '600', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+               >
+                 <Shield size={14} /> {locating ? 'Locating...' : 'My Location'}
+               </button>
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <Input label="Address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required />
             <Select label="Assigned Manager" value={formData.manager_user_id || ''} onChange={(e) => setFormData({ ...formData, manager_user_id: e.target.value })} options={managerOptions} />
             
-            <div style={{ background: '#f1f5f9', padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', marginTop: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>GPS COORDINATES</span>
-                <button 
-                  type="button" 
-                  onClick={handleCaptureLocation}
-                  disabled={locating}
-                  style={{ fontSize: '10px', background: 'var(--primary)', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                  {locating ? 'Locating...' : 'Capture Current'}
-                </button>
-              </div>
+            <div style={{ background: '#f1f5f9', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', marginTop: '4px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>GPS COORDINATES</span>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <input readOnly placeholder="Lat" value={formData.latitude} style={{ fontSize: '12px', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#e2e8f0' }} />
-                <input readOnly placeholder="Lng" value={formData.longitude} style={{ fontSize: '12px', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#e2e8f0' }} />
+                <input readOnly placeholder="Lat" value={formData.latitude} style={{ fontSize: '12px', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#e2e8f0' }} />
+                <input readOnly placeholder="Lng" value={formData.longitude} style={{ fontSize: '12px', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#e2e8f0' }} />
               </div>
             </div>
           </div>
+          {showMap && (
+            <div style={{ gridColumn: 'span 2' }}>
+              <GoogleMapPicker 
+                lat={formData.latitude} 
+                lng={formData.longitude} 
+                onSelect={(lat, lng) => setFormData({ ...formData, latitude: lat, longitude: lng })} 
+              />
+            </div>
+          )}
         </div>
       )}
 

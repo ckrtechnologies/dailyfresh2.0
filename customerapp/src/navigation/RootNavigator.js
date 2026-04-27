@@ -8,21 +8,19 @@ import { fetchActiveOrder } from '../store/slices/orderSlice';
 
 export const navigationRef = createNavigationContainerRef();
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Icon from 'react-native-vector-icons/Ionicons';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../constants/theme';
 import MiniCart from '../components/MiniCart';
 
 
-// Premium Bold Icon Mapping (Ionicons Style - FreshToHome Aesthetic)
+// Basic Icon Mapping
 const ICON_MAP = {
   Home: { active: 'home', inactive: 'home-outline' },
   Favorites: { active: 'heart', inactive: 'heart-outline' },
-  Categories: { active: 'grid', inactive: 'grid-outline' },
-  Cart: { active: 'cart', inactive: 'cart-outline' },
-  Account: { active: 'person', inactive: 'person-outline' }
+  Categories: { active: 'view-dashboard', inactive: 'view-dashboard-outline' },
+  Cart: { active: 'shopping', inactive: 'shopping-outline' },
+  Account: { active: 'account', inactive: 'account-outline' }
 };
-
-
 
 
 // Screens
@@ -71,33 +69,34 @@ const AppTabs = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarActiveTintColor: COLORS.primary, // Using brand green for active
-        tabBarInactiveTintColor: '#606060',
+        tabBarActiveTintColor: '#10b981', // Consistent Emerald Green
+        tabBarInactiveTintColor: '#9CA3AF',
         headerShown: false,
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: COLORS.white,
           borderTopWidth: 1,
-          borderTopColor: '#F0F0F0',
-          elevation: 0,
-          height: 65,
+          borderTopColor: '#F3F4F6',
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          height: 70,
           paddingBottom: 10,
-          paddingTop: 5,
+          paddingTop: 10,
         },
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-          marginTop: -5,
+          fontSize: 11,
+          fontWeight: '700',
+          marginTop: 2,
         },
         tabBarIcon: ({ color, size, focused }) => {
           const iconConfig = ICON_MAP[route.name];
           const iconName = focused ? iconConfig.active : iconConfig.inactive;
           
-          return <Icon name={iconName} size={22} color={color} />;
+          return <Icon name={iconName} size={size} color={color} />;
         },
-
-
-
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
@@ -109,7 +108,7 @@ const AppTabs = () => {
         options={{ 
           tabBarBadge: cartItems.length > 0 ? cartItems.length : null,
           tabBarBadgeStyle: {
-            backgroundColor: COLORS.primary,
+            backgroundColor: COLORS.secondary || '#F97316',
             color: COLORS.white,
             fontSize: 10,
           }

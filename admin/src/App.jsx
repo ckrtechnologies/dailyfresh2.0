@@ -12,6 +12,7 @@ import Riders from './pages/Riders.jsx';
 import Customers from './pages/Customers.jsx';
 import Inventory from './pages/Inventory.jsx';
 import HomeManagement from './pages/HomeManagement.jsx';
+import Coupons from './pages/Coupons.jsx';
 import Settings from './pages/Settings.jsx';
 import MainLayout from './components/layout/MainLayout.jsx';
 
@@ -65,6 +66,12 @@ function AppRoutes() {
         <Route path="notifications" element={
           <ProtectedRoute roles={['admin']}>
             <Notifications />
+          </ProtectedRoute>
+        } />
+
+        <Route path="coupons" element={
+          <ProtectedRoute roles={['admin']}>
+            <Coupons />
           </ProtectedRoute>
         } />
         

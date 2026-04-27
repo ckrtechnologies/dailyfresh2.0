@@ -63,13 +63,17 @@ const Inventory = () => {
       let payload = data;
       // Always use FormData for catalog entities to satisfy Multer on the backend
       const imageTypes = ['products', 'categories', 'subcategories'];
-      if (imageTypes.includes(type) && !(data instanceof FormData)) {
+      if (imageTypes.includes(type) && method !== 'DELETE' && !(data instanceof FormData)) {
         payload = new FormData();
         Object.keys(data).forEach(key => {
           if (key === 'imageFile') {
             if (data[key]) payload.append('image', data[key]);
           } else if (data[key] !== undefined && data[key] !== null) {
-            payload.append(key, data[key]);
+            // Stringify objects/arrays so they don't become "[object Object]"
+            const value = (typeof data[key] === 'object' && !(data[key] instanceof File)) 
+              ? JSON.stringify(data[key]) 
+              : data[key];
+            payload.append(key, value);
           }
         });
       }

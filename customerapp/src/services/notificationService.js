@@ -1,47 +1,74 @@
 import messaging from '@react-native-firebase/messaging';
-import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
-import { Platform } from 'react-native';
+import notifee, { AndroidImportance, EventType, AndroidStyle } from '@notifee/react-native';
+import { Platform, Alert, Linking } from 'react-native';
 import apiClient from '../api/apiClient';
 import { fetchActiveOrder } from '../store/slices/orderSlice';
+import { navigationRef } from '../navigation/RootNavigator';
 
 class NotificationService {
   async requestUserPermission() {
+    // 1. Request Firebase Permission (iOS/Android 13+)
     const authStatus = await messaging().requestPermission();
     const enabled =
       authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
       authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
     if (enabled) {
-      console.log('Authorization status:', authStatus);
+      console.log('FCM Permission granted:', authStatus);
       
-      // Create notification channels for Android
+      // 2. Request Notifee Permission (Specifically for Android 13+ and iOS)
+      try {
+        const settings = await notifee.requestPermission();
+        if (settings.authorizationStatus === 0) { // 0 is AuthorizationStatus.DENIED
+           this.showMandatoryPermissionAlert();
+           return false;
+        }
+      } catch (err) {
+        console.warn('Error requesting notifee permission:', err);
+      }
+
+      // 3. Create/Update channels
       if (Platform.OS === 'android') {
         try {
-          if (notifee && typeof notifee.createChannel === 'function') {
-            // Default channel with custom sound
-            await notifee.createChannel({
-              id: 'default',
-              name: 'Default Notifications',
-              importance: AndroidImportance.HIGH,
-              sound: 'notification_sound',
-            });
+          await notifee.createChannel({
+            id: 'default',
+            name: 'Default Notifications',
+            importance: AndroidImportance.HIGH,
+            vibration: true,
+            sound: 'ding',
+          });
 
-            // Specific channel for Orders with custom sound
-            await notifee.createChannel({
-              id: 'orders',
-              name: 'Order Updates',
-              importance: AndroidImportance.HIGH,
-              sound: 'notification_sound', // sound file: res/raw/notification_sound.mp3
-            });
-          }
+          await notifee.createChannel({
+            id: 'orders',
+            name: 'Order Updates',
+            importance: AndroidImportance.HIGH,
+            vibration: true,
+            sound: 'ding',
+          });
         } catch (err) {
-          console.warn('[Notification Warning] Could not create notifee channels:', err);
+          console.warn('Error creating channels:', err);
         }
       }
-      
       return true;
+    } else {
+      this.showMandatoryPermissionAlert();
+      return false;
     }
-    return false;
+  }
+
+  showMandatoryPermissionAlert() {
+    Alert.alert(
+      'Notifications Required 🔔',
+      'Daily Fresh needs notification permission to send you order updates and delivery status. Please enable it in settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Open Settings', 
+          onPress: () => notifee.openNotificationSettings() 
+        },
+      ],
+      { cancelable: false }
+    );
   }
 
   async getFcmToken() {
@@ -72,12 +99,41 @@ class NotificationService {
     }
   }
 
+  handleDeepLink(remoteMessage) {
+    if (!remoteMessage) return;
+    
+    // Extract link from data payload
+    const link = remoteMessage.data?.link;
+    if (link) {
+      console.log('[DeepLink] Processing link:', link);
+      
+      // If it's a dailyfresh:// URL and navigation is ready, use internal navigation
+      if (link.startsWith('dailyfresh://') && navigationRef.isReady()) {
+        const path = link.replace('dailyfresh://', '');
+        console.log('[DeepLink] Internal navigation to path:', path);
+        
+        // React Navigation's navigate can handle paths if configured in linking
+        // But for simplicity, we can also use Linking.openURL as it's handled by NavigationContainer
+        Linking.openURL(link).catch(err => 
+          console.error('[DeepLink] Failed to open URL via Linking:', err)
+        );
+      } else {
+        // Fallback to system Linking for https:// or other schemes
+        Linking.openURL(link).catch(err => 
+          console.error('[DeepLink] Failed to open external URL:', err)
+        );
+      }
+    } else {
+      console.log('[DeepLink] No link found in message data');
+    }
+  }
+
   listenForNotifications(dispatch) {
-    // Foreground messages
+    // 1. Foreground messages
     const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
       console.log('Foreground notification received:', remoteMessage);
       
-      // 1. Handle Order Status Update for real-time state change
+      // Handle Order Status Update for real-time state change
       if (remoteMessage.data?.type === 'order_status_update') {
         const { order_id, status } = remoteMessage.data;
         if (dispatch) {
@@ -86,58 +142,73 @@ class NotificationService {
             type: 'order/updateOrderStatusLocal', 
             payload: { orderId: order_id, status } 
           });
-          // Also fetch full fresh data to be sure
           dispatch(fetchActiveOrder());
         }
       }
 
-      // 2. Show System Notification (Instead of Alert)
+      // Show System Notification via Notifee
       try {
-        // Only attempt if notifee is available (native module check)
         if (notifee && typeof notifee.displayNotification === 'function') {
           const isOrderUpdate = remoteMessage.data?.type === 'order_status_update' || remoteMessage.data?.type === 'order_confirmed';
+          const imageUrl = remoteMessage.data?.image_url;
           
           await notifee.displayNotification({
             title: remoteMessage.notification?.title || 'Daily Fresh Update',
             body: remoteMessage.notification?.body || 'Check your app for updates',
+            data: remoteMessage.data, 
             android: {
               channelId: isOrderUpdate ? 'orders' : 'default',
               importance: AndroidImportance.HIGH,
-              sound: 'notification_sound',
+              sound: 'ding',
+              largeIcon: 'ic_launcher', // Show App Logo
+              style: imageUrl ? {
+                type: AndroidStyle.BIGPICTURE,
+                picture: imageUrl,
+              } : undefined,
               pressAction: {
                 id: 'default',
               },
             },
           });
-        } else {
-          // Fallback to console if native module is missing (needs rebuild)
-          console.log('[Notification Fallback] Native notifee not found. Message:', remoteMessage.notification?.body);
         }
       } catch (err) {
         console.warn('[Notification Error] Failed to show notifee notification:', err);
       }
     });
 
-    // Background/Quit state message handling
+    // 2. Notifee Foreground Event (Tap while app is open)
+    const unsubscribeNotifee = notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.PRESS) {
+        console.log('[Notifee] Foreground Press Deteceted:', detail.notification?.data);
+        this.handleDeepLink({ data: detail.notification?.data });
+      }
+    });
+
+    // 3. Background/Quit state message handling
     messaging().setBackgroundMessageHandler(async remoteMessage => {
       console.log('Message handled in the background!', remoteMessage);
     });
 
-    // Handle notification click when app is in background
+    // 4. Handle notification click when app is in background
     messaging().onNotificationOpenedApp(remoteMessage => {
       console.log('Notification caused app to open from background state:', remoteMessage);
+      this.handleDeepLink(remoteMessage);
     });
 
-    // Handle notification click when app is closed
+    // 5. Handle notification click when app is closed (Initial Launch)
     messaging()
       .getInitialNotification()
       .then(remoteMessage => {
         if (remoteMessage) {
           console.log('Notification caused app to open from quit state:', remoteMessage);
+          this.handleDeepLink(remoteMessage);
         }
       });
 
-    return unsubscribeForeground;
+    return () => {
+      unsubscribeForeground();
+      unsubscribeNotifee();
+    };
   }
 }
 

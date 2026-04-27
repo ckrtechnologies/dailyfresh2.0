@@ -117,6 +117,13 @@ export const updateFcmToken = async (req, res) => {
   if (!fcm_token) return errorResponse(res, 'FCM token is required', 400);
 
   try {
+    // 1. Remove this token from any other profiles to prevent duplicates
+    await supabaseAdmin
+      .from('profiles')
+      .update({ fcm_token: null })
+      .eq('fcm_token', fcm_token);
+
+    // 2. Assign token to current user
     const { error } = await supabaseAdmin
       .from('profiles')
       .update({ fcm_token })
