@@ -15,13 +15,13 @@ class NotificationService {
 
     if (enabled) {
       console.log('FCM Permission granted:', authStatus);
-      
+
       // 2. Request Notifee Permission (Specifically for Android 13+ and iOS)
       try {
         const settings = await notifee.requestPermission();
         if (settings.authorizationStatus === 0) { // 0 is AuthorizationStatus.DENIED
-           this.showMandatoryPermissionAlert();
-           return false;
+          this.showMandatoryPermissionAlert();
+          return false;
         }
       } catch (err) {
         console.warn('Error requesting notifee permission:', err);
@@ -62,9 +62,9 @@ class NotificationService {
       'Daily Fresh needs notification permission to send you order updates and delivery status. Please enable it in settings.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Open Settings', 
-          onPress: () => notifee.openNotificationSettings() 
+        {
+          text: 'Open Settings',
+          onPress: () => notifee.openNotificationSettings()
         },
       ],
       { cancelable: false }
@@ -101,25 +101,25 @@ class NotificationService {
 
   handleDeepLink(remoteMessage) {
     if (!remoteMessage) return;
-    
+
     // Extract link from data payload
     const link = remoteMessage.data?.link;
     if (link) {
       console.log('[DeepLink] Processing link:', link);
-      
+
       // If it's a dailyfresh:// URL and navigation is ready, use internal navigation
       if (link.startsWith('dailyfresh://') && navigationRef.isReady()) {
         const path = link.replace('dailyfresh://', '');
         console.log('[DeepLink] Internal navigation to path:', path);
-        
+
         // React Navigation's navigate can handle paths if configured in linking
         // But for simplicity, we can also use Linking.openURL as it's handled by NavigationContainer
-        Linking.openURL(link).catch(err => 
+        Linking.openURL(link).catch(err =>
           console.error('[DeepLink] Failed to open URL via Linking:', err)
         );
       } else {
         // Fallback to system Linking for https:// or other schemes
-        Linking.openURL(link).catch(err => 
+        Linking.openURL(link).catch(err =>
           console.error('[DeepLink] Failed to open external URL:', err)
         );
       }
@@ -132,15 +132,15 @@ class NotificationService {
     // 1. Foreground messages
     const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
       console.log('Foreground notification received:', remoteMessage);
-      
+
       // Handle Order Status Update for real-time state change
       if (remoteMessage.data?.type === 'order_status_update') {
         const { order_id, status } = remoteMessage.data;
         if (dispatch) {
           console.log('[Notification] Dispatching order status update:', status);
-          dispatch({ 
-            type: 'order/updateOrderStatusLocal', 
-            payload: { orderId: order_id, status } 
+          dispatch({
+            type: 'order/updateOrderStatusLocal',
+            payload: { orderId: order_id, status }
           });
           dispatch(fetchActiveOrder());
         }
@@ -151,16 +151,16 @@ class NotificationService {
         if (notifee && typeof notifee.displayNotification === 'function') {
           const isOrderUpdate = remoteMessage.data?.type === 'order_status_update' || remoteMessage.data?.type === 'order_confirmed';
           const imageUrl = remoteMessage.data?.image_url;
-          
+
           await notifee.displayNotification({
             title: remoteMessage.notification?.title || 'Daily Fresh Update',
             body: remoteMessage.notification?.body || 'Check your app for updates',
-            data: remoteMessage.data, 
+            data: remoteMessage.data,
             android: {
               channelId: isOrderUpdate ? 'orders' : 'default',
               importance: AndroidImportance.HIGH,
               sound: 'ding',
-              largeIcon: 'ic_launcher', // Show App Logo
+              largeIcon: imageUrl || 'ic_launcher', // Show Logo or Custom Image
               style: imageUrl ? {
                 type: AndroidStyle.BIGPICTURE,
                 picture: imageUrl,

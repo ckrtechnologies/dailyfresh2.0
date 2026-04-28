@@ -88,7 +88,7 @@ export const getProductById = async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('products')
-      .select('*, store:stores(*), sub_category:sub_categories(*)')
+      .select('*, store:stores(*), sub_category:sub_categories(*), variants:product_variants(*)')
       .eq('id', id)
       .single();
 

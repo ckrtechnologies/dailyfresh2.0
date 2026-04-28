@@ -43,11 +43,11 @@ export const sendToUser = async (userId, title, body, data = {}) => {
 
     const message = {
       notification: { title, body },
-      data: { 
-        ...fcmData, 
+      data: {
+        ...fcmData,
         title: String(title),
         body: String(body),
-        timestamp: new Date().toISOString() 
+        timestamp: new Date().toISOString()
       },
       android: {
         priority: 'high',

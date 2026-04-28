@@ -179,7 +179,44 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [location.pincode, location.storeId]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async (isCancelled = { current: false }) => {
+    let currentStoreId = storeId;
+
+    // SELF-HEALING: If storeId is missing but we have location, try to fetch it again
+    if (!currentStoreId && (location.pincode || location.coords)) {
+      console.log('🔄 [HOME_DEBUG] Store ID missing, attempting to re-fetch nearest store...');
+      try {
+        const params = {};
+        if (location.coords) {
+          params.lat = location.coords.lat;
+          params.lng = location.coords.lng;
+        }
+        if (location.pincode) params.pincode = location.pincode;
+
+        const res = await apiClient.get('/customer/stores/nearest', { params });
+        const store = res.data?.data?.store;
+        
+        if (store) {
+          console.log('✅ [HOME_DEBUG] Successfully re-assigned store:', store.name);
+          currentStoreId = store.id;
+          // Sync back to Redux for consistency
+          dispatch(require('../store/slices/locationSlice').setLocation({
+            ...location,
+            storeId: store.id,
+            storeName: store.name,
+            isServiceable: true
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to re-fetch nearest store in Home:', err);
+      }
+    }
+
+    if (!currentStoreId) {
+      console.log('Skipping loadData: No storeId');
+      return;
+    }
+
     try {
       dispatch(setLoading(true));
 
@@ -196,14 +233,16 @@ const HomeScreen = ({ navigation }) => {
       ] = await Promise.all([
         productService.getCategories(),
         productService.getBanners(),
-        productService.getProducts({ isFeatured: true, storeId }),
-        productService.getProducts({ isFlashSale: true, storeId }),
-        productService.getProducts({ isTrending: true, storeId }),
-        productService.getProducts({ isNewLaunch: true, storeId }),
-        productService.getProducts({ isFrozen: true, storeId }),
-        productService.getProducts({ isExclusive: true, storeId }),
-        productService.getProducts({ isDeal: true, storeId }),
+        productService.getProducts({ isFeatured: true, storeId: currentStoreId }),
+        productService.getProducts({ isFlashSale: true, storeId: currentStoreId }),
+        productService.getProducts({ isTrending: true, storeId: currentStoreId }),
+        productService.getProducts({ isNewLaunch: true, storeId: currentStoreId }),
+        productService.getProducts({ isFrozen: true, storeId: currentStoreId }),
+        productService.getProducts({ isExclusive: true, storeId: currentStoreId }),
+        productService.getProducts({ isDeal: true, storeId: currentStoreId }),
       ]);
+
+      if (isCancelled.current) return;
 
       if (categoriesRes.success) dispatch(setCategories(categoriesRes.data));
       if (bannersRes.success) dispatch(setBanners(bannersRes.data));
@@ -222,7 +261,7 @@ const HomeScreen = ({ navigation }) => {
       if (categoriesRes.success && categoriesRes.data.length > 0) {
         const categoryData = await Promise.all(
           categoriesRes.data.map(async (cat) => {
-            const prodRes = await productService.getProducts({ categoryId: cat.id, storeId });
+            const prodRes = await productService.getProducts({ categoryId: cat.id, storeId: currentStoreId });
             return {
               id: cat.id,
               title: cat.name,
@@ -230,19 +269,27 @@ const HomeScreen = ({ navigation }) => {
             };
           })
         );
+        
+        if (isCancelled.current) return;
         dispatch(setCategorySections(categoryData.filter(c => c.products.length > 0)));
       }
 
     } catch (error) {
       console.error('Error loading home data:', error);
     } finally {
-      dispatch(setLoading(false));
+      if (!isCancelled.current) {
+        dispatch(setLoading(false));
+      }
     }
-  };
+  }, [dispatch, storeId, location]);
 
   useEffect(() => {
-    loadData();
-  }, [dispatch, storeId]);
+    const isCancelled = { current: false };
+    loadData(isCancelled);
+    return () => {
+      isCancelled.current = true;
+    };
+  }, [loadData]);
 
   useEffect(() => {
     const fetchStore = async () => {

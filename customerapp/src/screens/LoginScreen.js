@@ -147,7 +147,7 @@ const LoginScreen = ({ navigation }) => {
               onPress={() => authService.signInWithGoogle()}
             >
               <Image
-                source={require('../assets/icons/google_logo.png')}
+                source={require('../assets/icons/google_logo.jpg')}
                 style={styles.googleIcon}
               />
               <Text style={styles.googleButtonText}>Continue with Google</Text>

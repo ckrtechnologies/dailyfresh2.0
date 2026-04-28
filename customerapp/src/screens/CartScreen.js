@@ -62,9 +62,8 @@ const CartScreen = ({ navigation }) => {
         <Text style={styles.itemPrice}>₹{item.price}</Text>
       </View>
       <View style={styles.quantityContainer}>
-        <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(removeItem(item.id))}>
+        <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(removeItem(item))}>
           <Icon name="minus" size={20} color={COLORS.primary} />
-
         </TouchableOpacity>
         <Text style={styles.quantity}>{item.quantity}</Text>
         <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(addItem(item))}>
@@ -101,7 +100,7 @@ const CartScreen = ({ navigation }) => {
         ref={flatListRef}
         data={items}
         renderItem={renderCartItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => `${item.id}-${item.variant?.id || 'base'}-${item.cutPreference || 'none'}-${item.cleaningPreference || 'none'}`}
         contentContainerStyle={styles.list}
         ListHeaderComponent={() => (
           <View style={styles.addressSection}>

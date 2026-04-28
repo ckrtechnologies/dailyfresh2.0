@@ -81,7 +81,8 @@ const productService = {
             *,
             category:categories!category_id(*)
           ),
-          store:stores!store_id(*)
+          store:stores!store_id(*),
+          variants:product_variants(*)
         `)
         .or(`slug.eq.${identifier},id.eq.${identifier}`)
         .single();

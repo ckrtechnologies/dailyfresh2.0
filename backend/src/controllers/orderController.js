@@ -195,12 +195,15 @@ export const placeOrder = async (req, res) => {
 
     // Increment coupon used_count if applied
     if (req.body.coupon_id) {
-      await supabaseAdmin.rpc('increment_coupon_usage', { coupon_id_param: req.body.coupon_id });
-      // If RPC is missing, fallback to standard update
-      await supabaseAdmin
-        .from('coupons')
-        .update({ used_count: supabaseAdmin.rpc('increment_val', { x: 1 }) }) // Note: Supabase increment pattern
-        .eq('id', req.body.coupon_id);
+      const { error: rpcErr } = await supabaseAdmin.rpc('increment_coupon_usage', { coupon_id_param: req.body.coupon_id });
+      if (rpcErr) {
+        console.warn('[Order] Failed to increment coupon usage via RPC:', rpcErr.message);
+        // Fallback: simple fetch and increment (not atomic but better than nothing if RPC fails)
+        const { data: coupon } = await supabaseAdmin.from('coupons').select('used_count').eq('id', req.body.coupon_id).single();
+        if (coupon) {
+          await supabaseAdmin.from('coupons').update({ used_count: (coupon.used_count || 0) + 1 }).eq('id', req.body.coupon_id);
+        }
+      }
     }
 
     // 4. Create Order Items
@@ -208,7 +211,8 @@ export const placeOrder = async (req, res) => {
       order_id: order.id,
       store_id: resolvedStoreId,
       product_id: it.product_id || it.id,
-      name: it.name || 'Product',           // schema column: name
+      variant_id: it.variant?.id || it.variant_id || null,
+      name: it.variant?.name || it.name || 'Product',           // Use variant name if available
       quantity: it.quantity,
       unit_price: it.price,                 // schema column: unit_price
       total_price: it.price * it.quantity,
@@ -468,7 +472,7 @@ export const getMyOrders = async (req, res) => {
         delivery_address:addresses(*),
         items:order_items(
           *,
-          product:products!fk_order_items_product(name, image_url)
+          product:products!product_id(name, image_url)
         )
       `)
       .eq('user_id', req.user.id)
@@ -498,7 +502,7 @@ export const getOrderById = async (req, res) => {
         delivery_address:addresses(*),
         items:order_items(
           *,
-          product:products!fk_order_items_product(*)
+          product:products!product_id(*)
         )
       `)
       .eq('id', id)

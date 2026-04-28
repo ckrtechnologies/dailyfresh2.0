@@ -9,13 +9,18 @@ const cartSlice = createSlice({
   },
   reducers: {
     addItem: (state, action) => {
-      const product = action.payload.product || action.payload;
-      const quantity = action.payload.quantity || 1;
-      const cutPreference = action.payload.cutPreference || null;
-      const cleaningPreference = action.payload.cleaningPreference || null;
-
+      const payload = action.payload;
+      
+      // Determine if we are receiving a { product, ... } structure or a flattened item
+      const product = payload.product || payload;
+      const quantity = payload.quantity || 1;
+      const variant = payload.variant || null;
+      const cutPreference = payload.cutPreference || null;
+      const cleaningPreference = payload.cleaningPreference || null;
+      
       const existingItemIndex = state.items.findIndex(
         (item) => item.id === product.id && 
+                  item.variant?.id === variant?.id &&
                   item.cutPreference === cutPreference && 
                   item.cleaningPreference === cleaningPreference
       );
@@ -23,9 +28,11 @@ const cartSlice = createSlice({
       if (existingItemIndex > -1) {
         state.items[existingItemIndex].quantity += quantity;
       } else {
+        // Store flattened but keep specific fields
         state.items.push({
           ...product,
           quantity,
+          variant,
           cutPreference,
           cleaningPreference,
         });
@@ -35,8 +42,18 @@ const cartSlice = createSlice({
       state.totalAmount += product.price * quantity;
     },
     removeItem: (state, action) => {
-      const id = action.payload.id || action.payload;
-      const itemIndex = state.items.findIndex((item) => item.id === id);
+      const payload = action.payload;
+      const id = typeof payload === 'object' ? payload.id : payload;
+      const variantId = typeof payload === 'object' ? payload.variant?.id : null;
+      const cutPref = typeof payload === 'object' ? payload.cutPreference : null;
+      const cleaningPref = typeof payload === 'object' ? payload.cleaningPreference : null;
+
+      const itemIndex = state.items.findIndex(
+        (item) => item.id === id && 
+                  item.variant?.id === variantId &&
+                  item.cutPreference === cutPref &&
+                  item.cleaningPreference === cleaningPref
+      );
 
       if (itemIndex > -1) {
         const item = state.items[itemIndex];

@@ -24,7 +24,10 @@ const EditProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   
   const initialName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.full_name || user?.name || '';
-  const initialPhone = user?.phone || user?.user_metadata?.phone || '';
+  
+  // Filter out sso_ placeholders from the UI
+  const rawPhone = user?.phone || user?.user_metadata?.phone || '';
+  const initialPhone = rawPhone.startsWith('sso_') ? '' : rawPhone;
   
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(user?.email || '');

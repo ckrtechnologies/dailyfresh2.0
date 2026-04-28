@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Config from 'react-native-config';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
+let accessToken = null;
 
 const apiClient = axios.create({
   baseURL: Config.API_URL,
@@ -10,20 +11,23 @@ const apiClient = axios.create({
   },
 });
 
+export const setAccessToken = (token) => {
+  accessToken = token;
+};
+
 // Request interceptor to inject JWT
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('access_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      if (accessToken) {
+        config.headers.Authorization = `Bearer ${accessToken}`;
       }
-      
+
       // Log outgoing requests for debugging
       console.log(`🚀 [API] ${config.method?.toUpperCase()} ${config.url}`, config.params || '');
-      
+
     } catch (e) {
-      console.error('Error reading token from storage', e);
+      console.error('Error in request interceptor', e);
     }
     return config;
   },

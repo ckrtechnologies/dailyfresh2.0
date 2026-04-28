@@ -106,19 +106,21 @@ const OrderDetailScreen = ({ route, navigation }) => {
   const handleReorder = () => {
     try {
       order.items.forEach(item => {
-        // We map the order item structure to the cart item structure
-        // Order item has 'product_id', cart expects 'id'
-        const cartItem = {
-          id: item.product_id,
-          name: item.name,
-          price: item.unit_price || item.price,
-          image_url: item.product?.image_url,
-          weight: item.weight || item.product?.weight,
+        // Wrap in the structure cartSlice expects
+        const payload = {
+          product: {
+            id: item.product_id,
+            name: item.name,
+            price: item.unit_price || item.price,
+            image_url: item.product?.image_url,
+            weight: item.weight || item.product?.weight,
+          },
           quantity: item.quantity,
-          // Preferences if available
-          preferences: item.preferences
+          variant: item.variant_id ? { id: item.variant_id, name: item.name } : null,
+          cutPreference: item.preferences?.cut || null,
+          cleaningPreference: item.preferences?.cleaning || null
         };
-        dispatch(addItem(cartItem));
+        dispatch(addItem(payload));
       });
       
       // Navigate to Cart
@@ -201,7 +203,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Items ({order.items?.length || 0})</Text>
           {order.items?.map((item, index) => (
-            <View key={index} style={[styles.itemRow, index === order.items.length - 1 && { borderBottomWidth: 0 }]}>
+            <View key={index} style={[styles.itemRow, index === (order.items?.length || 0) - 1 && { borderBottomWidth: 0 }]}>
               <Image 
                 source={{ uri: item.product?.image_url || 'https://via.placeholder.com/100' }} 
                 style={styles.itemImage} 

@@ -19,6 +19,7 @@ import { setCart } from './src/store/slices/cartSlice';
 import { Linking } from 'react-native';
 import { supabase } from './src/api/supabase';
 import { notificationService } from './src/services/notificationService';
+import { setAccessToken } from './src/api/apiClient';
 
 const AppContent = () => {
   const [loading, setLoading] = useState(true);
@@ -27,7 +28,10 @@ const AppContent = () => {
 
   const { items } = useSelector((state) => state.cart);
   const { selectedSlot } = useSelector((state) => state.config);
-  const { user, token } = useSelector((state) => state.auth);
+  const { user, token, isHydrated: authHydrated } = useSelector((state) => state.auth);
+  const { isHydrated: locationHydrated } = useSelector((state) => state.location);
+  const [isReady, setIsReady] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
@@ -74,12 +78,11 @@ const AppContent = () => {
       );
 
       if (isActiveSession && session) {
-        // Always save the latest token immediately so apiClient can use it
-        await storage.setItem('access_token', session.access_token);
+        setAccessToken(session.access_token);
         dispatch(hydrateAuth(session.access_token));
 
-        // Fetch real profile from backend (only on SIGNED_IN to avoid redundant calls on token refresh)
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        // Fetch real profile from backend (only on SIGNED_IN to avoid redundant calls on INITIAL_SESSION)
+        if (event === 'SIGNED_IN') {
           try {
             const res = await authService.getUserProfile();
             let backendUser = res.success ? res.data : session.user;
@@ -87,13 +90,13 @@ const AppContent = () => {
             if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
               const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
               const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
-              
+
               if (providerName || providerAvatar) {
                 try {
                   const updatePayload = {};
                   if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
                   if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
-                  
+
                   if (Object.keys(updatePayload).length > 0) {
                     const updateRes = await authService.updateProfile(updatePayload);
                     if (updateRes.success) {
@@ -107,12 +110,18 @@ const AppContent = () => {
             }
 
             dispatch(setCredentials({ user: backendUser, token: session.access_token }));
+            if (res.success) {
+              setProfileLoaded(true);
+            }
           } catch (e) {
             console.error('Error fetching profile after auth change:', e);
             dispatch(setCredentials({ user: session.user, token: session.access_token }));
+            setProfileLoaded(false);
           }
         }
       } else if (event === 'SIGNED_OUT') {
+        setAccessToken(null);
+        setProfileLoaded(false);
         dispatch(logout());
       }
     });
@@ -125,37 +134,36 @@ const AppContent = () => {
         const { data: { session } } = await supabase.auth.getSession();
 
         if (session) {
-          // Persist the fresh token so apiClient can use it
-          await storage.setItem('access_token', session.access_token);
+          setAccessToken(session.access_token);
           dispatch(hydrateAuth(session.access_token));
-
+          
           // Fetch real profile from backend with the fresh token
           const res = await authService.getUserProfile();
-          let backendUser = res.success ? res.data : session.user;
-          
-          if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
-            const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
-            const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
-            
-            if (providerName || providerAvatar) {
-              try {
+          if (res.success) {
+            let backendUser = res.data;
+            // Auto-update missing fields from SSO metadata
+            if (!backendUser.full_name || !backendUser.avatar_url) {
+              const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
+              const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
+              
+              if (providerName || providerAvatar) {
                 const updatePayload = {};
-                if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
-                if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
+                if (!backendUser.full_name && providerName) updatePayload.full_name = providerName;
+                if (!backendUser.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
                 
                 if (Object.keys(updatePayload).length > 0) {
                   const updateRes = await authService.updateProfile(updatePayload);
-                  if (updateRes.success) {
-                    backendUser = { ...backendUser, ...updatePayload };
-                  }
+                  if (updateRes.success) backendUser = { ...backendUser, ...updatePayload };
                 }
-              } catch (err) {
-                console.error('Auto profile update failed', err);
               }
             }
+            dispatch(setCredentials({ user: backendUser, token: session.access_token }));
+            setProfileLoaded(true);
+          } else {
+            // Profile fetch failed (e.g. 404), fallback to session user but profileLoaded stays false
+            dispatch(setCredentials({ user: session.user, token: session.access_token }));
+            setProfileLoaded(false);
           }
-          
-          dispatch(setCredentials({ user: backendUser, token: session.access_token }));
         }
 
         // Only hydrate with null if we don't have anything in storage
@@ -163,13 +171,15 @@ const AppContent = () => {
         const savedAddress = await storage.getItem('address');
         const savedStoreId = await storage.getItem('store_id');
         const savedStoreName = await storage.getItem('store_name');
+        const savedCoords = await storage.getItem('coords');
 
         if (savedPincode) {
           dispatch(hydrateLocation({
             pincode: savedPincode,
             address: savedAddress,
             storeId: savedStoreId,
-            storeName: savedStoreName
+            storeName: savedStoreName,
+            coords: savedCoords ? JSON.parse(savedCoords) : null
           }));
         } else {
           // Force fresh location check ONLY if we have none
@@ -178,6 +188,7 @@ const AppContent = () => {
       } catch (e) {
         console.warn('Hydration error:', e);
       } finally {
+        setIsReady(true);
         const endTime = Date.now();
         const elapsedTime = endTime - startTime;
         const minDuration = 4000; // 4 seconds
@@ -202,17 +213,15 @@ const AppContent = () => {
     };
   }, [dispatch]);
 
-  // Sync FCM Token on login
   useEffect(() => {
-    if (token && user) {
+    if (isReady && profileLoaded && token && user) {
       notificationService.updateTokenOnBackend();
     }
-  }, [token, user]);
+  }, [isReady, profileLoaded, token, user]);
 
-  // Fetch cart on login
   useEffect(() => {
     const fetchSavedCart = async () => {
-      if (token && user) {
+      if (isReady && profileLoaded && token && user) {
         const res = await cartService.getCart();
         if (res.success && Array.isArray(res.data)) {
           // Map backend structure back to frontend structure
@@ -228,13 +237,13 @@ const AppContent = () => {
       }
     };
     fetchSavedCart();
-  }, [token, user]); // Only run when user/token changes (login)
+  }, [isReady, token, user]); // Only run when user/token changes (login)
 
   // Sync cart to backend on changes
   useEffect(() => {
     let timeout;
     // Only sync if user is logged in AND we have items (or an empty array)
-    if (token && user && Array.isArray(items)) {
+    if (isReady && profileLoaded && token && user && Array.isArray(items)) {
       // Debounce sync to avoid too many requests
       timeout = setTimeout(async () => {
         try {
@@ -245,7 +254,7 @@ const AppContent = () => {
       }, 2000);
     }
     return () => clearTimeout(timeout);
-  }, [items, token, user]);
+  }, [isReady, items, token, user]);
 
   if (loading) {
     return <SplashScreen />;

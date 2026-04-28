@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
-import { Loader2, Save, X, Image as ImageIcon, Link as LinkIcon, Upload, Tag, Layers, Package, User, Store as StoreIcon, Shield, FileText } from 'lucide-react';
+import { Loader2, Save, X, Image as ImageIcon, Link as LinkIcon, Upload, Tag, Layers, Package, User, Store as StoreIcon, Shield, FileText, Plus, Trash2, Info } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 // Common Components
 const Input = ({ label, value, ...props }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
     <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</label>
-    <input 
-      style={{ 
-        padding: '10px 12px', 
-        border: '1px solid var(--border)', 
-        borderRadius: '8px', 
-        fontSize: '14px', 
+    <input
+      style={{
+        padding: '10px 12px',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        fontSize: '14px',
         outline: 'none',
         background: 'white',
         transition: 'border-color 0.2s',
         width: '100%'
-      }} 
+      }}
       onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
       onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
-      value={value ?? ''} 
-      {...props} 
+      value={value ?? ''}
+      {...props}
     />
   </div>
 );
@@ -28,17 +28,17 @@ const Input = ({ label, value, ...props }) => (
 const Select = ({ label, options, value, ...props }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
     <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</label>
-    <select 
-      style={{ 
-        padding: '10px 12px', 
-        border: '1px solid var(--border)', 
-        borderRadius: '8px', 
+    <select
+      style={{
+        padding: '10px 12px',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
         fontSize: '14px',
         background: 'white',
         outline: 'none',
         cursor: 'pointer',
         width: '100%'
-      }} 
+      }}
       value={value ?? ''}
       {...props}
     >
@@ -88,28 +88,28 @@ const FormWrapper = ({ title, onClose, onSubmit, loading, children, tabs = [], a
           ))}
         </div>
       )}
-      
+
       <form onSubmit={onSubmit} style={{ background: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '24px', height: '450px', overflowY: 'auto' }}>
           {children}
         </div>
-        
+
         {/* Footer */}
-        <div style={{ 
-          padding: '20px 24px', 
-          background: 'white', 
-          borderTop: '1px solid var(--border)', 
-          display: 'flex', 
-          justifyContent: 'flex-end', 
-          gap: '12px' 
+        <div style={{
+          padding: '20px 24px',
+          background: 'white',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '12px'
         }}>
-          <button 
-            type="button" 
-            onClick={onClose} 
-            className="btn-compact" 
-            style={{ 
-              minWidth: '100px', 
-              background: '#f8fafc', 
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-compact"
+            style={{
+              minWidth: '100px',
+              background: '#f8fafc',
               border: '1px solid var(--border)',
               color: 'var(--text-main)',
               fontWeight: '600'
@@ -117,18 +117,18 @@ const FormWrapper = ({ title, onClose, onSubmit, loading, children, tabs = [], a
           >
             Cancel
           </button>
-          <button 
-            disabled={loading} 
-            type="submit" 
-            className="btn-compact" 
-            style={{ 
-              minWidth: '140px', 
-              background: 'var(--primary)', 
-              color: 'white', 
-              border: 'none', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
+          <button
+            disabled={loading}
+            type="submit"
+            className="btn-compact"
+            style={{
+              minWidth: '140px',
+              background: 'var(--primary)',
+              color: 'white',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               gap: '8px',
               fontWeight: '600',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
@@ -160,33 +160,33 @@ const ImageInput = ({ label, value, onChange, onFileChange, imageFile }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
         <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</label>
         <div style={{ display: 'flex', gap: '8px' }}>
-           <button type="button" onClick={() => setMode('upload')} style={{ fontSize: '10px', color: mode === 'upload' ? 'var(--primary)' : 'var(--text-muted)', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-             <Upload size={10} /> Upload
-           </button>
-           <button type="button" onClick={() => setMode('url')} style={{ fontSize: '10px', color: mode === 'url' ? 'var(--primary)' : 'var(--text-muted)', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-             <LinkIcon size={10} /> URL
-           </button>
+          <button type="button" onClick={() => setMode('upload')} style={{ fontSize: '10px', color: mode === 'upload' ? 'var(--primary)' : 'var(--text-muted)', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <Upload size={10} /> Upload
+          </button>
+          <button type="button" onClick={() => setMode('url')} style={{ fontSize: '10px', color: mode === 'url' ? 'var(--primary)' : 'var(--text-muted)', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <LinkIcon size={10} /> URL
+          </button>
         </div>
       </div>
-      
+
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <div style={{ width: '48px', height: '48px', borderRadius: '4px', background: '#f1f5f9', border: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
           {preview ? <img src={preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon size={16} color="#94a3b8" />}
         </div>
-        
+
         <div style={{ flex: 1 }}>
           {mode === 'url' ? (
-            <input 
+            <input
               className="form-control"
               style={{ fontSize: '12px', padding: '6px 10px' }}
-              value={value || ''} 
-              onChange={(e) => { onChange(e.target.value); setPreview(e.target.value); onFileChange(null); }} 
+              value={value || ''}
+              onChange={(e) => { onChange(e.target.value); setPreview(e.target.value); onFileChange(null); }}
               placeholder="https://example.com/image.jpg"
             />
           ) : (
             <div style={{ position: 'relative' }}>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 accept="image/*"
                 onChange={handleFileSelect}
                 style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
@@ -218,10 +218,10 @@ export const SubCategoryForm = ({ initialData, onSave, onClose, loading, categor
   ];
 
   return (
-    <FormWrapper 
-      title={`${initialData ? 'Edit' : 'Add'} Sub-Category`} 
-      onClose={onClose} 
-      onSubmit={(e) => { e.preventDefault(); onSave(formData); }} 
+    <FormWrapper
+      title={`${initialData ? 'Edit' : 'Add'} Sub-Category`}
+      onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); onSave(formData); }}
       loading={loading}
       tabs={tabs}
       activeTab={activeTab}
@@ -237,12 +237,12 @@ export const SubCategoryForm = ({ initialData, onSave, onClose, loading, categor
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</label>
-            <textarea 
-              value={formData.description || ''} 
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
-              className="form-control" 
-              style={{ resize: 'none', minHeight: '124px' }} 
-              rows={5} 
+            <textarea
+              value={formData.description || ''}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="form-control"
+              style={{ resize: 'none', minHeight: '124px' }}
+              rows={5}
               placeholder="Describe this sub-category..."
             />
           </div>
@@ -251,11 +251,11 @@ export const SubCategoryForm = ({ initialData, onSave, onClose, loading, categor
 
       {activeTab === 'media' && (
         <div style={{ maxWidth: '500px' }}>
-          <ImageInput 
-            label="Sub-Category Visual" 
-            value={formData.image_url} 
+          <ImageInput
+            label="Sub-Category Visual"
+            value={formData.image_url}
             imageFile={formData.imageFile}
-            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })} 
+            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })}
             onFileChange={(file) => setFormData({ ...formData, imageFile: file, image_url: '' })}
           />
         </div>
@@ -280,10 +280,10 @@ export const CategoryForm = ({ initialData, onSave, onClose, loading }) => {
   ];
 
   return (
-    <FormWrapper 
-      title={`${initialData ? 'Edit' : 'Add'} Category`} 
-      onClose={onClose} 
-      onSubmit={(e) => { e.preventDefault(); onSave(formData); }} 
+    <FormWrapper
+      title={`${initialData ? 'Edit' : 'Add'} Category`}
+      onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); onSave(formData); }}
       loading={loading}
       tabs={tabs}
       activeTab={activeTab}
@@ -300,12 +300,12 @@ export const CategoryForm = ({ initialData, onSave, onClose, loading }) => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</label>
-              <textarea 
-                value={formData.description || ''} 
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
-                className="form-control" 
-                style={{ resize: 'none', minHeight: '124px' }} 
-                rows={5} 
+              <textarea
+                value={formData.description || ''}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="form-control"
+                style={{ resize: 'none', minHeight: '124px' }}
+                rows={5}
                 placeholder="Brief description of the category..."
               />
             </div>
@@ -315,15 +315,15 @@ export const CategoryForm = ({ initialData, onSave, onClose, loading }) => {
 
       {activeTab === 'media' && (
         <div style={{ maxWidth: '500px' }}>
-          <ImageInput 
-            label="Category Banner / Thumbnail" 
-            value={formData.image_url} 
+          <ImageInput
+            label="Category Banner / Thumbnail"
+            value={formData.image_url}
             imageFile={formData.imageFile}
-            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })} 
+            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })}
             onFileChange={(file) => setFormData({ ...formData, imageFile: file, image_url: '' })}
           />
           <div style={{ marginTop: '20px', padding: '16px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-             <p style={{ fontSize: '12px', color: '#1e40af', margin: 0 }}><b>Tip:</b> High-quality images with transparent backgrounds or consistent themes work best for the app's catalog view.</p>
+            <p style={{ fontSize: '12px', color: '#1e40af', margin: 0 }}><b>Tip:</b> High-quality images with transparent backgrounds or consistent themes work best for the app's catalog view.</p>
           </div>
         </div>
       )}
@@ -333,28 +333,30 @@ export const CategoryForm = ({ initialData, onSave, onClose, loading }) => {
 
 export const ProductForm = ({ initialData, onSave, onClose, loading, stores = [], subcategories = [], isManager = false }) => {
   const { user } = useAuth();
-  
-  const [formData, setFormData] = useState(initialData || { 
-    name: '', slug: '', price: 0, discount_price: '', stock_quantity: 0, weight_unit: 'kg', 
-    store_id: isManager ? user?.store_id : (stores[0]?.id || ''), 
+
+  const [formData, setFormData] = useState(initialData || {
+    name: '', slug: '', price: 0, discount_price: '', stock_quantity: 0, weight_unit: 'kg',
+    store_id: isManager ? user?.store_id : (stores[0]?.id || ''),
     sub_category_id: subcategories[0]?.id || '', description: '',
-    is_deal: false, is_featured: false
+    is_deal: false, is_featured: false,
+    variants: []
   });
   const [activeTab, setActiveTab] = useState('general');
 
   const tabs = [
     { id: 'general', label: 'Basics', icon: Package },
     { id: 'pricing', label: 'Inventory & Pricing', icon: Save },
+    { id: 'customize', label: 'Customize', icon: Layers },
     { id: 'about', label: 'About', icon: FileText },
     { id: 'guide', label: 'Cooking Guide', icon: Shield },
     { id: 'media', label: 'Media', icon: ImageIcon }
   ];
 
   return (
-    <FormWrapper 
-      title={`${initialData ? 'Edit' : 'Add'} Product`} 
-      onClose={onClose} 
-      onSubmit={(e) => { e.preventDefault(); onSave(formData); }} 
+    <FormWrapper
+      title={`${initialData ? 'Edit' : 'Add'} Product`}
+      onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); onSave(formData); }}
       loading={loading}
       tabs={tabs}
       activeTab={activeTab}
@@ -373,12 +375,12 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Description</label>
-            <textarea 
-              value={formData.description || ''} 
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
-              className="form-control" 
-              style={{ 
-                resize: 'none', 
+            <textarea
+              value={formData.description || ''}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="form-control"
+              style={{
+                resize: 'none',
                 minHeight: '160px',
                 padding: '12px',
                 borderRadius: '8px',
@@ -386,8 +388,8 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                 fontSize: '14px',
                 fontFamily: 'inherit',
                 outline: 'none'
-              }} 
-              rows={6} 
+              }}
+              rows={6}
               placeholder="Product details, origin, quality etc."
             />
           </div>
@@ -404,7 +406,7 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
             </div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>Set a discount price to show a strikethrough effect in the app.</p>
           </div>
-          
+
           <div>
             <h3 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '16px', color: 'var(--text-main)' }}>Stock & Units</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -436,17 +438,17 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {['morning', 'afternoon', 'express'].map(opt => (
                 <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={(formData.delivery_options || ['morning', 'afternoon', 'express']).includes(opt)} 
+                  <input
+                    type="checkbox"
+                    checked={(formData.delivery_options || ['morning', 'afternoon', 'express']).includes(opt)}
                     onChange={(e) => {
                       const current = formData.delivery_options || ['morning', 'afternoon', 'express'];
-                      const next = e.target.checked 
+                      const next = e.target.checked
                         ? [...current, opt]
                         : current.filter(o => o !== opt);
                       setFormData({ ...formData, delivery_options: next });
-                    }} 
-                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }} 
+                    }}
+                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
                   />
                   <span style={{ textTransform: 'capitalize' }}>{opt} Delivery</span>
                 </label>
@@ -456,15 +458,178 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
         </div>
       )}
 
+      {activeTab === 'customize' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>Product Variants</h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Add options like "Whole Cleaned", "Steak Cut", etc. with their own pricing.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormData({
+                ...formData,
+                variants: [
+                  ...(formData.variants || []),
+                  { name: '', price: '', discount_price: '', weight_text: '', gross_weight_text: '', description: '', image_url: '', delivery_info: 'Tomorrow Morning' }
+                ]
+              })}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              <Plus size={14} /> Add Variant
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {(formData.variants || []).length === 0 ? (
+              <div style={{ padding: '40px', background: 'white', borderRadius: '12px', border: '2px dashed var(--border)', textAlign: 'center' }}>
+                <Package size={32} color="var(--text-muted)" style={{ margin: '0 auto 12px' }} />
+                <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>No variants added yet. Click "Add Variant" to start.</p>
+              </div>
+            ) : (
+              formData.variants.map((variant, index) => (
+                <div key={index} style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ width: '24px', height: '24px', background: 'var(--primary)', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', flexShrink: 0 }}>{index + 1}</span>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <input
+                          placeholder="Variant Name (e.g. Whole Cleaned, Steak Cut)"
+                          value={variant.name}
+                          onChange={(e) => {
+                            const newVariants = [...formData.variants];
+                            newVariants[index].name = e.target.value;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          style={{ 
+                            border: '1px solid transparent', 
+                            borderBottom: '1px solid var(--border)',
+                            background: 'white', 
+                            padding: '6px 0',
+                            fontSize: '15px', 
+                            fontWeight: '700', 
+                            color: 'var(--text-main)', 
+                            width: '100%', 
+                            outline: 'none',
+                            transition: 'all 0.2s'
+                          }}
+                          onFocus={(e) => e.target.style.borderBottomColor = 'var(--primary)'}
+                          onBlur={(e) => e.target.style.borderBottomColor = 'var(--border)'}
+                        />
+                        {!variant.name && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '2px', fontWeight: '500' }}>* Required field</div>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newVariants = formData.variants.filter((_, i) => i !== index);
+                        setFormData({ ...formData, variants: newVariants });
+                      }}
+                      style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  
+                  <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '16px' }}>
+                    {/* Left Col: Imagery & Metadata */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <ImageInput
+                        label="Variant Image"
+                        value={variant.image_url}
+                        onChange={(url) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].image_url = url;
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                        onFileChange={() => {}} // Handle files later if needed, URLs for now
+                      />
+                      <Input
+                        label="Tooltip Info / Desc"
+                        placeholder="Price based on Gross Weight..."
+                        value={variant.description}
+                        onChange={(e) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].description = e.target.value;
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                      />
+                    </div>
+
+                    {/* Middle Col: Pricing */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <Input
+                        label="Price (₹)"
+                        type="number"
+                        value={variant.price}
+                        onChange={(e) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].price = e.target.value;
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                      />
+                      <Input
+                        label="Discount Price (₹)"
+                        type="number"
+                        value={variant.discount_price}
+                        onChange={(e) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].discount_price = e.target.value;
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                      />
+                      <Input
+                        label="Delivery Info"
+                        placeholder="Tomorrow Morning"
+                        value={variant.delivery_info}
+                        onChange={(e) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].delivery_info = e.target.value;
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                      />
+                    </div>
+
+                    {/* Right Col: Weight Details */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <Input
+                        label="Net Weight Text"
+                        placeholder="500g"
+                        value={variant.weight_text}
+                        onChange={(e) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].weight_text = e.target.value;
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                      />
+                      <Input
+                        label="Gross Weight Text"
+                        placeholder="715g"
+                        value={variant.gross_weight_text}
+                        onChange={(e) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].gross_weight_text = e.target.value;
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {activeTab === 'about' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Product Description / Story</label>
-            <textarea 
-              value={formData.description || ''} 
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
-              className="form-control" 
-              style={{ resize: 'none', minHeight: '180px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }} 
+            <textarea
+              value={formData.description || ''}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="form-control"
+              style={{ resize: 'none', minHeight: '180px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }}
               placeholder="Tell the story of this product..."
             />
           </div>
@@ -478,42 +643,42 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cooking Guide / Recipe Instructions</label>
-            <textarea 
-              value={formData.cooking_guide || ''} 
-              onChange={(e) => setFormData({ ...formData, cooking_guide: e.target.value })} 
-              className="form-control" 
-              style={{ 
-                resize: 'none', 
-                minHeight: '320px', 
-                padding: '16px', 
-                borderRadius: '12px', 
-                border: '1px solid var(--border)', 
+            <textarea
+              value={formData.cooking_guide || ''}
+              onChange={(e) => setFormData({ ...formData, cooking_guide: e.target.value })}
+              className="form-control"
+              style={{
+                resize: 'none',
+                minHeight: '320px',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '1px solid var(--border)',
                 fontSize: '14px',
                 lineHeight: '1.6',
                 fontFamily: 'inherit',
                 background: 'white',
                 outline: 'none',
                 boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)'
-              }} 
+              }}
               placeholder="Step 1: Clean the fish...
 Step 2: Marinate with salt and turmeric...
 Step 3: Fry until golden brown..."
             />
           </div>
           <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', gap: '12px' }}>
-             <div style={{ background: '#3b82f6', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', flexShrink: 0 }}>i</div>
-             <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>This recipe will be displayed in the <b>Cooking Guide</b> tab on the mobile app product page.</p>
+            <div style={{ background: '#3b82f6', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', flexShrink: 0 }}>i</div>
+            <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>This recipe will be displayed in the <b>Cooking Guide</b> tab on the mobile app product page.</p>
           </div>
         </div>
       )}
 
       {activeTab === 'media' && (
         <div style={{ maxWidth: '500px' }}>
-          <ImageInput 
-            label="Main Product Image" 
-            value={formData.image_url} 
+          <ImageInput
+            label="Main Product Image"
+            value={formData.image_url}
             imageFile={formData.imageFile}
-            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })} 
+            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })}
             onFileChange={(file) => setFormData({ ...formData, imageFile: file, image_url: '' })}
           />
         </div>
@@ -525,8 +690,8 @@ Step 3: Fry until golden brown..."
 import GoogleMapPicker from '../common/GoogleMapPicker';
 
 export const StoreForm = ({ initialData, onSave, onClose, loading, managers = [] }) => {
-  const [formData, setFormData] = useState(initialData || { 
-    name: '', pincode: '', address: '', phone: '', email: '', 
+  const [formData, setFormData] = useState(initialData || {
+    name: '', pincode: '', address: '', phone: '', email: '',
     manager_user_id: '', latitude: '', longitude: '', delivery_radius_km: 10,
     serviceable_pincodes: []
   });
@@ -540,10 +705,10 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setFormData({ 
-          ...formData, 
-          latitude: pos.coords.latitude.toFixed(7), 
-          longitude: pos.coords.longitude.toFixed(7) 
+        setFormData({
+          ...formData,
+          latitude: pos.coords.latitude.toFixed(7),
+          longitude: pos.coords.longitude.toFixed(7)
         });
         setLocating(false);
       },
@@ -562,19 +727,19 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
   ];
 
   return (
-    <FormWrapper 
-      title={`${initialData ? 'Edit' : 'Add'} Store`} 
-      onClose={onClose} 
-      onSubmit={(e) => { 
-        e.preventDefault(); 
+    <FormWrapper
+      title={`${initialData ? 'Edit' : 'Add'} Store`}
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
         const cleanedData = {
           ...formData,
-          serviceable_pincodes: typeof formData.serviceable_pincodes === 'string' 
+          serviceable_pincodes: typeof formData.serviceable_pincodes === 'string'
             ? formData.serviceable_pincodes.split(/[\s,]+/).filter(p => p.trim().length === 6).map(p => p.trim())
             : formData.serviceable_pincodes
         };
-        onSave(cleanedData); 
-      }} 
+        onSave(cleanedData);
+      }}
       loading={loading}
       tabs={tabs}
       activeTab={activeTab}
@@ -587,29 +752,29 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
             <Input label="Store Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
             <Input label="PIN Code" value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} required />
             <Input label="Delivery Radius (KM)" type="number" value={formData.delivery_radius_km} onChange={(e) => setFormData({ ...formData, delivery_radius_km: e.target.value })} />
-            
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-               <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setShowMap(!showMap)}
                 style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--primary)', color: 'var(--primary)', background: showMap ? '#f0f9ff' : 'white', fontWeight: '600', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-               >
-                 <ImageIcon size={14} /> {showMap ? 'Hide Map' : 'Pin on Map'}
-               </button>
-               <button 
-                type="button" 
+              >
+                <ImageIcon size={14} /> {showMap ? 'Hide Map' : 'Pin on Map'}
+              </button>
+              <button
+                type="button"
                 onClick={handleCaptureLocation}
                 disabled={locating}
                 style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', color: 'white', background: 'var(--primary)', fontWeight: '600', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-               >
-                 <Shield size={14} /> {locating ? 'Locating...' : 'My Location'}
-               </button>
+              >
+                <Shield size={14} /> {locating ? 'Locating...' : 'My Location'}
+              </button>
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <Input label="Address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required />
             <Select label="Assigned Manager" value={formData.manager_user_id || ''} onChange={(e) => setFormData({ ...formData, manager_user_id: e.target.value })} options={managerOptions} />
-            
+
             <div style={{ background: '#f1f5f9', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', marginTop: '4px' }}>
               <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>GPS COORDINATES</span>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -620,10 +785,10 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
           </div>
           {showMap && (
             <div style={{ gridColumn: 'span 2' }}>
-              <GoogleMapPicker 
-                lat={formData.latitude} 
-                lng={formData.longitude} 
-                onSelect={(lat, lng) => setFormData({ ...formData, latitude: lat, longitude: lng })} 
+              <GoogleMapPicker
+                lat={formData.latitude}
+                lng={formData.longitude}
+                onSelect={(lat, lng) => setFormData({ ...formData, latitude: lat, longitude: lng })}
               />
             </div>
           )}
@@ -635,19 +800,19 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
           <div style={{ background: '#eff6ff', padding: '16px', borderRadius: '8px', border: '1px solid #bfdbfe', marginBottom: '8px' }}>
             <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#1e40af', marginBottom: '4px' }}>Multi-Pincode Delivery</h4>
             <p style={{ fontSize: '12px', color: '#1e40af', margin: 0, lineHeight: '1.5' }}>
-              List all the PIN codes this store should serve. The app will automatically mark these areas as serviceable. 
+              List all the PIN codes this store should serve. The app will automatically mark these areas as serviceable.
               Separate multiple codes with <b>commas</b> or <b>new lines</b>.
             </p>
           </div>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Serviceable PIN Codes</label>
-            <textarea 
-              value={Array.isArray(formData.serviceable_pincodes) ? formData.serviceable_pincodes.join(', ') : (formData.serviceable_pincodes || '')} 
-              onChange={(e) => setFormData({ ...formData, serviceable_pincodes: e.target.value })} 
-              className="form-control" 
-              style={{ resize: 'none', minHeight: '180px', fontSize: '14px', letterSpacing: '0.5px', padding: '12px', border: '1px solid var(--border)', borderRadius: '4px' }} 
-              rows={8} 
+            <textarea
+              value={Array.isArray(formData.serviceable_pincodes) ? formData.serviceable_pincodes.join(', ') : (formData.serviceable_pincodes || '')}
+              onChange={(e) => setFormData({ ...formData, serviceable_pincodes: e.target.value })}
+              className="form-control"
+              style={{ resize: 'none', minHeight: '180px', fontSize: '14px', letterSpacing: '0.5px', padding: '12px', border: '1px solid var(--border)', borderRadius: '4px' }}
+              rows={8}
               placeholder="e.g. 201301, 201305, 201318..."
             />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Only valid 6-digit codes will be saved.</p>
@@ -666,14 +831,14 @@ export const StoreForm = ({ initialData, onSave, onClose, loading, managers = []
 };
 
 export const StaffForm = ({ onSave, onClose, loading, stores = [], type = 'rider' }) => {
-  const [formData, setFormData] = useState({ 
-    email: '', password: '', full_name: '', phone: '', role: type, 
-    store_id: stores[0]?.id || '', vehicle_type: 'bike', vehicle_number: '' 
+  const [formData, setFormData] = useState({
+    email: '', password: '', full_name: '', phone: '', role: type,
+    store_id: stores[0]?.id || '', vehicle_type: 'bike', vehicle_number: ''
   });
   const [activeTab, setActiveTab] = useState('account');
 
   const getTitle = () => {
-    switch(type) {
+    switch (type) {
       case 'rider': return 'Onboard New Rider';
       case 'store_manager': return 'Onboard New Manager';
       case 'customer': return 'Create New Customer';
@@ -687,10 +852,10 @@ export const StaffForm = ({ onSave, onClose, loading, stores = [], type = 'rider
   ].filter(Boolean);
 
   return (
-    <FormWrapper 
-      title={getTitle()} 
-      onClose={onClose} 
-      onSubmit={(e) => { e.preventDefault(); onSave(formData); }} 
+    <FormWrapper
+      title={getTitle()}
+      onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); onSave(formData); }}
       loading={loading}
       tabs={tabs}
       activeTab={activeTab}
@@ -713,7 +878,7 @@ export const StaffForm = ({ onSave, onClose, loading, stores = [], type = 'rider
       {activeTab === 'vehicle' && type === 'rider' && (
         <div style={{ maxWidth: '500px' }}>
           <div style={{ padding: '20px', background: 'white', borderRadius: '8px', border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <Select label="Vehicle Type" value={formData.vehicle_type} onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })} options={[{id: 'bike', name: 'Bike'}, {id: 'scooter', name: 'Scooter'}, {id: 'bicycle', name: 'Bicycle'}]} />
+            <Select label="Vehicle Type" value={formData.vehicle_type} onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })} options={[{ id: 'bike', name: 'Bike' }, { id: 'scooter', name: 'Scooter' }, { id: 'bicycle', name: 'Bicycle' }]} />
             <Input label="Vehicle Number" value={formData.vehicle_number} onChange={(e) => setFormData({ ...formData, vehicle_number: e.target.value })} placeholder="e.g. WB 1234" />
           </div>
         </div>
@@ -732,10 +897,10 @@ export const BannerForm = ({ initialData, onSave, onClose, loading }) => {
   ];
 
   return (
-    <FormWrapper 
-      title={`${initialData ? 'Edit' : 'Add'} Banner`} 
-      onClose={onClose} 
-      onSubmit={(e) => { e.preventDefault(); onSave(formData); }} 
+    <FormWrapper
+      title={`${initialData ? 'Edit' : 'Add'} Banner`}
+      onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); onSave(formData); }}
       loading={loading}
       initialData={initialData}
     >
@@ -753,11 +918,11 @@ export const BannerForm = ({ initialData, onSave, onClose, loading }) => {
           </label>
         </div>
         <div>
-          <ImageInput 
-            label="Banner Image" 
-            value={formData.image_url} 
+          <ImageInput
+            label="Banner Image"
+            value={formData.image_url}
             imageFile={formData.imageFile}
-            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })} 
+            onChange={(url) => setFormData({ ...formData, image_url: url, imageFile: null })}
             onFileChange={(file) => setFormData({ ...formData, imageFile: file, image_url: '' })}
           />
         </div>
@@ -770,10 +935,10 @@ export const HomeSectionForm = ({ initialData, onSave, onClose, loading }) => {
   const [formData, setFormData] = useState(initialData || { title: '', subtitle: '', is_active: true, display_order: 0 });
 
   return (
-    <FormWrapper 
-      title="Edit Home Section" 
-      onClose={onClose} 
-      onSubmit={(e) => { e.preventDefault(); onSave(formData); }} 
+    <FormWrapper
+      title="Edit Home Section"
+      onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); onSave(formData); }}
       loading={loading}
       initialData={initialData}
     >

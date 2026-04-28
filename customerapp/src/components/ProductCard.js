@@ -72,9 +72,19 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
   const discountPercentage = hasDiscount ? Math.round(((price - discount_price) / price) * 100) : 0;
 
   const handleAddToCart = () => {
+    // If product has customization options or variants, navigate to detail screen instead
+    const hasCustomization = (product.cut_options?.length > 0) || 
+                            (product.cleaning_options?.length > 0) || 
+                            (product.variants?.length > 0);
+    
+    if (hasCustomization && onPress) {
+      onPress();
+      return;
+    }
+
     dispatch(addItem({
-      ...product,
-      price: sellingPrice
+      product: { ...product, price: sellingPrice },
+      quantity: 1
     }));
   };
 

@@ -1,69 +1,71 @@
 import { createClient } from '@supabase/supabase-js';
-const SUPABASE_URL = 'https://db.dailyfreshkolkata.in';
-const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJzZXJ2aWNlX3JvbGUiLAogICAgImlzcyI6ICJzdXBhYmFzZS1kZW1vIiwKICAgICJpYXQiOiAxNjQxNzY5MjAwLAogICAgImV4cCI6IDE3OTk1MzU2MDAKfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q';
+import dotenv from 'dotenv';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../.env') });
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function createAdmin(email, password, fullName) {
   console.log(`--- Creating Super Admin: ${email} ---`);
 
-  // 1. Create User in Auth
-  let { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName, role: 'admin' }
-  });
+  // 1. Check if user already exists
+  const { data: listData } = await supabase.auth.admin.listUsers();
+  const existingUser = listData?.users?.find(u => u.email === email);
 
   let userId;
-  if (authError) {
-    if (authError.message.includes('already been registered')) {
-      console.log('ℹ️ User already exists in Auth, updating profile...');
-      // Fetch user ID
-      const { data: listData } = await supabase.auth.admin.listUsers();
-      const existingUser = listData.users.find(u => u.email === email);
-      if (!existingUser) {
-        console.error('❌ Could not find existing user ID');
-        return;
-      }
-      userId = existingUser.id;
-    } else {
+  if (existingUser) {
+    console.log('ℹ️ User already exists in Auth, using existing ID...');
+    userId = existingUser.id;
+  } else {
+    // 2. Create User in Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName, role: 'admin' }
+    });
+
+    if (authError) {
       console.error('❌ Auth Creation Failed:', authError.message);
+      console.log('💡 TIP: If you see "Database error", ensure you ran the permission_fix.sql in Supabase Dashboard.');
       return;
     }
-  } else {
     userId = authData.user.id;
     console.log('✅ Auth User Created:', userId);
   }
 
-  // 2. Create Profile
+  // 3. Create/Update Profile manually (just in case trigger fails)
+  console.log('Syncing profile...');
   const { error: profileError } = await supabase
     .from('profiles')
     .upsert([
-      { 
-        id: userId, 
-        full_name: fullName, 
-        email, 
+      {
+        id: userId,
+        full_name: fullName,
+        email,
         role: 'admin',
-        phone: '0000000000' // Placeholder
+        phone: '0000000000'
       }
     ]);
 
   if (profileError) {
-    console.error('❌ Profile Creation Failed:', profileError.message);
-    // Cleanup auth user if profile fails
-    await supabase.auth.admin.deleteUser(userId);
+    console.error('❌ Profile Sync Failed:', profileError.message);
     return;
   }
 
-  console.log('✅ Profile Created Successfully!');
+  console.log('✅ Admin Account Ready!');
   console.log('\n--- Admin Credentials ---');
   console.log('Email:', email);
   console.log('Password:', password);
   console.log('--------------------------');
 }
 
-// EDIT THESE VALUES
 const ADMIN_EMAIL = 'admin@dailyfresh.com';
 const ADMIN_PASS = 'Admin@123';
 const ADMIN_NAME = 'Super Admin';

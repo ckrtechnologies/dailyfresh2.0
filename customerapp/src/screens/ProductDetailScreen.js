@@ -9,12 +9,13 @@ import {
   ActivityIndicator,
   Dimensions,
   Share,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import productService from '../api/productService';
 import { useDispatch, useSelector } from 'react-redux';
-import { addItem } from '../store/slices/cartSlice';
+import { addItem, removeItem } from '../store/slices/cartSlice';
 import { toggleFavorite } from '../store/slices/favoritesSlice';
 
 const { width } = Dimensions.get('window');
@@ -31,7 +32,20 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const [similarProducts, setSimilarProducts] = useState([]);
 
   const { items: favorites } = useSelector((state) => state.favorites);
+  const { items: cartItems } = useSelector((state) => state.cart);
   const isFavorite = product && favorites.some(item => item.id === product.id);
+
+  // Helper to find quantity for a specific config
+  const getCartQuantity = (variant = null) => {
+    if (!product) return 0;
+    const item = cartItems.find(i => 
+      i.id === product.id && 
+      i.variant?.id === variant?.id &&
+      i.cutPreference === (variant ? null : selectedCut) &&
+      i.cleaningPreference === (variant ? null : selectedCleaning)
+    );
+    return item ? item.quantity : 0;
+  };
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -39,10 +53,19 @@ const ProductDetailScreen = ({ route, navigation }) => {
       try {
         const response = await productService.getProductDetail(productId);
         if (response.success) {
-          setProduct(response.data);
-          if (response.data.cut_options?.length > 0) setSelectedCut(response.data.cut_options[0]);
-          if (response.data.cleaning_options?.length > 0) setSelectedCleaning(response.data.cleaning_options[0]);
-          fetchSimilarProducts(response.data.sub_category_id);
+          const data = response.data;
+          setProduct(data);
+          if (data.cut_options?.length > 0) setSelectedCut(data.cut_options[0]);
+          if (data.cleaning_options?.length > 0) setSelectedCleaning(data.cleaning_options[0]);
+          
+          // Auto-select Customize tab if variants exist
+          if (data.variants?.length > 0) {
+            setActiveTab('customize');
+          } else {
+            setActiveTab('about');
+          }
+          
+          fetchSimilarProducts(data.sub_category_id);
         }
       } catch (err) {
         console.error(err);
@@ -57,7 +80,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
     try {
       let res = await productService.getProducts({ subCategoryId });
       let products = res.success ? res.data.filter(p => p.id !== productId) : [];
-      
+
       // Fallback: If no similar products in sub-category, try parent category
       if (products.length < 2 && product?.sub_category?.category_id) {
         const catRes = await productService.getProducts({ categoryId: product.sub_category.category_id });
@@ -66,7 +89,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
           products = [...products, ...additional];
         }
       }
-      
+
       setSimilarProducts(products.slice(0, 10)); // Max 10 items
     } catch (error) {
       console.error('Error fetching similar products:', error);
@@ -79,14 +102,28 @@ const ProductDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleAddToCart = () => {
-    dispatch(addItem({
-      product: { ...product, price: sellingPrice },
-      quantity,
-      cutPreference: selectedCut,
-      cleaningPreference: selectedCleaning
+  const handleAddToCart = (variant = null, overrideQuantity = null) => {
+    const qty = overrideQuantity !== null ? overrideQuantity : quantity;
+    const itemToAdd = {
+      product: { 
+        ...product, 
+        price: variant ? (variant.discount_price || variant.price) : sellingPrice 
+      },
+      quantity: qty,
+      variant: variant,
+      cutPreference: variant ? null : selectedCut,
+      cleaningPreference: variant ? null : selectedCleaning
+    };
+    dispatch(addItem(itemToAdd));
+  };
+
+  const handleRemoveFromCart = (variant = null) => {
+    dispatch(removeItem({
+      id: product.id,
+      variant: variant,
+      cutPreference: variant ? null : selectedCut,
+      cleaningPreference: variant ? null : selectedCleaning
     }));
-    navigation.navigate('AppTabs', { screen: 'Cart' });
   };
 
   const handleShare = async () => {
@@ -127,10 +164,10 @@ const ProductDetailScreen = ({ route, navigation }) => {
             style={styles.iconButton}
             onPress={handleToggleFavorite}
           >
-            <Icon 
-              name={isFavorite ? "heart" : "heart-outline"} 
-              size={24} 
-              color={isFavorite ? COLORS.secondary : COLORS.primary} 
+            <Icon
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={24}
+              color={isFavorite ? COLORS.secondary : COLORS.primary}
             />
           </TouchableOpacity>
         </View>
@@ -156,14 +193,14 @@ const ProductDetailScreen = ({ route, navigation }) => {
                 style={styles.qtyBtn}
                 onPress={() => setQuantity(Math.max(1, quantity - 1))}
               >
-                <Text style={{fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24}}>−</Text>
+                <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>−</Text>
               </TouchableOpacity>
               <Text style={styles.qtyText}>{quantity}</Text>
               <TouchableOpacity
                 style={styles.qtyBtn}
                 onPress={() => setQuantity(quantity + 1)}
               >
-                <Text style={{fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24}}>+</Text>
+                <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -223,19 +260,96 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
           {/* Product Detail Tabs */}
           <View style={styles.tabContainer}>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'about' && styles.activeTab]} 
+            {product.variants?.length > 0 && (
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'customize' && styles.activeTab]}
+                onPress={() => setActiveTab('customize')}
+              >
+                <Text style={[styles.tabText, activeTab === 'customize' && styles.activeTabText]}>Customize</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'about' && styles.activeTab]}
               onPress={() => setActiveTab('about')}
             >
               <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>About</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'recipe' && styles.activeTab]} 
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'recipe' && styles.activeTab]}
               onPress={() => setActiveTab('recipe')}
             >
-              <Text style={[styles.tabText, activeTab === 'recipe' && styles.activeTabText]}>Cooking Guide</Text>
+              <Text style={[styles.tabText, activeTab === 'recipe' && styles.activeTabText]}>Recipe</Text>
             </TouchableOpacity>
           </View>
+
+          {activeTab === 'customize' && product.variants?.length > 0 && (
+            <View style={styles.tabContent}>
+              {product.variants.map((variant) => (
+                <View key={variant.id} style={styles.variantCard}>
+                  <View style={styles.variantTop}>
+                    <View style={styles.variantInfo}>
+                      <Text style={styles.variantWeight}>{variant.weight_text}</Text>
+                      <View style={styles.variantTitleRow}>
+                        <Text style={styles.variantName}>{variant.name}</Text>
+                        {variant.description && (
+                          <TouchableOpacity style={styles.infoIcon}>
+                            <Icon name="information-outline" size={16} color={COLORS.gray} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      
+                      <View style={styles.variantPriceRow}>
+                        <Text style={styles.variantPrice}>₹{variant.discount_price || variant.price}</Text>
+                        {variant.discount_price && (
+                           <View style={styles.memberBadge}>
+                             <Icon name="alpha-p-circle" size={16} color="#fbbf24" />
+                             <Text style={styles.memberPriceText}>₹{variant.discount_price}</Text>
+                             <Icon name="chevron-right" size={12} color="#fbbf24" />
+                           </View>
+                        )}
+                      </View>
+
+                      <View style={styles.deliveryRow}>
+                        <Icon name="truck-delivery-outline" size={14} color={COLORS.gray} />
+                        <Text style={styles.deliveryText}>{variant.delivery_info || 'Tomorrow Morning'}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.variantImageContainer}>
+                      <Image 
+                        source={{ uri: variant.image_url || product.image_url }} 
+                        style={styles.variantImage} 
+                      />
+                      {getCartQuantity(variant) > 0 ? (
+                        <View style={styles.variantQtySelector}>
+                          <TouchableOpacity 
+                            style={styles.variantQtyBtn} 
+                            onPress={() => handleRemoveFromCart(variant)}
+                          >
+                            <Icon name="minus" size={16} color={COLORS.primary} />
+                          </TouchableOpacity>
+                          <Text style={styles.variantQtyText}>{getCartQuantity(variant)}</Text>
+                          <TouchableOpacity 
+                            style={styles.variantQtyBtn} 
+                            onPress={() => handleAddToCart(variant, 1)}
+                          >
+                            <Icon name="plus" size={16} color={COLORS.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity 
+                          style={styles.variantAddBtn} 
+                          onPress={() => handleAddToCart(variant)}
+                        >
+                          <Text style={styles.variantAddText}>ADD</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
 
           {activeTab === 'about' ? (
             <View style={styles.tabContent}>
@@ -286,7 +400,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
                     <Text style={styles.recipeSubText}>Step-by-step instructions</Text>
                   </View>
                 </View>
-                
+
                 <View style={styles.recipeBody}>
                   {product.cooking_guide ? (
                     product.cooking_guide.split('\n').filter(line => line.trim()).map((step, index) => (
@@ -321,8 +435,8 @@ const ProductDetailScreen = ({ route, navigation }) => {
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarList}>
               {similarProducts.map((p) => (
-                <TouchableOpacity 
-                  key={p.id} 
+                <TouchableOpacity
+                  key={p.id}
                   style={styles.similarCard}
                   onPress={() => navigation.push('ProductDetail', { productId: p.id })}
                 >
@@ -357,9 +471,52 @@ const ProductDetailScreen = ({ route, navigation }) => {
           <Text style={styles.totalLabel}>Total Price</Text>
           <Text style={styles.totalPrice}>₹{sellingPrice * quantity}</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={handleAddToCart}>
-          <Text style={styles.addBtnText}>ADD TO CART</Text>
-        </TouchableOpacity>
+        {product.variants?.length > 0 ? (
+          <TouchableOpacity 
+            style={styles.addBtn} 
+            onPress={() => {
+              if (cartItems.some(i => i.id === product.id)) {
+                navigation.navigate('AppTabs', { screen: 'Cart' });
+              } else {
+                setActiveTab('customize');
+              }
+            }}
+          >
+            <Text style={styles.addBtnText}>ADD TO CART</Text>
+          </TouchableOpacity>
+        ) : getCartQuantity() > 0 ? (
+          <View style={[styles.addBtn, styles.qtySelectorFooter]}>
+            <TouchableOpacity 
+              style={styles.footerQtyBtn} 
+              onPress={() => handleRemoveFromCart()}
+            >
+              <Icon name="minus" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={{ flex: 1, alignItems: 'center' }}
+              onPress={() => navigation.navigate('AppTabs', { screen: 'Cart' })}
+            >
+              <Text style={styles.footerQtyText}>{getCartQuantity()}</Text>
+              <Text style={{ color: COLORS.white, fontSize: 10, fontWeight: '700' }}>VIEW CART</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.footerQtyBtn} 
+              onPress={() => handleAddToCart(null, 1)}
+            >
+              <Icon name="plus" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity 
+            style={styles.addBtn} 
+            onPress={() => {
+              handleAddToCart();
+              navigation.navigate('AppTabs', { screen: 'Cart' });
+            }}
+          >
+            <Text style={styles.addBtnText}>ADD TO CART</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -794,6 +951,108 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.dark,
   },
+  variantCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.m,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginBottom: SPACING.m,
+    padding: SPACING.m,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  variantTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  variantInfo: {
+    flex: 1,
+    paddingRight: SPACING.m,
+  },
+  variantWeight: {
+    fontSize: 11,
+    color: COLORS.gray,
+    fontWeight: '600',
+  },
+  variantTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  variantName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.dark,
+  },
+  infoIcon: {
+    marginLeft: 6,
+  },
+  variantPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  variantPrice: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.dark,
+    marginRight: 8,
+  },
+  memberBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+  },
+  memberPriceText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400e',
+    marginHorizontal: 2,
+  },
+  deliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  deliveryText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  variantImageContainer: {
+    alignItems: 'center',
+  },
+  variantImage: {
+    width: 100,
+    height: 70,
+    borderRadius: RADIUS.s,
+    backgroundColor: COLORS.lightGray,
+  },
+  variantAddBtn: {
+    marginTop: 8,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 20,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  variantAddText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -834,6 +1093,49 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     fontWeight: '700',
+  },
+  variantQtySelector: {
+    position: 'absolute',
+    bottom: -10,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.s,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  variantQtyBtn: {
+    padding: 4,
+  },
+  variantQtyText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.primary,
+    marginHorizontal: 8,
+    minWidth: 16,
+    textAlign: 'center',
+  },
+  qtySelectorFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.l,
+  },
+  footerQtyBtn: {
+    padding: 10,
+  },
+  footerQtyText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.white,
   },
 });
 

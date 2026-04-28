@@ -39,6 +39,7 @@ const OrdersScreen = ({ navigation }) => {
   };
 
   const getStatusColor = (status) => {
+    if (!status) return COLORS.gray;
     switch (status.toLowerCase()) {
       case 'delivered': return '#4CAF50';
       case 'pending': return '#FF9800';
@@ -73,7 +74,7 @@ const OrdersScreen = ({ navigation }) => {
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
           <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {item.status.toUpperCase()}
+            {(item.status || 'UNKNOWN').toUpperCase()}
           </Text>
         </View>
       </View>

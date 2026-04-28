@@ -29,6 +29,7 @@ const locationSlice = createSlice({
       if (address) storage.setItem('address', address);
       if (storeId) storage.setItem('store_id', storeId);
       if (storeName) storage.setItem('store_name', storeName);
+      if (coords) storage.setItem('coords', JSON.stringify(coords));
     },
     setSelectedAddress: (state, action) => {
       state.selectedAddress = action.payload;
@@ -43,6 +44,7 @@ const locationSlice = createSlice({
         if (action.payload.pincode) storage.setItem('pincode', action.payload.pincode);
         if (state.address) storage.setItem('address', state.address);
         if (action.payload.store_id) storage.setItem('store_id', action.payload.store_id);
+        if (state.coords) storage.setItem('coords', JSON.stringify(state.coords));
       } else {
         storage.removeItem('selected_address');
       }
@@ -56,10 +58,12 @@ const locationSlice = createSlice({
       storage.removeItem('pincode');
       storage.removeItem('address');
       storage.removeItem('store_id');
+      storage.removeItem('coords');
     },
     hydrateLocation: (state, action) => {
       state.pincode = action.payload.pincode;
       state.address = action.payload.address;
+      state.coords = action.payload.coords || null;
       state.storeId = action.payload.storeId || null;
       state.storeName = action.payload.storeName || null;
       state.isServiceable = !!action.payload.pincode;

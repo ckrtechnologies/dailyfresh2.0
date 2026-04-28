@@ -19,13 +19,11 @@ const authSlice = createSlice({
       state.user = user;
       state.token = token;
       state.isAuthenticated = true;
-      storage.setItem('access_token', token);
     },
     logout: (state) => {
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
-      storage.removeItem('access_token');
     },
     setLoading: (state, action) => {
       state.loading = action.payload;

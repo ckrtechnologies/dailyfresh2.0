@@ -36,9 +36,11 @@ export const authenticate = async (req, res, next) => {
         .insert([
           {
             id: user.id,
-            full_name: user.user_metadata?.full_name || user.email.split('@')[0],
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
             email: user.email,
-            phone: user.user_metadata?.phone || '0000000000', // Placeholder
+            // If phone is missing (common for SSO), set to null. 
+            // Note: Requires DB migration to allow NULL on profiles.phone
+            phone: user.user_metadata?.phone || null,
             role: 'customer',
             avatar_url: user.user_metadata?.avatar_url || null
           }

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import crypto from 'crypto';
 import { deleteFileByUrl } from '../utils/fileHelper.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import * as notificationService from '../services/notificationService.js';
@@ -558,7 +559,7 @@ export const listProducts = async (req, res) => {
   try {
     let query = supabaseAdmin
       .from('products')
-      .select('*, store:stores(name), sub_category:sub_categories(name, category:categories(name))', { count: 'exact' });
+      .select('*, store:stores(name), sub_category:sub_categories(name, category:categories(name)), variants:product_variants(*)', { count: 'exact' });
 
     if (storeIdToFetch) query = query.eq('store_id', storeIdToFetch);
     if (search) query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,sku.ilike.%${search}%`);
@@ -656,10 +657,101 @@ export const createProduct = async (req, res) => {
       delivery_options: safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express'])
     };
 
-    const { data, error } = await supabaseAdmin.from('products').insert([productData]).select().single();
+    const { data: product, error } = await supabaseAdmin.from('products').insert([productData]).select('*, variants:product_variants(*)').single();
     if (error) return errorResponse(res, 'Failed to create product', 400, error);
-    return successResponse(res, { product: data }, 'Product created', 201);
+
+    // --- HANDLE VARIANTS ---
+    const variants = req.body.variants ? (typeof req.body.variants === 'string' ? JSON.parse(req.body.variants) : req.body.variants) : [];
+    if (variants.length > 0) {
+      try {
+        console.log(`[Admin] Creating ${variants.length} variants for product ${product.id}`);
+        await syncProductVariants(product.id, variants);
+        
+        // Refresh product with inserted variants
+        const { data: refreshed } = await supabaseAdmin.from('products').select('*, variants:product_variants(*)').eq('id', product.id).single();
+        return successResponse(res, { product: refreshed }, 'Product created', 201);
+      } catch (variantErr) {
+        // Since product was created, we might want to delete it or inform the user
+        // For now, let's just return the error. The admin can try to edit it later.
+        return errorResponse(res, `Product created but variants failed: ${variantErr.message}`, 400);
+      }
+    }
+
+    return successResponse(res, { product }, 'Product created', 201);
   } catch (error) { return errorResponse(res, 'Error', 500, error); }
+};
+
+// Helper for variants
+const syncProductVariants = async (productId, variants) => {
+  if (!Array.isArray(variants)) return;
+  console.log(`[Admin] Syncing ${variants.length} variants for product ${productId}`);
+
+  try {
+    // 1. Get existing variant IDs
+    const { data: existing } = await supabaseAdmin.from('product_variants').select('id').eq('product_id', productId);
+    const existingIds = (existing || []).map(v => v.id);
+    
+    // 2. Identify variants to delete (those not in the incoming list)
+    const incomingIds = variants.map(v => v.id).filter(id => id);
+    const idsToDelete = existingIds.filter(id => !incomingIds.includes(id));
+
+    if (idsToDelete.length > 0) {
+      console.log(`[Admin] Deleting ${idsToDelete.length} obsolete variants`);
+      await supabaseAdmin.from('product_variants').delete().in('id', idsToDelete);
+    }
+
+    // 3. Helper and ID generation
+    const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    const generateUUID = () => crypto.randomUUID();
+
+    // 4. Prepare all variants for upsert
+    const variantsToUpsert = variants.map(v => {
+      const record = {
+        product_id: productId,
+        name: v.name,
+        description: v.description || null,
+        price: parseFloat(v.price) || 0,
+        discount_price: (v.discount_price && v.discount_price !== '' && v.discount_price !== 'null') ? parseFloat(v.discount_price) : null,
+        weight_text: v.weight_text || null,
+        gross_weight_text: v.gross_weight_text || null,
+        image_url: v.image_url || null,
+        delivery_info: v.delivery_info || 'Tomorrow Morning',
+        display_order: v.display_order || 0
+      };
+
+      // If it's an existing variant, keep its ID; otherwise, generate a new one
+      if (v.id && isUUID(v.id)) {
+        record.id = v.id;
+      } else {
+        record.id = generateUUID();
+      }
+      
+      return record;
+    });
+
+    // 5. Validate all variants
+    if (variantsToUpsert.length > 0) {
+      const invalid = variantsToUpsert.find(v => !v.name || v.price <= 0);
+      if (invalid) {
+        throw new Error('All variants must have a name and a valid price (> 0)');
+      }
+
+      console.log(`[Admin] Syncing ${variantsToUpsert.length} variants for product ${productId}`);
+      
+      // 6. Single bulk upsert (now safe because all records have IDs)
+      const { error: upsertError } = await supabaseAdmin
+        .from('product_variants')
+        .upsert(variantsToUpsert, { onConflict: 'id' });
+
+      if (upsertError) {
+        console.error('[Admin] Bulk upsert variants error:', upsertError);
+        throw upsertError;
+      }
+    }
+  } catch (error) {
+    console.error('[Admin] Variant sync error:', error);
+    throw error;
+  }
 };
 
 // Update
@@ -774,9 +866,20 @@ export const updateProduct = async (req, res) => {
       query = query.eq('store_id', req.user.store_id);
     }
 
-    const { data, error } = await query.select().single();
+    // --- SYNC VARIANTS ---
+    if (req.body.variants) {
+      try {
+        const variants = typeof req.body.variants === 'string' ? JSON.parse(req.body.variants) : req.body.variants;
+        await syncProductVariants(id, variants);
+      } catch (variantErr) {
+        return errorResponse(res, variantErr.message || 'Failed to sync variants', 400);
+      }
+    }
+
+    const { data: product, error } = await query.select('*, variants:product_variants(*)').single();
     if (error) return errorResponse(res, 'Update failed or access denied', 400, error);
-    return successResponse(res, { product: data }, 'Product updated');
+
+    return successResponse(res, { product }, 'Product updated');
   } catch (error) { return errorResponse(res, 'Error', 500, error); }
 };
 

@@ -19,21 +19,24 @@ export const createCoupon = async (req, res) => {
     const { data, error } = await supabaseAdmin
       .from('coupons')
       .insert([{
-        code: code.toUpperCase(),
-        description,
+        code: code.toUpperCase().trim(),
+        description: description || null,
         discount_type,
-        discount_value,
-        min_order_amount: min_order_amount || 0,
-        max_discount_amount: max_discount_amount || null,
-        start_date: start_date || new Date(),
-        end_date: end_date || null,
-        usage_limit: usage_limit || null,
+        discount_value: parseFloat(discount_value),
+        min_order_amount: (min_order_amount && min_order_amount !== '') ? parseFloat(min_order_amount) : 0,
+        max_discount_amount: (max_discount_amount && max_discount_amount !== '') ? parseFloat(max_discount_amount) : null,
+        start_date: (start_date && start_date !== '') ? start_date : new Date(),
+        end_date: (end_date && end_date !== '') ? end_date : null,
+        usage_limit: (usage_limit && usage_limit !== '') ? parseInt(usage_limit) : null,
         is_active: true
       }])
       .select()
       .single();
 
-    if (error) return errorResponse(res, 'Failed to create coupon', 400, error);
+    if (error) {
+      console.error('[Coupon] Create error:', error);
+      return errorResponse(res, 'Failed to create coupon', 400, error);
+    }
     return successResponse(res, { coupon: data }, 'Coupon created successfully', 201);
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
@@ -69,7 +72,24 @@ export const listCoupons = async (req, res) => {
 
 export const updateCoupon = async (req, res) => {
   const { id } = req.params;
-  const updateData = req.body;
+  const body = req.body;
+
+  // Sanitize numeric and date fields to handle empty strings
+  const updateData = { ...body };
+  
+  if (updateData.discount_value !== undefined) updateData.discount_value = parseFloat(updateData.discount_value);
+  
+  if (updateData.min_order_amount === '') updateData.min_order_amount = 0;
+  else if (updateData.min_order_amount !== undefined) updateData.min_order_amount = parseFloat(updateData.min_order_amount);
+  
+  if (updateData.max_discount_amount === '') updateData.max_discount_amount = null;
+  else if (updateData.max_discount_amount !== undefined) updateData.max_discount_amount = parseFloat(updateData.max_discount_amount);
+  
+  if (updateData.usage_limit === '') updateData.usage_limit = null;
+  else if (updateData.usage_limit !== undefined) updateData.usage_limit = parseInt(updateData.usage_limit);
+  
+  if (updateData.start_date === '') updateData.start_date = new Date();
+  if (updateData.end_date === '') updateData.end_date = null;
 
   try {
     const { data, error } = await supabaseAdmin
@@ -79,7 +99,10 @@ export const updateCoupon = async (req, res) => {
       .select()
       .single();
 
-    if (error) return errorResponse(res, 'Failed to update coupon', 400, error);
+    if (error) {
+      console.error('[Coupon] Update error:', error);
+      return errorResponse(res, 'Failed to update coupon', 400, error);
+    }
     return successResponse(res, { coupon: data }, 'Coupon updated successfully');
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
