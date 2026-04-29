@@ -130,10 +130,11 @@ const MainStack = () => {
   return (
     <Stack.Navigator 
       screenOptions={{ headerShown: false }}
-      initialRouteName={!isServiceable ? "LocationPicker" : "AppTabs"}
+      initialRouteName={isServiceable ? 'AppTabs' : 'LocationPicker'}
     >
-      <Stack.Screen name="AppTabs" component={AppTabs} />
+      {/* LocationPicker is ALWAYS registered so it can be navigated to at any time */}
       <Stack.Screen name="LocationPicker" component={LocationPickerScreen} />
+      <Stack.Screen name="AppTabs" component={AppTabs} />
       <Stack.Screen name="ProductListing" component={ProductListingScreen} />
       <Stack.Screen name="ProductList" component={ProductListScreen} />
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />

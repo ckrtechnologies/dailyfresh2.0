@@ -33,6 +33,14 @@ const storage = {
     }
   },
 
+  clearAll: async () => {
+    try {
+      await AsyncStorage.clear();
+    } catch (e) {
+      console.error('Error clearing storage', e);
+    }
+  },
+
   // Synchronous-like access for things already in memory (not recommended for large data)
   // We will handle this via Redux hydration
 };

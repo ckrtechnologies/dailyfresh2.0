@@ -130,6 +130,12 @@ const CheckoutScreen = ({ navigation }) => {
           name: item.name,
           quantity: item.quantity,
           price: item.price,
+          image_url: item.image_url,
+          variant_id: item.variant?.id,
+          preferences: {
+            cut: item.cutPreference,
+            cleaning: item.cleaningPreference
+          }
         })),
         subtotal: totalAmount,
         delivery_charge: deliveryFee,
@@ -204,15 +210,19 @@ const CheckoutScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color={COLORS.dark} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Checkout</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        style={{ flex: 1 }}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={24} color={COLORS.dark} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Address Selection */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -363,6 +373,7 @@ const CheckoutScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+    </KeyboardAvoidingView>
 
       {/* Available Coupons Modal */}
       <Modal

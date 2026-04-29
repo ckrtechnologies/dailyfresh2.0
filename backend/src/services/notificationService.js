@@ -21,7 +21,7 @@ export const sendToUser = async (userId, title, body, data = {}) => {
     // 2. Fetch FCM Token for Push
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('fcm_token')
+      .select('fcm_token, avatar_url')
       .eq('id', userId)
       .single();
 
@@ -32,7 +32,10 @@ export const sendToUser = async (userId, title, body, data = {}) => {
 
     // 3. Send Firebase Push
     // NOTE: FCM data payload values must be strings
-    const fcmData = {};
+    const avatarUrl = profile?.avatar_url || 'https://dailyfreshkolkata.in/assets/logo.png';
+    const fcmData = {
+      image_url: avatarUrl
+    };
     if (data) {
       Object.keys(data).forEach(key => {
         if (data[key] !== undefined && data[key] !== null) {
@@ -42,7 +45,11 @@ export const sendToUser = async (userId, title, body, data = {}) => {
     }
 
     const message = {
-      notification: { title, body },
+      notification: { 
+        title, 
+        body,
+        imageUrl: avatarUrl 
+      },
       data: {
         ...fcmData,
         title: String(title),
@@ -55,6 +62,7 @@ export const sendToUser = async (userId, title, body, data = {}) => {
           channelId: (data.type?.includes('order') || data.type?.includes('confirmed')) ? 'orders' : 'default',
           priority: 'high',
           sound: 'ding',
+          imageUrl: avatarUrl
         }
       },
       apns: {

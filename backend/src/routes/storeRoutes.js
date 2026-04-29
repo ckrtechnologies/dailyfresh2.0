@@ -1,6 +1,7 @@
 import express from 'express';
 import * as storeController from '../controllers/storeController.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
+import { upload } from '../middlewares/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -22,9 +23,10 @@ router.patch('/fcm-token', storeController.updateFcmToken);
 router.get('/categories', storeController.getCategories);
 router.get('/sub-categories', storeController.getSubCategories);
 
-router.post('/inventory', storeController.createProduct);
+// Inventory CRUD with Image Upload support
+router.post('/inventory', upload.single('image'), storeController.createProduct);
 router.get('/inventory/export', storeController.exportInventoryCSV);
-router.put('/inventory/:productId', storeController.updateProduct);
+router.put('/inventory/:productId', upload.single('image'), storeController.updateProduct);
 router.delete('/inventory/:productId', storeController.deleteProduct);
 
 router.get('/orders/export', storeController.exportOrdersCSV);

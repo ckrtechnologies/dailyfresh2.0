@@ -14,6 +14,9 @@ router.use(authenticate);
 router.get('/stats', authorize(['admin', 'store_manager']), adminController.getDashboardStats);
 router.get('/recent-orders', authorize(['admin', 'store_manager']), adminController.listOrders); 
 
+// Common Upload Utility
+router.post('/upload', authorize(['admin', 'store_manager']), upload.single('file'), adminController.uploadFile);
+
 // Order Management
 router.get('/orders', authorize(['admin', 'store_manager']), adminController.listOrders);
 router.patch('/orders/:id/status', authorize(['admin', 'store_manager']), adminController.updateOrderStatus);
@@ -50,16 +53,16 @@ router.patch('/riders/:riderId/approve', authorize(['admin']), adminController.a
 router.patch('/riders/:riderId', authorize(['admin', 'store_manager']), adminController.updateRiderStatus);
 
 // Catalog CRUD (Managers cannot add/remove)
-router.post('/categories', authorize(['admin']), upload.single('image'), adminController.createCategory);
-router.patch('/categories/:id', authorize(['admin']), upload.single('image'), adminController.updateCategory);
+router.post('/categories', authorize(['admin']), upload.any(), adminController.createCategory);
+router.patch('/categories/:id', authorize(['admin']), upload.any(), adminController.updateCategory);
 router.delete('/categories/:id', authorize(['admin']), adminController.deleteCategory);
 
-router.post('/sub-categories', authorize(['admin']), upload.single('image'), adminController.createSubCategory);
-router.patch('/sub-categories/:id', authorize(['admin']), upload.single('image'), adminController.updateSubCategory);
+router.post('/sub-categories', authorize(['admin']), upload.any(), adminController.createSubCategory);
+router.patch('/sub-categories/:id', authorize(['admin']), upload.any(), adminController.updateSubCategory);
 router.delete('/sub-categories/:id', authorize(['admin']), adminController.deleteSubCategory);
 
-router.post('/products', authorize(['admin', 'store_manager']), upload.single('image'), adminController.createProduct);
-router.patch('/products/:id', authorize(['admin', 'store_manager']), upload.single('image'), adminController.updateProduct);
+router.post('/products', authorize(['admin', 'store_manager']), upload.any(), adminController.createProduct);
+router.patch('/products/:id', authorize(['admin', 'store_manager']), upload.any(), adminController.updateProduct);
 router.delete('/products/:id', authorize(['admin']), adminController.deleteProduct);
 
 // Platform Global Settings
@@ -68,8 +71,8 @@ router.patch('/config', authorize(['admin']), adminController.updatePlatformSett
 
 // Home Screen Management
 router.get('/banners', authorize(['admin']), adminController.listBanners);
-router.post('/banners', authorize(['admin']), upload.single('image'), adminController.createBanner);
-router.patch('/banners/:id', authorize(['admin']), upload.single('image'), adminController.updateBanner);
+router.post('/banners', authorize(['admin']), upload.any(), adminController.createBanner);
+router.patch('/banners/:id', authorize(['admin']), upload.any(), adminController.updateBanner);
 router.delete('/banners/:id', authorize(['admin']), adminController.deleteBanner);
 
 router.get('/home-sections', authorize(['admin']), adminController.listHomeSections);

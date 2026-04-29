@@ -15,8 +15,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import addressService from '../api/addressService';
+import { useDispatch } from 'react-redux';
+import { setSelectedAddress } from '../store/slices/locationSlice';
 
 const AddAddressScreen = ({ route, navigation }) => {
+  const dispatch = useDispatch();
   const { locationData, editAddress } = route.params || {};
   
   const [loading, setLoading] = useState(false);
@@ -90,6 +93,17 @@ const AddAddressScreen = ({ route, navigation }) => {
 
       if (res.success) {
         Alert.alert('Success', editAddress ? 'Address updated' : 'Address saved successfully');
+        
+        // Auto-select this address after saving
+        const savedAddress = res.data.address;
+        if (savedAddress) {
+          dispatch(setSelectedAddress({
+            ...savedAddress,
+            store_id: store.id,
+            store_name: store.name
+          }));
+        }
+
         navigation.goBack();
       }
     } catch (error) {
@@ -133,7 +147,7 @@ const AddAddressScreen = ({ route, navigation }) => {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -263,6 +277,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.l,
+    paddingBottom: 40,
   },
   sectionTitle: {
     fontSize: 12,

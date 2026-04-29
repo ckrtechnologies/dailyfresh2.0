@@ -11,8 +11,11 @@ const configSlice = createSlice({
     setSelectedSlot: (state, action) => {
       state.selectedSlot = action.payload;
     },
+    resetConfig: (state) => {
+      state.selectedSlot = 'all';
+    },
   },
 });
 
-export const { setSelectedSlot } = configSlice.actions;
+export const { setSelectedSlot, resetConfig } = configSlice.actions;
 export default configSlice.reducer;

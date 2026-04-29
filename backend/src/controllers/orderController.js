@@ -82,12 +82,12 @@ const findFulfillingStore = async (preferredStoreId, items, lat, lng) => {
 };
 
 export const placeOrder = async (req, res) => {
-  const { 
+  const {
     store_id,       // preferred store (from Redux location state)
-    address_id, 
-    items, 
-    total_amount, 
-    payment_method, 
+    address_id,
+    items,
+    total_amount,
+    payment_method,
     delivery_slot,
     subtotal,
     delivery_charge,
@@ -157,7 +157,7 @@ export const placeOrder = async (req, res) => {
         }])
         .select()
         .single();
-        
+
       if (!addrErr && newAddr) {
         final_address_id = newAddr.id;
       }
@@ -223,7 +223,7 @@ export const placeOrder = async (req, res) => {
     }));
 
     const { error: itemsError } = await supabaseAdmin.from('order_items').insert(orderItems);
-    
+
     if (itemsError) {
       console.error('[Order Error] Items insertion failed:', itemsError);
       // If items fail, we should probably delete the order to prevent orphan orders
@@ -232,7 +232,7 @@ export const placeOrder = async (req, res) => {
     }
 
     console.log(`[Order Success] Order #${order.order_number} created with ${orderItems.length} items`);
-    
+
     // 5. If COD, decrement stock immediately and send notification
     if (payment_method === 'cod') {
       try {
@@ -274,7 +274,7 @@ export const placeOrder = async (req, res) => {
     }
 
     // 7. Success Response
-    return successResponse(res, { 
+    return successResponse(res, {
       order_id: order.id,
       razorpay_order_id,
       total_amount,
@@ -305,13 +305,13 @@ export const verifyPayment = async (req, res) => {
     console.log('[Payment] Payload received:', { razorpay_order_id, razorpay_payment_id, order_id });
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !order_id) {
-       console.error('[Payment Error] Incomplete Payload:', { 
-         razorpay_order_id: !!razorpay_order_id, 
-         razorpay_payment_id: !!razorpay_payment_id, 
-         razorpay_signature: !!razorpay_signature, 
-         order_id: !!order_id 
-       });
-       return errorResponse(res, 'Incomplete payment information', 400);
+      console.error('[Payment Error] Incomplete Payload:', {
+        razorpay_order_id: !!razorpay_order_id,
+        razorpay_payment_id: !!razorpay_payment_id,
+        razorpay_signature: !!razorpay_signature,
+        order_id: !!order_id
+      });
+      return errorResponse(res, 'Incomplete payment information', 400);
     }
 
     // 1. Verify Signature
@@ -319,7 +319,7 @@ export const verifyPayment = async (req, res) => {
     const rzpOrderIdStr = String(razorpay_order_id).trim();
     const rzpPaymentIdStr = String(razorpay_payment_id).trim();
     const rzpSignatureStr = String(razorpay_signature).trim();
-    
+
     const generated_signature = crypto
       .createHmac("sha256", secretStr)
       .update(rzpOrderIdStr + "|" + rzpPaymentIdStr)
@@ -370,7 +370,7 @@ export const verifyPayment = async (req, res) => {
       status: order.status,
       payment_status: order.payment_status
     };
-    
+
     successResponse(res, { order: sanitizedOrder }, 'Payment verified');
 
     // 4. Background Tasks (Stock & Notifications)
@@ -378,7 +378,7 @@ export const verifyPayment = async (req, res) => {
     (async () => {
       try {
         console.log('[Payment Background] Processing stock...');
-        
+
         const { data: items, error: itemsError } = await supabaseAdmin
           .from('order_items')
           .select('product_id, quantity, name')
@@ -397,7 +397,7 @@ export const verifyPayment = async (req, res) => {
                 .select('stock_quantity')
                 .eq('id', item.product_id)
                 .single();
-              
+
               if (product) {
                 // 2. Calculate and update new stock
                 const newStock = Math.max(0, (product.stock_quantity || 0) - item.quantity);
@@ -411,7 +411,7 @@ export const verifyPayment = async (req, res) => {
         } else {
           console.warn('[Payment Background] No items found for order:', order_id);
         }
-        
+
         console.log('[Payment Background] Sending notifications...');
         await notificationService.sendToUser(
           order.user_id,
@@ -451,7 +451,7 @@ export const verifyPayment = async (req, res) => {
       console.error('[Payment Response Error]', JSON.stringify(error.response.data, null, 2));
     }
     console.error('-------------------------------------------');
-    return errorResponse(res, 'Payment verification failed', 500, { 
+    return errorResponse(res, 'Payment verification failed', 500, {
       error: error.message,
       stack: error.stack,
       details: error.response?.data

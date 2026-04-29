@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  ScrollView,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -20,6 +21,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { setLocation } from '../store/slices/locationSlice';
 import apiClient from '../api/apiClient';
+import { supabase } from '../api/supabase';
 
 const fetchNearestStore = async ({ lat, lng, pincode } = {}) => {
   try {
@@ -43,8 +45,16 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   const [isComingSoon, setIsComingSoon] = useState(false);
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth);
-
+  const { selectedAddress } = useSelector((state) => state.location);
+  const isMandatory = !!route.params?.mandatory;
   const params = route.params || {};
+
+  // If we already have a selected address, don't stay here
+  useEffect(() => {
+    if (selectedAddress) {
+      navigation.replace('AppTabs');
+    }
+  }, [selectedAddress]);
 
   const requestLocationPermission = async () => {
     if (Platform.OS === 'ios') {
@@ -129,17 +139,33 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
           };
 
           dispatch(setLocation(locationData));
-
+          
           if (!store) {
             setIsComingSoon(true);
             return;
           }
 
-          if (params?.from === 'SavedAddresses') {
-            navigation.navigate('AddAddress', { locationData });
-          } else {
-            navigation.replace('AppTabs');
-          }
+          Alert.alert(
+            'Store Found!',
+            `You are being connected to our ${store.name} branch.`,
+            [{ text: 'Continue', onPress: () => {
+              if (params?.from === 'SavedAddresses' || (isAuthenticated && isMandatory)) {
+                navigation.navigate('AddAddress', { locationData });
+              } else if (isAuthenticated) {
+                // Even if not mandatory, encourage saving for better UX if they just detected location
+                Alert.alert(
+                  'Save Address',
+                  'Would you like to save this location for faster checkout?',
+                  [
+                    { text: 'Later', onPress: () => navigation.replace('AppTabs') },
+                    { text: 'Save Now', onPress: () => navigation.navigate('AddAddress', { locationData }) }
+                  ]
+                );
+              } else {
+                navigation.replace('AppTabs');
+              }
+            }}]
+          );
         } catch (error) {
           console.error('Geocoding logic error:', error);
           Alert.alert('Location Error', 'Failed to resolve your address. Please enter pincode.');
@@ -170,7 +196,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
     setLoading(true);
     try {
       console.log('🔍 Checking Pincode:', pincode);
-      
+
       // Geocode the pincode FIRST so the backend can use lat/lng for radius checks
       let pincodeCoords = null;
       try {
@@ -187,10 +213,10 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
       }
 
       // Pass lat/lng so backend can calculate distance against delivery_radius_km
-      const store = await fetchNearestStore({ 
-        pincode, 
-        lat: pincodeCoords?.lat, 
-        lng: pincodeCoords?.lng 
+      const store = await fetchNearestStore({
+        pincode,
+        lat: pincodeCoords?.lat,
+        lng: pincodeCoords?.lng
       });
       console.log('🏢 Found Store Mapping:', store ? `${store.name} (ID: ${store.id})` : 'None');
 
@@ -205,12 +231,18 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
         };
 
         dispatch(setLocation(locationData));
-
-        if (params?.from === 'SavedAddresses') {
-          navigation.navigate('AddAddress', { locationData });
-        } else {
-          navigation.replace('AppTabs');
-        }
+        
+        Alert.alert(
+          'Store Found!',
+          `You are being connected to our ${store.name} branch for the freshest delivery.`,
+          [{ text: 'Continue Shopping', onPress: () => {
+            if (params?.from === 'SavedAddresses' || (isAuthenticated && isMandatory)) {
+              navigation.navigate('AddAddress', { locationData });
+            } else {
+              navigation.replace('AppTabs');
+            }
+          }}]
+        );
       } else {
         setIsComingSoon(true);
       }
@@ -224,83 +256,109 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        style={{ flex: 1 }}
       >
-        <View style={styles.header}>
-          <Image
-            source={require('../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>Where should we deliver?</Text>
-          <Text style={styles.subtitle}>
-            Find the freshest products available in your neighborhood.
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Instant Delivery</Text>
-          <TouchableOpacity
-            style={styles.locationButton}
-            onPress={handleCurrentLocation}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={COLORS.primary} />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Icon name="crosshairs-gps" size={20} color={COLORS.primary} />
-                <Text style={styles.locationButtonText}>Detect My Location</Text>
-              </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Image
+              source={require('../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>
+              {isMandatory ? 'Delivery Address Required' : 'Where should we deliver?'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isMandatory
+                ? 'Please add a delivery address to continue shopping the freshest products.'
+                : 'Find the freshest products available in your neighborhood.'}
+            </Text>
+            {isMandatory && (
+              <TouchableOpacity 
+                style={styles.switchUserBtn} 
+                onPress={() => {
+                  Alert.alert('Logout', 'Are you sure you want to logout and switch accounts?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Logout', style: 'destructive', onPress: () => {
+                      supabase.auth.signOut(); // This will trigger the SIGNED_OUT listener in App.js
+                    }}
+                  ]);
+                }}
+              >
+                <Icon name="logout" size={16} color={COLORS.primary} />
+                <Text style={styles.switchUserText}>Switch User / Logout</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
-
-          {isAuthenticated && (
-            <TouchableOpacity
-              style={[styles.locationButton, { marginTop: SPACING.m, borderStyle: 'solid', backgroundColor: COLORS.white }]}
-              onPress={() => navigation.navigate('SavedAddresses', { from: 'LocationPicker' })}
-            >
-              <View style={styles.buttonContent}>
-                <Icon name="notebook-outline" size={20} color={COLORS.primary} />
-                <Text style={styles.locationButtonText}>Use Saved Address</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.divider}>
-            <View style={styles.line} />
-            <Text style={styles.dividerText}>OR ENTER MANUALLY</Text>
-            <View style={styles.line} />
           </View>
 
-          <Text style={styles.inputLabel}>Enter Delivery Pincode</Text>
-          <View style={styles.pincodeContainer}>
-            <TextInput
-              style={styles.pincodeInput}
-              placeholder="e.g. 201301"
-              keyboardType="number-pad"
-              maxLength={6}
-              value={pincode}
-              onChangeText={setPincode}
-              placeholderTextColor={COLORS.gray}
-            />
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Instant Delivery</Text>
             <TouchableOpacity
-              style={[styles.checkButton, loading && styles.disabledButton]}
-              onPress={handleCheckPincode}
+              style={styles.locationButton}
+              onPress={handleCurrentLocation}
               disabled={loading}
             >
-              <Text style={styles.checkButtonText}>CHECK</Text>
+              {loading ? (
+                <ActivityIndicator color={COLORS.primary} />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Icon name="crosshairs-gps" size={20} color={COLORS.primary} />
+                  <Text style={styles.locationButtonText}>Detect My Location</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          </View>
-          <Text style={styles.helperText}>Example: 201301 (Noida), 700001 (Kolkata)</Text>
-        </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Delivering the freshest cuts to your doorstep.
-          </Text>
-        </View>
+            {isAuthenticated && (
+              <TouchableOpacity
+                style={[styles.locationButton, { marginTop: SPACING.m, borderStyle: 'solid', backgroundColor: COLORS.white }]}
+                onPress={() => navigation.navigate('SavedAddresses', { from: 'LocationPicker' })}
+              >
+                <View style={styles.buttonContent}>
+                  <Icon name="notebook-outline" size={20} color={COLORS.primary} />
+                  <Text style={styles.locationButtonText}>Use Saved Address</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.dividerText}>OR ENTER MANUALLY</Text>
+              <View style={styles.line} />
+            </View>
+
+            <Text style={styles.inputLabel}>Enter Delivery Pincode</Text>
+            <View style={styles.pincodeContainer}>
+              <TextInput
+                style={styles.pincodeInput}
+                placeholder="e.g. 201301"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={pincode}
+                onChangeText={setPincode}
+                placeholderTextColor={COLORS.gray}
+              />
+              <TouchableOpacity
+                style={[styles.checkButton, loading && styles.disabledButton]}
+                onPress={handleCheckPincode}
+                disabled={loading}
+              >
+                <Text style={styles.checkButtonText}>CHECK</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>Example: 201301 (Noida), 700001 (Kolkata)</Text>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              Delivering the freshest cuts to your doorstep.
+            </Text>
+          </View>
+        </ScrollView>
 
         {isComingSoon && (
           <View style={styles.overlay}>
@@ -329,9 +387,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
   },
-  content: {
-    flex: 1,
+  scrollContent: {
     padding: SPACING.xl,
+    flexGrow: 1,
   },
   header: {
     marginTop: SPACING.xl,
@@ -355,6 +413,20 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     textAlign: 'center',
     paddingHorizontal: SPACING.l,
+  },
+  switchUserBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING.m,
+    padding: SPACING.s,
+    backgroundColor: COLORS.lightGray,
+    borderRadius: RADIUS.s,
+  },
+  switchUserText: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   card: {
     backgroundColor: COLORS.white,

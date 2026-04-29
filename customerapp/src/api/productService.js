@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import apiClient from './apiClient';
 
 const productService = {
   /**
@@ -26,7 +27,6 @@ const productService = {
   getBanners: async () => {
     try {
       // Call backend API — it applies is_active + valid_from/valid_until date filters
-      const { default: apiClient } = await import('./apiClient');
       const response = await apiClient.get('/customer/banners');
       return { success: true, data: response.data?.data?.banners || [] };
     } catch (error) {
@@ -40,7 +40,6 @@ const productService = {
    */
   getProducts: async (filters = {}) => {
     try {
-      const { default: apiClient } = await import('./apiClient');
 
       // Map frontend filter names to backend expected names if different
       const params = {

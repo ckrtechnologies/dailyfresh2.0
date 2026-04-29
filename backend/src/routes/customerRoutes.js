@@ -7,6 +7,7 @@ import * as orderController from '../controllers/orderController.js';
 import * as notificationController from '../controllers/notificationController.js';
 import * as bannerController from '../controllers/bannerController.js';
 import * as storeController from '../controllers/storeController.js';
+import * as favoritesController from '../controllers/favoritesController.js';
 
 import { authenticate, authorize } from '../middlewares/auth.js';
 
@@ -41,6 +42,8 @@ router.post('/addresses', customerController.addAddress);
 router.patch('/addresses/:id', customerController.updateAddress);
 router.delete('/addresses/:id', customerController.deleteAddress);
 router.patch('/fcm-token', customerController.updateFcmToken);
+router.get('/favorites', favoritesController.getFavorites);
+router.post('/favorites/toggle', favoritesController.toggleFavorite);
 
 // Cart & Orders
 // Cart

@@ -71,7 +71,7 @@ const RegisterScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.content}
       >
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -201,7 +201,8 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
   },
   form: {
-    paddingBottom: SPACING.xxl,
+    paddingBottom: 40,
+    flexGrow: 1,
   },
   inputWrapper: {
     marginBottom: SPACING.l,

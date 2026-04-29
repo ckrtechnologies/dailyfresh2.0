@@ -68,7 +68,7 @@ const LoginScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.content}
       >
         <ScrollView
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   logoContainer: {
     alignItems: 'center',

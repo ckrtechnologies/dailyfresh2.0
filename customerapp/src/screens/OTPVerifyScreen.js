@@ -7,6 +7,8 @@ import {
   StyleSheet,
   SafeAreaView,
   KeyboardAvoidingView,
+  ScrollView,
+  Alert,
   Platform,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
@@ -78,54 +80,60 @@ const OTPVerifyScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.content}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Verification</Text>
-          <Text style={styles.subtitle}>
-            Enter the 6-digit code sent to {value}
-          </Text>
-        </View>
-
-        <View style={styles.otpContainer}>
-          {otp.map((digit, index) => (
-            <TextInput
-              key={index}
-              style={styles.otpInput}
-              keyboardType="number-pad"
-              maxLength={1}
-              value={digit}
-              onChangeText={(text) => {
-                const newOtp = [...otp];
-                newOtp[index] = text;
-                setOtp(newOtp);
-                // Auto-focus next input
-                // ... logic to be added
-              }}
-            />
-          ))}
-        </View>
-
-        <TouchableOpacity 
-          style={[styles.button, isVerifying && styles.disabledButton]} 
-          onPress={handleVerify}
-          disabled={isVerifying}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.buttonText}>
-            {isVerifying ? 'Verifying...' : 'Verify & Continue'}
-          </Text>
-        </TouchableOpacity>
+          <View style={styles.header}>
+            <Text style={styles.title}>Verification</Text>
+            <Text style={styles.subtitle}>
+              Enter the 6-digit code sent to {value}
+            </Text>
+          </View>
 
-        <View style={styles.resendContainer}>
-          {timer > 0 ? (
-            <Text style={styles.timerText}>Resend code in {timer}s</Text>
-          ) : (
-            <TouchableOpacity onPress={handleResend}>
-              <Text style={styles.resendText}>Resend OTP</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+          <View style={styles.otpContainer}>
+            {otp.map((digit, index) => (
+              <TextInput
+                key={index}
+                style={styles.otpInput}
+                keyboardType="number-pad"
+                maxLength={1}
+                value={digit}
+                onChangeText={(text) => {
+                  const newOtp = [...otp];
+                  newOtp[index] = text;
+                  setOtp(newOtp);
+                  // Auto-focus next input
+                  // ... logic to be added
+                }}
+              />
+            ))}
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.button, isVerifying && styles.disabledButton]} 
+            onPress={handleVerify}
+            disabled={isVerifying}
+          >
+            <Text style={styles.buttonText}>
+              {isVerifying ? 'Verifying...' : 'Verify & Continue'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.resendContainer}>
+            {timer > 0 ? (
+              <Text style={styles.timerText}>Resend code in {timer}s</Text>
+            ) : (
+              <TouchableOpacity onPress={handleResend}>
+                <Text style={styles.resendText}>Resend OTP</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -138,6 +146,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     padding: SPACING.xl,
     justifyContent: 'center',
   },

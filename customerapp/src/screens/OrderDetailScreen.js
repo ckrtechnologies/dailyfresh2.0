@@ -5,11 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Image,
   Share,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { useDispatch } from 'react-redux';
@@ -47,8 +47,13 @@ const OrderDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  if (loading) return <LogoLoader />;
-  if (!order) return <View style={styles.centerContainer}><Text>Order not found</Text></View>;
+  if (loading) return <LogoLoader fullScreen />;
+  if (!order) return (
+    <View style={styles.centerContainer}>
+      <Icon name="alert-circle-outline" size={48} color={COLORS.gray} />
+      <Text style={styles.errorText}>Order not found</Text>
+    </View>
+  );
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -141,7 +146,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -167,6 +172,13 @@ const OrderDetailScreen = ({ route, navigation }) => {
             <View>
               <Text style={styles.orderIdText}>Order #{order.order_number}</Text>
               <Text style={styles.storeText}>{order.store?.name || 'Daily Fresh Store'}</Text>
+              <Text style={styles.orderTimeText}>
+                {new Date(order.created_at).toLocaleDateString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })} • {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '15' }]}>
               <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
@@ -203,23 +215,31 @@ const OrderDetailScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Items ({order.items?.length || 0})</Text>
           {order.items?.map((item, index) => (
-            <View key={index} style={[styles.itemRow, index === (order.items?.length || 0) - 1 && { borderBottomWidth: 0 }]}>
+            <TouchableOpacity 
+              key={index} 
+              style={[styles.itemRow, index === (order.items?.length || 0) - 1 && { borderBottomWidth: 0 }]}
+              onPress={() => navigation.navigate('ProductDetail', { productId: item.product_id })}
+              activeOpacity={0.7}
+            >
               <Image 
                 source={{ uri: item.product?.image_url || 'https://via.placeholder.com/100' }} 
                 style={styles.itemImage} 
               />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                {item.preferences && (
+                {/* Show variant name or customization if available, otherwise fallback to item name */}
+                <Text style={styles.itemName}>
+                  {item.variant?.name || (item.preferences?.cut ? `${item.preferences.cut}` : item.name)}
+                </Text>
+                {item.preferences && (item.preferences.cut || item.preferences.cleaning) && (
                   <Text style={styles.itemPref}>
-                    {item.preferences.cut ? `${item.preferences.cut} Cut` : ''}
-                    {item.preferences.cleaning ? `, ${item.preferences.cleaning}` : ''}
+                    {item.preferences.cut && item.preferences.cut !== (item.variant?.name || item.name) ? `${item.preferences.cut} Cut` : ''}
+                    {item.preferences.cleaning && item.preferences.cleaning !== (item.variant?.name || item.name) ? (item.preferences.cut ? `, ${item.preferences.cleaning}` : item.preferences.cleaning) : ''}
                   </Text>
                 )}
                 <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
               </View>
               <Text style={styles.itemPrice}>₹{item.total_price}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -345,6 +365,11 @@ const styles = StyleSheet.create({
   },
   storeText: {
     fontSize: 13,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
+  orderTimeText: {
+    fontSize: 11,
     color: COLORS.gray,
     marginTop: 2,
   },

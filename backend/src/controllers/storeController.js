@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import crypto from 'crypto';
 import { successResponse, errorResponse } from '../utils/response.js';
 
 /**
@@ -15,6 +16,71 @@ const getAssignedStoreId = async (managerId) => {
   return data.id;
 };
 
+const getImageUrl = (file, bodyUrl) => {
+  if (file) {
+    const baseUrl = (process.env.CDN_BASE_URL || 'https://assets.dailyfreshkolkata.in/uploads').replace(/\/$/, '');
+    return `${baseUrl}/${file.filename}`;
+  }
+  return bodyUrl || null;
+};
+
+const safeParseOptions = (options, defaultVal = []) => {
+  if (!options) return defaultVal;
+  if (Array.isArray(options)) return options;
+  if (typeof options !== 'string') return defaultVal;
+  try {
+    const parsed = JSON.parse(options);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch (e) {
+    return options.split(',').map(s => s.trim()).filter(s => s);
+  }
+};
+
+const syncProductVariants = async (productId, variants) => {
+  if (!Array.isArray(variants)) return;
+  try {
+    const { data: existing } = await supabaseAdmin.from('product_variants').select('id').eq('product_id', productId);
+    const existingIds = (existing || []).map(v => v.id);
+    const incomingIds = variants.map(v => v.id).filter(id => id);
+    const idsToDelete = existingIds.filter(id => !incomingIds.includes(id));
+
+    if (idsToDelete.length > 0) {
+      await supabaseAdmin.from('product_variants').delete().in('id', idsToDelete);
+    }
+
+    const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    const generateUUID = () => crypto.randomUUID();
+
+    const variantsToUpsert = variants.map(v => {
+      const record = {
+        product_id: productId,
+        name: v.name,
+        description: v.description || null,
+        price: parseFloat(v.price) || 0,
+        discount_price: (v.discount_price && v.discount_price !== '' && v.discount_price !== 'null') ? parseFloat(v.discount_price) : null,
+        weight_text: v.weight_text || null,
+        gross_weight_text: v.gross_weight_text || null,
+        image_url: v.image_url || null,
+        delivery_info: v.delivery_info || 'Tomorrow Morning',
+        display_order: v.display_order || 0
+      };
+      if (v.id && isUUID(v.id)) record.id = v.id;
+      else record.id = generateUUID();
+      return record;
+    });
+
+    if (variantsToUpsert.length > 0) {
+      const { error: upsertError } = await supabaseAdmin
+        .from('product_variants')
+        .upsert(variantsToUpsert, { onConflict: 'id' });
+      if (upsertError) throw upsertError;
+    }
+  } catch (error) {
+    console.error('[Store] Variant sync error:', error);
+    throw error;
+  }
+};
+
 /**
  * Get Dashboard KPIs for the store
  */
@@ -23,18 +89,24 @@ export const getDashboard = async (req, res) => {
     const storeId = await getAssignedStoreId(req.user.id);
     if (!storeId) return errorResponse(res, 'No store assigned to this manager', 404);
 
-    const { data: products } = await supabaseAdmin
-      .from('products')
-      .select('id, name, stock_quantity')
-      .eq('store_id', storeId);
-
-    const lowStockCount = products ? products.filter(p => p.stock_quantity < 10).length : 0;
-
     const { startDate, endDate } = req.query;
 
+    // 1. Fetch Products within range (to see how many were added/active in this period)
+    let productsQuery = supabaseAdmin
+      .from('products')
+      .select('id, name, stock_quantity, created_at')
+      .eq('store_id', storeId);
+
+    if (startDate) productsQuery = productsQuery.gte('created_at', startDate);
+    if (endDate) productsQuery = productsQuery.lte('created_at', endDate);
+
+    const { data: products } = await productsQuery;
+    const lowStockCount = products ? products.filter(p => p.stock_quantity < 10).length : 0;
+
+    // 2. Fetch Orders within range
     let orderQuery = supabaseAdmin
       .from('orders')
-      .select('status, total_amount, created_at')
+      .select('id, status, total_amount, created_at')
       .eq('store_id', storeId);
 
     if (startDate) orderQuery = orderQuery.gte('created_at', startDate);
@@ -49,50 +121,67 @@ export const getDashboard = async (req, res) => {
     if (orders) {
       totalOrders = orders.length;
       orders.forEach(o => {
-        if (o.status !== 'cancelled') totalRevenue += Number(o.total_amount) || 0;
-        if (o.status !== 'delivered' && o.status !== 'cancelled') activeOrders++;
+        // Only count non-cancelled orders for revenue
+        if (o.status !== 'cancelled') {
+          totalRevenue += Number(o.total_amount) || 0;
+        }
+        // Count anything not delivered or cancelled as active
+        if (o.status !== 'delivered' && o.status !== 'cancelled') {
+          activeOrders++;
+        }
       });
     }
 
-    // 2. Latest 5 Orders
-    const { data: latestOrders } = await supabaseAdmin
+    // 3. Latest 5 Orders (within range)
+    let latestOrdersQuery = supabaseAdmin
       .from('orders')
       .select('id, order_number, total_amount, status, created_at, customer:profiles!user_id(full_name)')
-      .eq('store_id', storeId)
+      .eq('store_id', storeId);
+
+    if (startDate) latestOrdersQuery = latestOrdersQuery.gte('created_at', startDate);
+    if (endDate) latestOrdersQuery = latestOrdersQuery.lte('created_at', endDate);
+
+    const { data: latestOrders } = await latestOrdersQuery
       .order('created_at', { ascending: false })
       .limit(5);
 
-    // 3. Top 5 Selling Products
-    // We'll aggregate from order_items
-    const { data: topProductsData } = await supabaseAdmin
-      .from('order_items')
-      .select('product_id, name, quantity')
-      .eq('store_id', storeId);
+    // 4. Top 5 Selling Products (within range)
+    const orderIds = (orders || []).map(o => o.id);
+    let topProducts = [];
 
-    const productSales = {};
-    if (topProductsData) {
-      topProductsData.forEach(item => {
-        if (!productSales[item.product_id]) {
-          productSales[item.product_id] = { id: item.product_id, name: item.name, total_qty: 0 };
-        }
-        productSales[item.product_id].total_qty += item.quantity;
-      });
+    if (orderIds.length > 0) {
+      const { data: topProductsData } = await supabaseAdmin
+        .from('order_items')
+        .select('product_id, name, quantity')
+        .in('order_id', orderIds);
+
+      const productSales = {};
+      if (topProductsData) {
+        topProductsData.forEach(item => {
+          if (!productSales[item.product_id]) {
+            productSales[item.product_id] = { id: item.product_id, name: item.name, total_qty: 0 };
+          }
+          productSales[item.product_id].total_qty += item.quantity;
+        });
+      }
+      topProducts = Object.values(productSales)
+        .sort((a, b) => b.total_qty - a.total_qty)
+        .slice(0, 5);
     }
-    const topProducts = Object.values(productSales)
-      .sort((a, b) => b.total_qty - a.total_qty)
-      .slice(0, 5);
 
     return successResponse(res, {
       store_id: storeId,
+      applied_filters: { startDate, endDate },
       total_products: products ? products.length : 0,
       low_stock_alerts: lowStockCount,
-      total_revenue: totalRevenue,
+      total_revenue: Number(totalRevenue.toFixed(2)),
       active_orders: activeOrders,
       total_orders: totalOrders,
       latest_orders: latestOrders || [],
       top_products: topProducts
-    }, 'Dashboard stats fetched');
+    }, 'Dashboard stats updated');
   } catch (error) {
+    console.error('[getDashboard] Error:', error);
     return errorResponse(res, 'Internal server error', 500, error);
   }
 };
@@ -109,7 +198,7 @@ export const getInventory = async (req, res) => {
 
     let query = supabaseAdmin
       .from('products')
-      .select('*, sub_category:sub_categories(name, category_id, category:categories(name))')
+      .select('*, sub_category:sub_categories(name, category_id, category:categories(name)), variants:product_variants(*)')
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
 
@@ -245,26 +334,49 @@ export const getOrders = async (req, res) => {
   try {
     const storeId = await getAssignedStoreId(req.user.id);
 
-    const { startDate, endDate, search } = req.query;
+    const { startDate, endDate, search, page = 1, pageSize = 50 } = req.query;
+    const from = (parseInt(page) - 1) * parseInt(pageSize);
+    const to = from + parseInt(pageSize) - 1;
 
-    let query = supabaseAdmin
+    // 1. Fetch Orders and Customers (Direct join with profiles)
+    let orderQuery = supabaseAdmin
       .from('orders')
-      .select('*, items:order_items(*, product:products!fk_order_items_product(image_url)), customer:profiles!user_id(full_name, phone)')
-      .eq('store_id', storeId)
-      .order('created_at', { ascending: false });
+      .select('*, customer:profiles(full_name, phone)', { count: 'exact' })
+      .eq('store_id', storeId);
 
-    if (startDate) query = query.gte('created_at', startDate);
-    if (endDate) query = query.lte('created_at', endDate);
+    if (startDate) orderQuery = orderQuery.gte('created_at', startDate);
+    if (endDate) orderQuery = orderQuery.lte('created_at', endDate);
+    if (search) orderQuery = orderQuery.or(`order_number.ilike.%${search}%,status.ilike.%${search}%`);
 
-    if (search) {
-      // Search in order_number or status
-      query = query.or(`order_number.ilike.%${search}%,status.ilike.%${search}%`);
-    }
+    const { data: orders, error: orderError, count } = await orderQuery
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-    const { data, error } = await query;
+    if (orderError) return errorResponse(res, 'Failed to fetch orders', 400, orderError);
+    if (!orders || orders.length === 0) return successResponse(res, { orders: [], total: 0 });
 
-    if (error) return errorResponse(res, 'Failed to fetch orders', 400, error);
-    return successResponse(res, { orders: data });
+    // 2. Fetch Order Items separately to avoid join errors
+    const orderIds = orders.map(o => o.id);
+    const { data: items } = await supabaseAdmin
+      .from('order_items')
+      .select('*, product:products(image_url)')
+      .in('order_id', orderIds);
+
+    // 3. Manual stitching
+    const ordersWithItems = orders.map(order => ({
+      ...order,
+      items: items ? items.filter(item => item.order_id === order.id) : []
+    }));
+
+    return successResponse(res, { 
+      orders: ordersWithItems,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        totalPages: Math.ceil(count / pageSize)
+      }
+    });
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
   }
@@ -381,16 +493,9 @@ export const getNearestStore = async (req, res) => {
         .sort((a, b) => a.distance_km - b.distance_km);
 
       selected = withDistance[0] || null;
-
-      if (selected || (lat && lng)) {
-        return successResponse(res, {
-          store: selected,
-          is_serviceable: !!selected,
-          distance: selected ? selected.distance_km.toFixed(2) : null
-        }, selected ? 'Nearest store found via GPS' : 'No store within 10km radius');
-      }
     }
 
+    // If no store found via GPS, or GPS not provided, try pincode
     if (!selected && pincode) {
       const pStr = pincode.toString();
       selected = stores.find(s => s.pincode === pStr) || null;
@@ -402,11 +507,20 @@ export const getNearestStore = async (req, res) => {
           s.serviceable_pincodes.includes(pStr)
         ) || null;
       }
+
+      // If found via pincode and we have user coords, calculate distance
+      if (selected && lat && lng) {
+        selected = {
+          ...selected,
+          distance_km: haversine(parseFloat(lat), parseFloat(lng), parseFloat(selected.latitude), parseFloat(selected.longitude))
+        };
+      }
     }
 
     return successResponse(res, {
       store: selected,
-      is_serviceable: !!selected
+      is_serviceable: !!selected,
+      distance: selected && selected.distance_km ? selected.distance_km.toFixed(2) : null
     }, selected ? 'Nearest store found' : 'Location not serviceable');
   } catch (error) {
     return errorResponse(res, 'Failed to find nearest store', 500, error);
@@ -424,19 +538,33 @@ export const createProduct = async (req, res) => {
     const { name } = req.body;
     if (!name) return errorResponse(res, 'Product name is required', 400);
 
-    // Generate slug from name
     const slug = name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '') + '-' + Date.now().toString().slice(-4);
 
-    const newProduct = {
+    const image_url = getImageUrl(req.file, req.body.image_url);
+
+    const productData = {
       ...req.body,
       store_id: storeId,
-      slug: req.body.slug || slug
+      slug: req.body.slug || slug,
+      image_url,
+      delivery_options: safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express'])
     };
 
-    const { data, error } = await supabaseAdmin.from('products').insert([newProduct]).select().single();
+    // Remove variants from main product payload
+    const variants = productData.variants || [];
+    delete productData.variants;
+
+    const { data: product, error } = await supabaseAdmin.from('products').insert([productData]).select().single();
 
     if (error) return errorResponse(res, 'Failed to create product', 400, error);
-    return successResponse(res, { product: data }, 'Product created');
+
+    if (variants.length > 0) {
+      await syncProductVariants(product.id, variants);
+      const { data: refreshed } = await supabaseAdmin.from('products').select('*, variants:product_variants(*)').eq('id', product.id).single();
+      return successResponse(res, { product: refreshed }, 'Product created with variants');
+    }
+
+    return successResponse(res, { product }, 'Product created');
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
   }
@@ -455,20 +583,44 @@ export const updateProduct = async (req, res) => {
       return errorResponse(res, 'Access denied: Product does not belong to your store', 403);
     }
 
-    // Only allow specific fields to be updated by store managers to prevent SKU conflicts
-    const allowedFields = ['stock_quantity', 'price', 'sale_price', 'description', 'is_active', 'weight_unit'];
+    // Allowed fields for store manager updates
+    const allowedFields = [
+      'stock_quantity', 'price', 'discount_price', 'sale_price', 'description', 
+      'is_active', 'weight_unit', 'name', 'cooking_guide', 'image_url',
+      'is_deal', 'is_featured', 'is_trending', 'is_flash_sale', 'sub_category_id',
+      'delivery_options'
+    ];
+    
+    const image_url = getImageUrl(req.file, req.body.image_url);
+    
     const updateData = {};
-
     Object.keys(req.body).forEach(key => {
       if (allowedFields.includes(key)) {
-        updateData[key] = req.body[key];
+        if (key === 'delivery_options') {
+          updateData[key] = safeParseOptions(req.body[key]);
+        } else {
+          updateData[key] = req.body[key];
+        }
       }
     });
 
-    const { data, error } = await supabaseAdmin.from('products').update(updateData).eq('id', productId).select().single();
+    if (image_url) {
+      updateData.image_url = image_url;
+    }
+
+    const variants = req.body.variants;
+
+    const { data: productData, error } = await supabaseAdmin.from('products').update(updateData).eq('id', productId).select().single();
 
     if (error) return errorResponse(res, 'Update failed', 400, error);
-    return successResponse(res, { product: data }, 'Product updated');
+
+    if (variants !== undefined) {
+      await syncProductVariants(productId, variants);
+      const { data: refreshed } = await supabaseAdmin.from('products').select('*, variants:product_variants(*)').eq('id', productId).single();
+      return successResponse(res, { product: refreshed }, 'Product and variants updated');
+    }
+
+    return successResponse(res, { product: productData }, 'Product updated');
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
   }

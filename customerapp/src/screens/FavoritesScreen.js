@@ -11,14 +11,19 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
-import { toggleFavorite } from '../store/slices/favoritesSlice';
+import { toggleFavorite, toggleFavoriteAsync, setFavorites, fetchFavoritesAsync } from '../store/slices/favoritesSlice';
 import { addItem } from '../store/slices/cartSlice';
+import favoritesService from '../api/favoritesService';
 
 const { width } = Dimensions.get('window');
 
 const FavoritesScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { items } = useSelector((state) => state.favorites);
+  const { items, loading } = useSelector((state) => state.favorites);
+
+  React.useEffect(() => {
+    dispatch(fetchFavoritesAsync());
+  }, [dispatch]);
 
   const renderItem = ({ item }) => (
     <TouchableOpacity 
@@ -28,7 +33,10 @@ const FavoritesScreen = ({ navigation }) => {
       <Image source={{ uri: item.image_url }} style={styles.image} />
       <TouchableOpacity 
         style={styles.favoriteBtn}
-        onPress={() => dispatch(toggleFavorite(item))}
+        onPress={() => {
+          dispatch(toggleFavorite(item));
+          dispatch(toggleFavoriteAsync(item));
+        }}
       >
         <Icon name="heart" size={20} color={COLORS.primary} />
       </TouchableOpacity>

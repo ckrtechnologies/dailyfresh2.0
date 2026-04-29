@@ -49,16 +49,22 @@ const SavedAddressesScreen = ({ route, navigation }) => {
         { 
           text: 'Delete', 
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const res = await addressService.deleteAddress(id);
-              if (res.success) {
-                fetchAddresses();
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete address');
+        onPress: async () => {
+          try {
+            setLoading(true);
+            const res = await addressService.deleteAddress(id);
+            if (res.success) {
+              await fetchAddresses();
+            } else {
+              Alert.alert('Error', res.error || 'Failed to delete address');
             }
+          } catch (error) {
+            console.error('Delete address error:', error);
+            Alert.alert('Error', 'Failed to delete address. Please try again.');
+          } finally {
+            setLoading(false);
           }
+        }
         }
       ]
     );
@@ -173,7 +179,7 @@ const SavedAddressesScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Icon name="arrow-left" size={24} color={COLORS.dark} />

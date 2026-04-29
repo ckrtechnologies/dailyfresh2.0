@@ -30,6 +30,7 @@ import {
 import { setSelectedSlot } from '../store/slices/configSlice';
 import productService from '../api/productService';
 import apiClient from '../api/apiClient';
+import { setSelectedAddress, setLocation } from '../store/slices/locationSlice';
 import ProductCard from '../components/ProductCard';
 import LogoLoader from '../components/LogoLoader';
 
@@ -78,7 +79,8 @@ const HomeScreen = ({ navigation }) => {
     outputRange: [-width, width],
   });
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const { address, storeId, coords, storeName } = useSelector((state) => state.location);
+  const location = useSelector((state) => state.location);
+  const { address, storeId, coords, storeName } = location;
   const { isAuthenticated } = useSelector((state) => state.auth);
 
   const [storeDetail, setStoreDetail] = useState(null);
@@ -88,20 +90,61 @@ const HomeScreen = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
-      const fetchUnreadCount = async () => {
+      let isSubscribed = true;
+      
+      const fetchAddressAndNotifications = async () => {
         if (!isAuthenticated) return;
+        
         try {
+          // 1. Check if we have a location (either selected address OR manual pick)
+          if (!location.selectedAddress && !location.storeId) {
+            console.log('🔄 [HOME] No location context, fetching addresses...');
+            const addrRes = await apiClient.get('/customer/addresses');
+            
+            if (!isSubscribed) return;
+
+            if (addrRes.data?.success && addrRes.data.data.addresses.length > 0) {
+              const defaultAddr = addrRes.data.data.addresses.find(a => a.is_default) || addrRes.data.data.addresses[0];
+              
+              // Resolve store for this address
+              const storeRes = await apiClient.get('/customer/stores/nearest', { 
+                params: { pincode: defaultAddr.pincode, lat: defaultAddr.latitude, lng: defaultAddr.longitude } 
+              });
+              
+              if (!isSubscribed) return;
+              const store = storeRes.data?.data?.store;
+              
+              const addressWithStore = {
+                ...defaultAddr,
+                store_id: store?.id,
+                store_name: store?.name
+              };
+              
+              dispatch(setSelectedAddress(addressWithStore));
+            } else {
+              // MANDATORY LOCATION: Redirect to LocationPicker if no location at all exists
+              console.log('⚠️ [HOME] No location or addresses found, redirecting to mandatory picker');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'LocationPicker', params: { mandatory: true } }],
+              });
+            }
+          }
+
+          // 2. Fetch unread count
           const response = await apiClient.get('/customer/notifications');
-          if (response.data?.success) {
+          if (isSubscribed && response.data?.success) {
             const unread = response.data.data.notifications.filter(n => !n.is_read).length;
             setUnreadCount(unread);
           }
         } catch (error) {
-          console.log('Failed to fetch unread notifications count:', error);
+          console.log('Failed to fetch home focus data:', error);
         }
       };
-      fetchUnreadCount();
-    }, [isAuthenticated])
+      
+      fetchAddressAndNotifications();
+      return () => { isSubscribed = false; };
+    }, [isAuthenticated, location.selectedAddress, navigation, dispatch])
   );
 
   const totalHeaderHeight = 120;
@@ -166,7 +209,6 @@ const HomeScreen = ({ navigation }) => {
     return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
   };
 
-  const location = useSelector((state) => state.location);
 
   useEffect(() => {
     if (location.pincode) {
@@ -200,7 +242,7 @@ const HomeScreen = ({ navigation }) => {
           console.log('✅ [HOME_DEBUG] Successfully re-assigned store:', store.name);
           currentStoreId = store.id;
           // Sync back to Redux for consistency
-          dispatch(require('../store/slices/locationSlice').setLocation({
+          dispatch(setLocation({
             ...location,
             storeId: store.id,
             storeName: store.name,
@@ -281,7 +323,7 @@ const HomeScreen = ({ navigation }) => {
         dispatch(setLoading(false));
       }
     }
-  }, [dispatch, storeId, location]);
+  }, [dispatch, storeId, location.pincode, location.coords]);
 
   useEffect(() => {
     const isCancelled = { current: false };
@@ -302,22 +344,19 @@ const HomeScreen = ({ navigation }) => {
               // User GPS coords available — precise distance
               const dist = getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude);
               setDistance(dist);
-            } else if (res.data.pincode) {
+            } else if (location.pincode) {
               // No GPS — try to geocode the user's pincode for an approximate distance
               try {
-                const savedPincode = await import('../utils/storage').then(m => m.default.getItem('pincode'));
-                if (savedPincode) {
-                  const geoRes = await fetch(
-                    `https://nominatim.openstreetmap.org/search?format=json&postalcode=${savedPincode}&country=India`,
-                    { headers: { 'User-Agent': 'DailyFreshApp' } }
-                  );
-                  const geoData = await geoRes.json();
-                  if (geoData && geoData[0]) {
-                    const approxLat = parseFloat(geoData[0].lat);
-                    const approxLng = parseFloat(geoData[0].lon);
-                    const dist = getDistance(approxLat, approxLng, res.data.latitude, res.data.longitude);
-                    setDistance(dist);
-                  }
+                const geoRes = await fetch(
+                  `https://nominatim.openstreetmap.org/search?format=json&postalcode=${location.pincode}&country=India`,
+                  { headers: { 'User-Agent': 'DailyFreshApp' } }
+                );
+                const geoData = await geoRes.json();
+                if (geoData && geoData[0]) {
+                  const approxLat = parseFloat(geoData[0].lat);
+                  const approxLng = parseFloat(geoData[0].lon);
+                  const dist = getDistance(approxLat, approxLng, res.data.latitude, res.data.longitude);
+                  setDistance(dist);
                 }
               } catch (e) {
                 console.warn('Distance geocoding fallback failed:', e);
@@ -389,18 +428,28 @@ const HomeScreen = ({ navigation }) => {
       ]}>
         <TouchableOpacity
           style={styles.locationContainer}
-          onPress={() => navigation.navigate('LocationPicker')}
+          onPress={() => {
+            if (isAuthenticated) {
+              navigation.navigate('SavedAddresses', { selectMode: true });
+            } else {
+              navigation.navigate('LocationPicker');
+            }
+          }}
         >
           <View style={styles.locationIconWrapper}>
             <Icon name="map-marker" size={18} color={activeTheme.primary} />
           </View>
           <View style={styles.locationTextContainer}>
             <View style={styles.locationTitleRow}>
-              <Text style={styles.locationTitle}>{address?.split(',')[0] || 'Pick Location'}</Text>
+              <Text style={styles.locationTitle}>
+                {location.selectedAddress?.label || address?.split(',')[0] || 'Pick Location'}
+              </Text>
               <Icon name="chevron-down" size={14} color={COLORS.white} />
             </View>
             <Text style={styles.addressText} numberOfLines={1}>
-              {address || 'Select your delivery address'}
+              {location.selectedAddress 
+                ? `${location.selectedAddress.line1}${location.selectedAddress.line2 ? ', ' + location.selectedAddress.line2 : ''}`
+                : address || 'Select your delivery address'}
             </Text>
           </View>
         </TouchableOpacity>

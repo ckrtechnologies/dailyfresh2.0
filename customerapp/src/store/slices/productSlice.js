@@ -45,6 +45,20 @@ const productSlice = createSlice({
     setError: (state, action) => {
       state.error = action.payload;
     },
+    clearProducts: (state) => {
+      state.categories = [];
+      state.banners = [];
+      state.featuredProducts = [];
+      state.flashSale = [];
+      state.frozenProducts = [];
+      state.exclusiveOffers = [];
+      state.trendingProducts = [];
+      state.newLaunch = [];
+      state.todaysDeals = [];
+      state.categorySections = [];
+      state.loading = false;
+      state.error = null;
+    },
   },
 });
 
@@ -55,7 +69,8 @@ export const {
   setFeaturedProducts,
   setCategorySections,
   setLoading, 
-  setError 
+  setError,
+  clearProducts
 } = productSlice.actions;
 
 export default productSlice.reducer;

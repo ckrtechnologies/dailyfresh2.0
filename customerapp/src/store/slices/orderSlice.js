@@ -45,6 +45,12 @@ const orderSlice = createSlice({
            // For now, let's keep it so user sees "Delivered"
         }
       }
+    },
+    clearOrders: (state) => {
+      state.activeOrder = null;
+      state.loading = false;
+      state.error = null;
+      state.hidden = false;
     }
   },
   extraReducers: (builder) => {
@@ -67,5 +73,5 @@ const orderSlice = createSlice({
   }
 });
 
-export const { setActiveOrder, hideMiniStatus, updateOrderStatusLocal } = orderSlice.actions;
+export const { setActiveOrder, hideMiniStatus, updateOrderStatusLocal, clearOrders } = orderSlice.actions;
 export default orderSlice.reducer;

@@ -68,6 +68,16 @@ const Inventory = () => {
         Object.keys(data).forEach(key => {
           if (key === 'imageFile') {
             if (data[key]) payload.append('image', data[key]);
+          } else if (key === 'variants' && Array.isArray(data[key])) {
+            // Special handling for variants to extract files and append to FormData
+            const variantsWithoutFiles = data[key].map((v, index) => {
+              if (v.imageFile) {
+                payload.append(`variant_image_${index}`, v.imageFile);
+              }
+              const { imageFile, ...rest } = v;
+              return rest;
+            });
+            payload.append(key, JSON.stringify(variantsWithoutFiles));
           } else if (data[key] !== undefined && data[key] !== null) {
             // Stringify objects/arrays so they don't become "[object Object]"
             const value = (typeof data[key] === 'object' && !(data[key] instanceof File)) 

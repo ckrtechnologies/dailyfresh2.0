@@ -8,6 +8,7 @@ import {
   Alert,
   Share,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -36,9 +37,15 @@ const AccountScreen = ({ navigation }) => {
         { 
           text: 'Logout', 
           style: 'destructive',
-          onPress: () => {
-            dispatch(logout());
-            dispatch(clearLocation());
+          onPress: async () => {
+            try {
+              const authService = require('../api/authService').default;
+              await authService.logout();
+              // The App.js auth listener will handle clearAll() and Redux reset
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           }
         },
       ]
@@ -89,7 +96,11 @@ const AccountScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={activeTheme.primary} />
-      <View style={styles.mainContent}>
+      <ScrollView
+        style={styles.mainContent}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.mainContentInner}
+      >
         {/* Profile Header */}
         <View style={styles.header}>
           <View style={styles.profileInfo}>
@@ -133,7 +144,7 @@ const AccountScreen = ({ navigation }) => {
 
           <Text style={styles.version}>Daily Fresh v1.0.4 - Premium</Text>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -145,7 +156,10 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    justifyContent: 'space-between',
+  },
+  mainContentInner: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
   header: {
     backgroundColor: COLORS.white,
@@ -203,7 +217,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     marginTop: SPACING.m,
     paddingHorizontal: SPACING.l,
-    flex: 1,
   },
   menuItem: {
     flexDirection: 'row',
@@ -232,6 +245,7 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.m,
   },
   footerContainer: {
+    marginTop: SPACING.xl,
     paddingBottom: SPACING.xl,
   },
   logoutBtn: {

@@ -471,7 +471,7 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                 ...formData,
                 variants: [
                   ...(formData.variants || []),
-                  { name: '', price: '', discount_price: '', weight_text: '', gross_weight_text: '', description: '', image_url: '', delivery_info: 'Tomorrow Morning' }
+                  { name: '', price: '', discount_price: '', weight_text: '', gross_weight_text: '', description: '', image_url: '', imageFile: null, delivery_info: 'Tomorrow Morning' }
                 ]
               })}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
@@ -542,7 +542,13 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                           newVariants[index].image_url = url;
                           setFormData({ ...formData, variants: newVariants });
                         }}
-                        onFileChange={() => {}} // Handle files later if needed, URLs for now
+                        onFileChange={(file) => {
+                          const newVariants = [...formData.variants];
+                          newVariants[index].imageFile = file;
+                          newVariants[index].image_url = '';
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                        imageFile={variant.imageFile}
                       />
                       <Input
                         label="Tooltip Info / Desc"

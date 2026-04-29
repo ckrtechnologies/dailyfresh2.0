@@ -84,7 +84,7 @@ const OrdersScreen = ({ navigation }) => {
       <View style={styles.orderBody}>
         <View style={styles.itemsPreview}>
           <Text style={styles.itemText} numberOfLines={1}>
-            {item.items?.map(it => it.name).join(', ')}
+            {item.items?.map(it => it.variant?.name || it.name).join(', ')}
           </Text>
           <Text style={styles.itemCount}>
             {item.items?.length || 0} {item.items?.length === 1 ? 'Item' : 'Items'}
@@ -111,7 +111,7 @@ const OrdersScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Icon name="arrow-left" size={24} color={COLORS.dark} />
@@ -121,10 +121,7 @@ const OrdersScreen = ({ navigation }) => {
       </View>
 
       {loading ? (
-        <View style={styles.centerContainer}>
-          <LogoLoader size={60} />
-          <Text style={{ marginTop: 10, color: COLORS.gray }}>Fetching your orders...</Text>
-        </View>
+        <LogoLoader fullScreen />
       ) : orders.length === 0 ? (
         <View style={styles.centerContainer}>
           <Icon name="shopping-outline" size={80} color="#E5E7EB" />

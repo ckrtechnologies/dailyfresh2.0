@@ -160,8 +160,8 @@ class NotificationService {
               channelId: isOrderUpdate ? 'orders' : 'default',
               importance: AndroidImportance.HIGH,
               sound: 'ding',
-              largeIcon: imageUrl || 'ic_launcher', // Show Logo or Custom Image
-              style: imageUrl ? {
+              largeIcon: imageUrl || 'ic_launcher',
+              style: (imageUrl && remoteMessage.data?.type === 'promotion') ? {
                 type: AndroidStyle.BIGPICTURE,
                 picture: imageUrl,
               } : undefined,

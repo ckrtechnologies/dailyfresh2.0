@@ -13,7 +13,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, THEMES, SPACING, RADIUS } from '../constants/theme';
 import { addItem, removeItem } from '../store/slices/cartSlice';
-import { toggleFavorite } from '../store/slices/favoritesSlice';
+import { toggleFavorite, toggleFavoriteAsync } from '../store/slices/favoritesSlice';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - SPACING.xl * 2 - SPACING.m) / 2;
@@ -89,7 +89,10 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
   };
 
   const handleToggleFavorite = () => {
+    // Optimistic UI update
     dispatch(toggleFavorite(product));
+    // Persistence to backend
+    dispatch(toggleFavoriteAsync(product));
   };
 
   const handleRemove = () => {
@@ -180,12 +183,14 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
           </View>
         </View>
 
-        <View style={styles.priceRow}>
-          <Text style={[styles.price, { color: activeTheme.text }]}>₹{sellingPrice}</Text>
-          {hasDiscount && (
-            <Text style={[styles.comparePrice, { color: activeTheme.textLight }]}>₹{price}</Text>
-          )}
-        </View>
+        {!(product.variants?.length > 0) && (
+          <View style={styles.priceRow}>
+            <Text style={[styles.price, { color: activeTheme.text }]}>₹{sellingPrice}</Text>
+            {hasDiscount && (
+              <Text style={[styles.comparePrice, { color: activeTheme.textLight }]}>₹{price}</Text>
+            )}
+          </View>
+        )}
 
         {/* Prominent ADD button for Small cards as requested */}
         {!isTall && (

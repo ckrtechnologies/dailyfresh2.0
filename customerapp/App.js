@@ -13,8 +13,14 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import { useSelector } from 'react-redux';
 import authService from './src/api/authService';
 import cartService from './src/api/cartService';
+import favoritesService from './src/api/favoritesService';
 import { setCredentials, logout } from './src/store/slices/authSlice';
-import { setCart } from './src/store/slices/cartSlice';
+import { setCart, clearCart } from './src/store/slices/cartSlice';
+import { clearLocation } from './src/store/slices/locationSlice';
+import { clearFavorites, setFavorites, fetchFavoritesAsync } from './src/store/slices/favoritesSlice';
+import { clearOrders } from './src/store/slices/orderSlice';
+import { resetConfig } from './src/store/slices/configSlice';
+import { clearProducts } from './src/store/slices/productSlice';
 
 import { Linking } from 'react-native';
 import { supabase } from './src/api/supabase';
@@ -30,6 +36,7 @@ const AppContent = () => {
   const { selectedSlot } = useSelector((state) => state.config);
   const { user, token, isHydrated: authHydrated } = useSelector((state) => state.auth);
   const { isHydrated: locationHydrated } = useSelector((state) => state.location);
+  const isAuthenticated = !!(token && user);
   const [isReady, setIsReady] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
 
@@ -70,59 +77,80 @@ const AppContent = () => {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth State Changed:', event, session ? 'Session exists' : 'No session');
 
-      // Handle all events that mean we have a valid session
-      const isActiveSession = (
-        event === 'SIGNED_IN' ||
-        event === 'INITIAL_SESSION' ||
-        event === 'TOKEN_REFRESHED'
-      );
+        // Handle all events that mean we have a valid session
+        const isActiveSession = (
+          event === 'SIGNED_IN' ||
+          event === 'INITIAL_SESSION' ||
+          event === 'TOKEN_REFRESHED'
+        );
 
-      if (isActiveSession && session) {
-        setAccessToken(session.access_token);
-        dispatch(hydrateAuth(session.access_token));
+        if (isActiveSession && session) {
+          // IMPORTANT: If this is a fresh login, clear any stale location data immediately
+          if (event === 'SIGNED_IN') {
+            dispatch(clearLocation());
+          }
+          
+          setAccessToken(session.access_token);
+          dispatch(hydrateAuth(session.access_token));
 
-        // Fetch real profile from backend (only on SIGNED_IN to avoid redundant calls on INITIAL_SESSION)
-        if (event === 'SIGNED_IN') {
-          try {
-            const res = await authService.getUserProfile();
-            let backendUser = res.success ? res.data : session.user;
+          // Fetch real profile from backend
+          if (event === 'SIGNED_IN') {
+            try {
+              const res = await authService.getUserProfile();
+              let backendUser = res.success ? res.data : session.user;
 
-            if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
-              const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
-              const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
+              if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
+                const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
+                const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
 
-              if (providerName || providerAvatar) {
-                try {
-                  const updatePayload = {};
-                  if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
-                  if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
+                if (providerName || providerAvatar) {
+                  try {
+                    const updatePayload = {};
+                    if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
+                    if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
 
-                  if (Object.keys(updatePayload).length > 0) {
-                    const updateRes = await authService.updateProfile(updatePayload);
-                    if (updateRes.success) {
-                      backendUser = { ...backendUser, ...updatePayload };
+                    if (Object.keys(updatePayload).length > 0) {
+                      const updateRes = await authService.updateProfile(updatePayload);
+                      if (updateRes.success) {
+                        backendUser = { ...backendUser, ...updatePayload };
+                      }
                     }
+                  } catch (err) {
+                    console.error('Auto profile update failed', err);
                   }
-                } catch (err) {
-                  console.error('Auto profile update failed', err);
                 }
               }
-            }
 
-            dispatch(setCredentials({ user: backendUser, token: session.access_token }));
-            if (res.success) {
-              setProfileLoaded(true);
+              dispatch(setCredentials({ user: backendUser, token: session.access_token }));
+              if (res.success) {
+                setProfileLoaded(true);
+                // 3. Restore Favorites & Cart from Backend
+                dispatch(fetchFavoritesAsync());
+              }
+            } catch (e) {
+              console.error('Error fetching profile after auth change:', e);
+              dispatch(setCredentials({ user: session.user, token: session.access_token }));
+              setProfileLoaded(false);
             }
-          } catch (e) {
-            console.error('Error fetching profile after auth change:', e);
-            dispatch(setCredentials({ user: session.user, token: session.access_token }));
-            setProfileLoaded(false);
           }
-        }
-      } else if (event === 'SIGNED_OUT') {
+        } else if (event === 'SIGNED_OUT') {
+        console.log('🚪 [AUTH] User signed out, clearing all data...');
         setAccessToken(null);
         setProfileLoaded(false);
+        
+        // 1. Reset Redux state IMMEDIATELY to avoid race conditions
         dispatch(logout());
+        dispatch(clearLocation());
+        dispatch(clearCart());
+        dispatch(clearFavorites());
+        dispatch(clearOrders());
+        dispatch(resetConfig());
+        dispatch(clearProducts());
+        
+        // 2. Clear all storage in background
+        storage.clearAll().catch(err => {
+          console.error('Error during logout cleanup:', err);
+        });
       }
     });
 
@@ -179,7 +207,7 @@ const AppContent = () => {
             address: savedAddress,
             storeId: savedStoreId,
             storeName: savedStoreName,
-            coords: savedCoords ? JSON.parse(savedCoords) : null
+            coords: savedCoords || null
           }));
         } else {
           // Force fresh location check ONLY if we have none
@@ -219,6 +247,41 @@ const AppContent = () => {
     }
   }, [isReady, profileLoaded, token, user]);
 
+  // Validate location serviceability on startup or login
+  useEffect(() => {
+    const validateLocation = async () => {
+      if (isReady && locationHydrated) {
+        const { pincode, coords, storeId } = store.getState().location;
+        
+        // If we have a location but no storeId, or if we just logged in, re-verify
+        if ((pincode || coords) && !storeId) {
+          try {
+            const params = {};
+            if (coords) { params.lat = coords.lat; params.lng = coords.lng; }
+            if (pincode) params.pincode = pincode;
+            
+            const res = await apiClient.get('/customer/stores/nearest', { params });
+            const storeData = res.data?.data?.store;
+            
+            if (!storeData) {
+              dispatch(hydrateLocation({ ...store.getState().location, isServiceable: false }));
+            } else {
+              dispatch(hydrateLocation({ 
+                ...store.getState().location, 
+                storeId: storeData.id, 
+                storeName: storeData.name,
+                isServiceable: true 
+              }));
+            }
+          } catch (e) {
+            console.error('Location validation failed:', e);
+          }
+        }
+      }
+    };
+    validateLocation();
+  }, [isReady, locationHydrated, isAuthenticated]);
+
   useEffect(() => {
     const fetchSavedCart = async () => {
       if (isReady && profileLoaded && token && user) {
@@ -237,6 +300,16 @@ const AppContent = () => {
       }
     };
     fetchSavedCart();
+    
+    const fetchSavedFavorites = async () => {
+      if (isReady && profileLoaded && token && user) {
+        const res = await favoritesService.getFavorites();
+        if (res.success) {
+          dispatch(setFavorites(res.data));
+        }
+      }
+    };
+    fetchSavedFavorites();
   }, [isReady, token, user]); // Only run when user/token changes (login)
 
   // Sync cart to backend on changes
@@ -264,7 +337,7 @@ const AppContent = () => {
     <View style={{ flex: 1, backgroundColor: activeTheme.primary }}>
       <StatusBar
         backgroundColor={activeTheme.primary}
-        barStyle={activeTheme.statusBar}
+        barStyle="light-content"
         translucent={false}
       />
 

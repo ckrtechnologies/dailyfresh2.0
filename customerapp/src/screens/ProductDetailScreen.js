@@ -16,7 +16,9 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import productService from '../api/productService';
 import { useDispatch, useSelector } from 'react-redux';
 import { addItem, removeItem } from '../store/slices/cartSlice';
-import { toggleFavorite } from '../store/slices/favoritesSlice';
+import { toggleFavorite, toggleFavoriteAsync } from '../store/slices/favoritesSlice';
+import favoritesService from '../api/favoritesService';
+import LogoLoader from '../components/LogoLoader';
 
 const { width } = Dimensions.get('window');
 
@@ -99,6 +101,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const handleToggleFavorite = () => {
     if (product) {
       dispatch(toggleFavorite(product));
+      dispatch(toggleFavoriteAsync(product));
     }
   };
 
@@ -107,7 +110,9 @@ const ProductDetailScreen = ({ route, navigation }) => {
     const itemToAdd = {
       product: { 
         ...product, 
-        price: variant ? (variant.discount_price || variant.price) : sellingPrice 
+        name: variant ? variant.name : (selectedCut ? `${selectedCut}` : product.name),
+        price: variant ? (variant.discount_price || variant.price) : sellingPrice,
+        image_url: (variant && variant.image_url) ? variant.image_url : product.image_url
       },
       quantity: qty,
       variant: variant,
@@ -139,11 +144,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+    return <LogoLoader fullScreen />;
   }
 
   const sellingPrice = product.discount_price || product.price;
@@ -181,29 +182,31 @@ const ProductDetailScreen = ({ route, navigation }) => {
           <Text style={styles.name}>{product.name}</Text>
           <Text style={styles.weight}>{product.weight_unit || '500g'}</Text>
 
-          <View style={styles.priceRow}>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>₹{sellingPrice}</Text>
-              {hasDiscount && (
-                <Text style={styles.comparePrice}>₹{product.price}</Text>
-              )}
+          {!(product.variants?.length > 0) && (
+            <View style={styles.priceRow}>
+              <View style={styles.priceContainer}>
+                <Text style={styles.price}>₹{sellingPrice}</Text>
+                {hasDiscount && (
+                  <Text style={styles.comparePrice}>₹{product.price}</Text>
+                )}
+              </View>
+              <View style={styles.quantityContainer}>
+                <TouchableOpacity
+                  style={styles.qtyBtn}
+                  onPress={() => setQuantity(Math.max(1, quantity - 1))}
+                >
+                  <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>−</Text>
+                </TouchableOpacity>
+                <Text style={styles.qtyText}>{quantity}</Text>
+                <TouchableOpacity
+                  style={styles.qtyBtn}
+                  onPress={() => setQuantity(quantity + 1)}
+                >
+                  <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>+</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.quantityContainer}>
-              <TouchableOpacity
-                style={styles.qtyBtn}
-                onPress={() => setQuantity(Math.max(1, quantity - 1))}
-              >
-                <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>−</Text>
-              </TouchableOpacity>
-              <Text style={styles.qtyText}>{quantity}</Text>
-              <TouchableOpacity
-                style={styles.qtyBtn}
-                onPress={() => setQuantity(quantity + 1)}
-              >
-                <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>+</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          )}
 
           <View style={styles.divider} />
 
@@ -468,8 +471,12 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
       <View style={styles.footer}>
         <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Total Price</Text>
-          <Text style={styles.totalPrice}>₹{sellingPrice * quantity}</Text>
+          {!(product.variants?.length > 0) && (
+            <>
+              <Text style={styles.totalLabel}>Total Price</Text>
+              <Text style={styles.totalPrice}>₹{sellingPrice * quantity}</Text>
+            </>
+          )}
         </View>
         {product.variants?.length > 0 ? (
           <TouchableOpacity 

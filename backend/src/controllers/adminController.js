@@ -4,11 +4,22 @@ import { deleteFileByUrl } from '../utils/fileHelper.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import * as notificationService from '../services/notificationService.js';
 
-const getImageUrl = (file, bodyUrl) => {
+const getImageUrl = (file, bodyUrl, req = null, fieldname = 'image') => {
+  // 1. Check direct file (upload.single)
   if (file) {
     const baseUrl = (process.env.CDN_BASE_URL || 'https://assets.dailyfreshkolkata.in/uploads').replace(/\/$/, '');
     return `${baseUrl}/${file.filename}`;
   }
+  
+  // 2. Check in files array (upload.any or upload.fields)
+  if (req && req.files && Array.isArray(req.files)) {
+    const foundFile = req.files.find(f => f.fieldname === fieldname);
+    if (foundFile) {
+      const baseUrl = (process.env.CDN_BASE_URL || 'https://assets.dailyfreshkolkata.in/uploads').replace(/\/$/, '');
+      return `${baseUrl}/${foundFile.filename}`;
+    }
+  }
+
   return bodyUrl || null;
 };
 
@@ -24,6 +35,16 @@ const safeParseOptions = (options, defaultVal = []) => {
   } catch (e) {
     // Fallback: handle comma-separated strings (like "morning,express")
     return options.split(',').map(s => s.trim()).filter(s => s);
+  }
+};
+
+export const uploadFile = async (req, res) => {
+  try {
+    if (!req.file) return errorResponse(res, 'No file uploaded', 400);
+    const url = getImageUrl(req.file);
+    return successResponse(res, { url }, 'File uploaded successfully');
+  } catch (error) {
+    return errorResponse(res, 'Upload failed', 500, error);
   }
 };
 
@@ -582,7 +603,7 @@ export const createCategory = async (req, res) => {
   if (!name) return errorResponse(res, 'Category name is required', 400);
   if (!slug) return errorResponse(res, 'Slug is required', 400);
 
-  const image_url = getImageUrl(req.file, bodyUrl);
+  const image_url = getImageUrl(req.file, bodyUrl, req);
 
   try {
     const { data, error } = await supabaseAdmin
@@ -600,7 +621,7 @@ export const createSubCategory = async (req, res) => {
   if (!category_id) return errorResponse(res, 'Parent category is required', 400);
   if (!name) return errorResponse(res, 'Sub-category name is required', 400);
 
-  const image_url = getImageUrl(req.file, bodyUrl);
+  const image_url = getImageUrl(req.file, bodyUrl, req);
 
   try {
     const { data, error } = await supabaseAdmin.from('sub_categories').insert([{
@@ -628,7 +649,7 @@ export const createProduct = async (req, res) => {
   if (!name) return errorResponse(res, 'Product name is required.', 400);
   if (price === undefined || price === null) return errorResponse(res, 'Price is required.', 400);
 
-  const image_url = getImageUrl(req.file, bodyUrl);
+  const image_url = getImageUrl(req.file, bodyUrl, req);
 
   try {
     const productData = {
@@ -665,7 +686,7 @@ export const createProduct = async (req, res) => {
     if (variants.length > 0) {
       try {
         console.log(`[Admin] Creating ${variants.length} variants for product ${product.id}`);
-        await syncProductVariants(product.id, variants);
+        await syncProductVariants(product.id, variants, req);
         
         // Refresh product with inserted variants
         const { data: refreshed } = await supabaseAdmin.from('products').select('*, variants:product_variants(*)').eq('id', product.id).single();
@@ -682,7 +703,7 @@ export const createProduct = async (req, res) => {
 };
 
 // Helper for variants
-const syncProductVariants = async (productId, variants) => {
+const syncProductVariants = async (productId, variants, req = null) => {
   if (!Array.isArray(variants)) return;
   console.log(`[Admin] Syncing ${variants.length} variants for product ${productId}`);
 
@@ -705,7 +726,10 @@ const syncProductVariants = async (productId, variants) => {
     const generateUUID = () => crypto.randomUUID();
 
     // 4. Prepare all variants for upsert
-    const variantsToUpsert = variants.map(v => {
+    const variantsToUpsert = variants.map((v, index) => {
+      // Look for uploaded file for this specific variant
+      const variantImageUrl = getImageUrl(null, v.image_url, req, `variant_image_${index}`);
+
       const record = {
         product_id: productId,
         name: v.name,
@@ -714,7 +738,7 @@ const syncProductVariants = async (productId, variants) => {
         discount_price: (v.discount_price && v.discount_price !== '' && v.discount_price !== 'null') ? parseFloat(v.discount_price) : null,
         weight_text: v.weight_text || null,
         gross_weight_text: v.gross_weight_text || null,
-        image_url: v.image_url || null,
+        image_url: variantImageUrl,
         delivery_info: v.delivery_info || 'Tomorrow Morning',
         display_order: v.display_order || 0
       };
@@ -760,7 +784,7 @@ export const updateCategory = async (req, res) => {
   const { name, slug, description, image_url: bodyUrl, display_order, is_active } = req.body;
   const updateData = { name, slug, description, display_order, is_active };
 
-  if (req.file) updateData.image_url = getImageUrl(req.file);
+  if (req.file || req.files) updateData.image_url = getImageUrl(req.file, bodyUrl, req);
   else if (bodyUrl !== undefined) updateData.image_url = bodyUrl;
 
   Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
@@ -780,7 +804,7 @@ export const updateSubCategory = async (req, res) => {
     name, slug, description, display_order, is_active
   };
 
-  if (req.file) updateData.image_url = getImageUrl(req.file);
+  if (req.file || req.files) updateData.image_url = getImageUrl(req.file, bodyUrl, req);
   else if (bodyUrl !== undefined) updateData.image_url = bodyUrl;
 
   Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
@@ -833,7 +857,7 @@ export const updateProduct = async (req, res) => {
     delivery_options: req.body.delivery_options ? safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express']) : undefined
   };
 
-  if (req.file) updateData.image_url = getImageUrl(req.file);
+  if (req.file || req.files) updateData.image_url = getImageUrl(req.file, bodyUrl, req);
   else if (bodyUrl !== undefined) updateData.image_url = bodyUrl;
 
   // RBAC: Store Managers can only update specific fields (Catalog details like Name/SubCat are usually Admin-only)
@@ -870,7 +894,7 @@ export const updateProduct = async (req, res) => {
     if (req.body.variants) {
       try {
         const variants = typeof req.body.variants === 'string' ? JSON.parse(req.body.variants) : req.body.variants;
-        await syncProductVariants(id, variants);
+        await syncProductVariants(id, variants, req);
       } catch (variantErr) {
         return errorResponse(res, variantErr.message || 'Failed to sync variants', 400);
       }
@@ -1099,7 +1123,7 @@ export const listBanners = async (req, res) => {
 
 export const createBanner = async (req, res) => {
   const { title, image_url: bodyUrl, link_url, placement, display_order, is_active } = req.body;
-  const image_url = getImageUrl(req.file, bodyUrl);
+  const image_url = getImageUrl(req.file, bodyUrl, req);
 
   try {
     const { data, error } = await supabaseAdmin
@@ -1119,7 +1143,7 @@ export const updateBanner = async (req, res) => {
   const { id } = req.params;
   const updateData = { ...req.body };
 
-  if (req.file) updateData.image_url = getImageUrl(req.file);
+  if (req.file || req.files) updateData.image_url = getImageUrl(req.file, bodyUrl, req);
   delete updateData.imageFile; // Remove frontend-only field
 
   try {

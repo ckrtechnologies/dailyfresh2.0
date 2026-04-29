@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Animated, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../constants/theme';
 
-const LogoLoader = ({ size = 80 }) => {
+const LogoLoader = ({ size = 80, fullScreen = false }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
@@ -37,7 +37,7 @@ const LogoLoader = ({ size = 80 }) => {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, fullScreen && styles.fullScreen]}>
       <Animated.View style={[
         styles.ring,
         {
@@ -65,6 +65,10 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  fullScreen: {
+    flex: 1,
+    backgroundColor: COLORS.white,
   },
   ring: {
     position: 'absolute',
