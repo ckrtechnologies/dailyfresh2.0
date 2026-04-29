@@ -463,8 +463,9 @@ export const verifyPayment = async (req, res) => {
  * Get Customer Order History
  */
 export const getMyOrders = async (req, res) => {
+  const { startDate, endDate } = req.query;
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('orders')
       .select(`
         *,
@@ -475,8 +476,12 @@ export const getMyOrders = async (req, res) => {
           product:products!product_id(name, image_url)
         )
       `)
-      .eq('user_id', req.user.id)
-      .order('created_at', { ascending: false });
+      .eq('user_id', req.user.id);
+
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', `${endDate} 23:59:59`);
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('[GetMyOrders Error]', JSON.stringify(error, null, 2));

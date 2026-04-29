@@ -30,9 +30,9 @@ const orderService = {
   /**
    * Get user's order history
    */
-  getMyOrders: async () => {
+  getMyOrders: async (filters = {}) => {
     try {
-      const response = await apiClient.get('/customer/orders');
+      const response = await apiClient.get('/customer/orders', { params: filters });
       return { success: true, data: response.data.data };
     } catch (error) {
       console.error('Error fetching orders:', error);

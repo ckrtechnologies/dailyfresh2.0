@@ -4,11 +4,20 @@ import fs from 'fs';
 
 // Resolve and ensure directory exists
 const isWindows = process.platform === 'win32';
-const targetPath = process.env.UPLOAD_PATH || (isWindows ? './public/uploads' : '/var/www/dailyfresh/public/uploads');
-const uploadDir = path.resolve(targetPath);
+let uploadDir;
+try {
+  const targetPath = process.env.UPLOAD_PATH || (isWindows ? './public/uploads' : '/var/www/dailyfresh/public/uploads');
+  uploadDir = path.resolve(targetPath);
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (error) {
+  console.warn(`[STORAGE] Failed to use UPLOAD_PATH (${process.env.UPLOAD_PATH}). Falling back to local ./public/uploads`);
+  uploadDir = path.resolve('./public/uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
 }
 console.log(`[STORAGE] Upload directory active at: ${uploadDir}`);
 
@@ -30,7 +39,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-export const upload = multer({ 
+export const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit

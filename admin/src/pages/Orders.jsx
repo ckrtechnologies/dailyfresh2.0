@@ -12,6 +12,7 @@ const Orders = () => {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
   const [status, setStatus] = useState('all');
   const [updatingId, setUpdatingId] = useState(null);
+  const [showOnlyMe, setShowOnlyMe] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: response, isLoading } = useQuery({
@@ -25,7 +26,8 @@ const Orders = () => {
           store_id: storeIdToFetch || undefined,
           startDate: dateRange.startDate || undefined,
           endDate: dateRange.endDate || undefined,
-          search: searchQuery || undefined
+          search: searchQuery || undefined,
+          user_id: showOnlyMe ? user.id : undefined // Added to backend support below
         }
       });
       return resp.data.data;
@@ -65,8 +67,17 @@ const Orders = () => {
       accessor: (row) => row.order_number,
       render: (row) => <span style={{ fontWeight: '600', color: 'var(--primary)' }}>{row.order_number}</span>
     },
-    { header: 'Customer', accessor: (row) => row.customer?.full_name },
     { header: 'Store', accessor: (row) => row.store?.name },
+    { 
+      header: 'Customer', 
+      accessor: (row) => row.customer?.full_name,
+      render: (row) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: '600' }}>{row.customer?.full_name}</span>
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{row.customer?.email}</span>
+        </div>
+      )
+    },
     { 
       header: 'Amount', 
       accessor: (row) => row.total_amount,
@@ -170,8 +181,39 @@ const Orders = () => {
             <option value="delivered">Delivered</option>
             <option value="cancelled">Cancelled</option>
           </select>
+
+          <div className="search-container" style={{ position: 'relative', width: '250px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input 
+              type="text" 
+              placeholder="Search Customer or Order #..." 
+              style={{ padding: '6px 12px 6px 32px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '13px', width: '100%' }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  // This triggers the useFilters global search
+                  // Or we can add a local page-specific search state
+                }
+              }}
+            />
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', background: 'white', padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+            <input 
+              type="checkbox" 
+              checked={showOnlyMe}
+              onChange={(e) => setShowOnlyMe(e.target.checked)}
+            />
+            My Orders Only
+          </label>
         </div>
       </div>
+
+      {(dateRange.startDate || dateRange.endDate) && (
+        <div style={{ marginBottom: '16px', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px' }}>
+          <span>Active Date Filter: <b>{dateRange.startDate || 'Any'}</b> to <b>{dateRange.endDate || 'Any'}</b></span>
+          <button onClick={() => setDateRange({ startDate: '', endDate: '' })} style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear Dates</button>
+        </div>
+      )}
 
       <DataTable 
         title="Orders"

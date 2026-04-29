@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import crypto from 'crypto';
 import { successResponse, errorResponse } from '../utils/response.js';
+import * as notificationService from '../services/notificationService.js';
 
 /**
  * Helper to get the store ID assigned to the logged-in manager
@@ -36,9 +37,20 @@ const safeParseOptions = (options, defaultVal = []) => {
   }
 };
 
-const syncProductVariants = async (productId, variants) => {
+const syncProductVariants = async (productId, variants, files = []) => {
   if (!Array.isArray(variants)) return;
   try {
+    // Process files for variants
+    const variantImages = {};
+    if (files && files.length > 0) {
+      files.forEach(f => {
+        if (f.fieldname.startsWith('variant_image_')) {
+          const index = f.fieldname.replace('variant_image_', '');
+          variantImages[index] = getImageUrl(f);
+        }
+      });
+    }
+
     const { data: existing } = await supabaseAdmin.from('product_variants').select('id').eq('product_id', productId);
     const existingIds = (existing || []).map(v => v.id);
     const incomingIds = variants.map(v => v.id).filter(id => id);
@@ -49,9 +61,18 @@ const syncProductVariants = async (productId, variants) => {
     }
 
     const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-    const generateUUID = () => crypto.randomUUID();
+    const generateUUID = () => {
+      try {
+        return crypto.randomUUID();
+      } catch (e) {
+        // Fallback for older Node versions
+        return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+          (c ^ crypto.randomBytes(1)[0] & 15 >> c / 4).toString(16)
+        );
+      }
+    };
 
-    const variantsToUpsert = variants.map(v => {
+    const variantsToUpsert = variants.map((v, index) => {
       const record = {
         product_id: productId,
         name: v.name,
@@ -60,8 +81,8 @@ const syncProductVariants = async (productId, variants) => {
         discount_price: (v.discount_price && v.discount_price !== '' && v.discount_price !== 'null') ? parseFloat(v.discount_price) : null,
         weight_text: v.weight_text || null,
         gross_weight_text: v.gross_weight_text || null,
-        image_url: v.image_url || null,
-        delivery_info: v.delivery_info || 'Tomorrow Morning',
+        delivery_info: (v.delivery_info && Array.isArray(v.delivery_info)) ? v.delivery_info : (v.delivery_info ? [v.delivery_info] : ['Tomorrow Morning']),
+        image_url: variantImages[index.toString()] || v.image_url || null,
         display_order: v.display_order || 0
       };
       if (v.id && isUUID(v.id)) record.id = v.id;
@@ -192,21 +213,16 @@ export const getDashboard = async (req, res) => {
 export const getInventory = async (req, res) => {
   try {
     const storeId = await getAssignedStoreId(req.user.id);
+    console.log(`[Inventory] Fetching for manager ${req.user.id}, storeId: ${storeId}`);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
-    const { startDate, endDate } = req.query;
-
-    let query = supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('products')
       .select('*, sub_category:sub_categories(name, category_id, category:categories(name)), variants:product_variants(*)')
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
 
-    if (startDate) query = query.gte('created_at', startDate);
-    if (endDate) query = query.lte('created_at', endDate);
-
-    const { data, error } = await query;
-
+    console.log(`[Inventory] Found ${data?.length || 0} products`);
     if (error) return errorResponse(res, 'Failed to fetch inventory', 400, error);
     return successResponse(res, { products: data });
   } catch (error) {
@@ -368,7 +384,7 @@ export const getOrders = async (req, res) => {
       items: items ? items.filter(item => item.order_id === order.id) : []
     }));
 
-    return successResponse(res, { 
+    return successResponse(res, {
       orders: ordersWithItems,
       pagination: {
         total: count,
@@ -435,10 +451,45 @@ export const updateOrderStatus = async (req, res) => {
   const { status } = req.body;
   try {
     const storeId = await getAssignedStoreId(req.user.id);
-    const { data: order } = await supabaseAdmin.from('orders').select('store_id').eq('id', orderId).single();
+    const { data: order } = await supabaseAdmin
+      .from('orders')
+      .select('store_id, user_id, order_number')
+      .eq('id', orderId)
+      .single();
+
     if (!order || order.store_id !== storeId) return errorResponse(res, 'Access denied', 403);
+
     const { data, error } = await supabaseAdmin.from('orders').update({ status }).eq('id', orderId).select().single();
     if (error) return errorResponse(res, 'Update failed', 400, error);
+
+    // Send Notification to Customer
+    try {
+      let title = 'Order Update! 🛍️';
+      let body = `Your order #${order.order_number} status is now ${status}.`;
+
+      if (status === 'Accepted') {
+        title = '👨‍🍳 Order Accepted';
+        body = `Your order #${order.order_number} is being prepared!`;
+      } else if (status === 'Out for Delivery') {
+        title = '🛵 Out for Delivery';
+        body = `Your order #${order.order_number} is on the way!`;
+      } else if (status === 'Delivered') {
+        title = '🍗 Order Delivered';
+        body = `Enjoy your meal! Order #${order.order_number} has been delivered.`;
+      } else if (status === 'Cancelled') {
+        title = '😔 Order Cancelled';
+        body = `We're sorry, your order #${order.order_number} has been cancelled by the store.`;
+      }
+
+      await notificationService.sendToUser(order.user_id, title, body, {
+        type: 'order_update',
+        status: status,
+        orderId: orderId
+      });
+    } catch (notifErr) {
+      console.error('[Notification Error] Failed to notify customer:', notifErr.message);
+    }
+
     return successResponse(res, { order: data }, 'Order status updated');
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
@@ -532,6 +583,15 @@ export const getNearestStore = async (req, res) => {
  */
 export const createProduct = async (req, res) => {
   try {
+    console.log('[StoreController] createProduct request received');
+    console.log('[Headers]', req.headers['content-type']);
+    console.log('[Body Keys]', Object.keys(req.body));
+    if (req.files) console.log('[Files Received]', req.files.length);
+    
+    // Find the main product image
+    const mainFile = req.files?.find(f => f.fieldname === 'image');
+    if (mainFile) console.log('[Main File]', mainFile.originalname);
+
     const storeId = await getAssignedStoreId(req.user.id);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
@@ -540,18 +600,24 @@ export const createProduct = async (req, res) => {
 
     const slug = name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '') + '-' + Date.now().toString().slice(-4);
 
-    const image_url = getImageUrl(req.file, req.body.image_url);
+    const image_url = getImageUrl(mainFile, req.body.image_url);
+    const variants = safeParseOptions(req.body.variants);
+    const delivery_options = safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express']);
 
     const productData = {
       ...req.body,
       store_id: storeId,
       slug: req.body.slug || slug,
       image_url,
-      delivery_options: safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express'])
+      price: parseFloat(req.body.price) || 0,
+      discount_price: (req.body.discount_price && req.body.discount_price !== 'null') ? parseFloat(req.body.discount_price) : null,
+      stock_quantity: parseInt(req.body.stock_quantity) || 0,
+      is_active: req.body.is_active === 'true' || req.body.is_active === true,
+      delivery_options
     };
 
-    // Remove variants from main product payload
-    const variants = productData.variants || [];
+    // Remove UI-only fields and metadata that shouldn't be in the products table
+    delete productData.category_id;
     delete productData.variants;
 
     const { data: product, error } = await supabaseAdmin.from('products').insert([productData]).select().single();
@@ -559,7 +625,7 @@ export const createProduct = async (req, res) => {
     if (error) return errorResponse(res, 'Failed to create product', 400, error);
 
     if (variants.length > 0) {
-      await syncProductVariants(product.id, variants);
+      await syncProductVariants(product.id, variants, req.files);
       const { data: refreshed } = await supabaseAdmin.from('products').select('*, variants:product_variants(*)').eq('id', product.id).single();
       return successResponse(res, { product: refreshed }, 'Product created with variants');
     }
@@ -574,8 +640,15 @@ export const createProduct = async (req, res) => {
  * Update product details
  */
 export const updateProduct = async (req, res) => {
-  const { productId } = req.params;
   try {
+    const productId = req.params.productId;
+    console.log(`[StoreController] updateProduct called for ID: ${productId}`);
+    console.log('[Headers]', req.headers['content-type']);
+    console.log('[Body Keys]', Object.keys(req.body));
+    if (req.files) console.log('[Files Received]', req.files.length);
+
+    const mainFile = req.files?.find(f => f.fieldname === 'image');
+
     const storeId = await getAssignedStoreId(req.user.id);
 
     const { data: product } = await supabaseAdmin.from('products').select('store_id').eq('id', productId).single();
@@ -585,19 +658,23 @@ export const updateProduct = async (req, res) => {
 
     // Allowed fields for store manager updates
     const allowedFields = [
-      'stock_quantity', 'price', 'discount_price', 'sale_price', 'description', 
+      'stock_quantity', 'price', 'discount_price', 'sale_price', 'description',
       'is_active', 'weight_unit', 'name', 'cooking_guide', 'image_url',
       'is_deal', 'is_featured', 'is_trending', 'is_flash_sale', 'sub_category_id',
       'delivery_options'
     ];
-    
-    const image_url = getImageUrl(req.file, req.body.image_url);
-    
+
+    const image_url = getImageUrl(mainFile, req.body.image_url);
+
     const updateData = {};
     Object.keys(req.body).forEach(key => {
       if (allowedFields.includes(key)) {
         if (key === 'delivery_options') {
           updateData[key] = safeParseOptions(req.body[key]);
+        } else if (['price', 'discount_price', 'sale_price', 'stock_quantity'].includes(key)) {
+          updateData[key] = (req.body[key] && req.body[key] !== 'null') ? parseFloat(req.body[key]) : null;
+        } else if (['is_active', 'is_deal', 'is_featured', 'is_trending', 'is_flash_sale'].includes(key)) {
+          updateData[key] = req.body[key] === 'true' || req.body[key] === true;
         } else {
           updateData[key] = req.body[key];
         }
@@ -608,14 +685,14 @@ export const updateProduct = async (req, res) => {
       updateData.image_url = image_url;
     }
 
-    const variants = req.body.variants;
+    const variants = safeParseOptions(req.body.variants, undefined);
 
     const { data: productData, error } = await supabaseAdmin.from('products').update(updateData).eq('id', productId).select().single();
 
     if (error) return errorResponse(res, 'Update failed', 400, error);
 
     if (variants !== undefined) {
-      await syncProductVariants(productId, variants);
+      await syncProductVariants(productId, variants, req.files);
       const { data: refreshed } = await supabaseAdmin.from('products').select('*, variants:product_variants(*)').eq('id', productId).single();
       return successResponse(res, { product: refreshed }, 'Product and variants updated');
     }
@@ -787,4 +864,5 @@ export const getSubCategories = async (req, res) => {
     return errorResponse(res, 'Failed to fetch sub-categories', 500, error);
   }
 };
+
 

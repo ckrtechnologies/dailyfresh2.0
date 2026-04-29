@@ -24,9 +24,9 @@ router.get('/categories', storeController.getCategories);
 router.get('/sub-categories', storeController.getSubCategories);
 
 // Inventory CRUD with Image Upload support
-router.post('/inventory', upload.single('image'), storeController.createProduct);
+router.post('/inventory', upload.any(), storeController.createProduct);
 router.get('/inventory/export', storeController.exportInventoryCSV);
-router.put('/inventory/:productId', upload.single('image'), storeController.updateProduct);
+router.put('/inventory/:productId', upload.any(), storeController.updateProduct);
 router.delete('/inventory/:productId', storeController.deleteProduct);
 
 router.get('/orders/export', storeController.exportOrdersCSV);

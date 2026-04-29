@@ -370,7 +370,7 @@ export const getDashboardStats = async (req, res) => {
  */
 
 export const listOrders = async (req, res) => {
-  const { page = 1, pageSize = 50, status, startDate, endDate, search } = req.query;
+  const { page = 1, pageSize = 50, status, startDate, endDate, search, user_id } = req.query;
   const storeIdToFetch = req.user.role === 'store_manager' ? req.user.store_id : req.query.store_id;
 
   const from = (page - 1) * pageSize;
@@ -388,8 +388,34 @@ export const listOrders = async (req, res) => {
     query = query.range(from, to);
 
     if (status && status !== 'all') query = query.eq('status', status);
-    if (storeIdToFetch) query = query.eq('store_id', storeIdToFetch);
-    if (search) query = query.or(`order_number.ilike.%${search}%,user_id.ilike.%${search}%`);
+    if (user_id) query = query.eq('user_id', user_id);
+    if (req.user.role === 'store_manager') {
+      query = query.eq('store_id', req.user.store_id);
+    } else if (req.query.store_id) {
+      query = query.eq('store_id', req.query.store_id);
+    }
+
+    if (search) {
+      // 1. Check if it's an order number (e.g., RN-...)
+      if (search.toUpperCase().startsWith('RN-')) {
+        query = query.ilike('order_number', `%${search}%`);
+      } else {
+        // 2. Otherwise, assume it's a customer name/email search
+        // Find matching profiles first
+        const { data: matchedProfiles } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+        
+        if (matchedProfiles && matchedProfiles.length > 0) {
+          const profileIds = matchedProfiles.map(p => p.id);
+          query = query.in('user_id', profileIds);
+        } else {
+          // If no profiles match, search order_number as fallback
+          query = query.ilike('order_number', `%${search}%`);
+        }
+      }
+    }
 
     const { data, count, error } = await query;
     if (error) throw error;
@@ -739,7 +765,7 @@ const syncProductVariants = async (productId, variants, req = null) => {
         weight_text: v.weight_text || null,
         gross_weight_text: v.gross_weight_text || null,
         image_url: variantImageUrl,
-        delivery_info: v.delivery_info || 'Tomorrow Morning',
+        delivery_info: (v.delivery_info && Array.isArray(v.delivery_info)) ? v.delivery_info : (v.delivery_info ? [v.delivery_info] : ['Tomorrow Morning']),
         display_order: v.display_order || 0
       };
 

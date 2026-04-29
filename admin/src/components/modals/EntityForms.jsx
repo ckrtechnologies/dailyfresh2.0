@@ -584,16 +584,36 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                           setFormData({ ...formData, variants: newVariants });
                         }}
                       />
-                      <Input
-                        label="Delivery Info"
-                        placeholder="Tomorrow Morning"
-                        value={variant.delivery_info}
-                        onChange={(e) => {
-                          const newVariants = [...formData.variants];
-                          newVariants[index].delivery_info = e.target.value;
-                          setFormData({ ...formData, variants: newVariants });
-                        }}
-                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Delivery Slots</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {['Tomorrow Morning', 'Tomorrow Afternoon', 'Express Delivery'].map(slot => {
+                            const current = Array.isArray(variant.delivery_info) 
+                              ? variant.delivery_info 
+                              : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : []);
+                            const isActive = current.includes(slot);
+                            
+                            return (
+                              <label key={slot} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isActive}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...current, slot]
+                                      : current.filter(s => s !== slot);
+                                    const newVariants = [...formData.variants];
+                                    newVariants[index].delivery_info = next;
+                                    setFormData({ ...formData, variants: newVariants });
+                                  }}
+                                  style={{ width: '14px', height: '14px', accentColor: 'var(--primary)' }}
+                                />
+                                <span>{slot}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Right Col: Weight Details */}

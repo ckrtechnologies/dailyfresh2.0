@@ -7,25 +7,53 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import orderService from '../api/orderService';
 import LogoLoader from '../components/LogoLoader';
+import { format, parseISO } from 'date-fns';
 
 const OrdersScreen = ({ navigation }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dateFilters, setDateFilters] = useState({ startDate: '', endDate: '' });
+  const [showFilters, setShowFilters] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerTarget, setPickerTarget] = useState('startDate');
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (filters = dateFilters) => {
     setLoading(true);
-    const res = await orderService.getMyOrders();
+    const res = await orderService.getMyOrders(filters);
     if (res.success) {
       setOrders(res.data.orders);
     }
     setLoading(false);
+  };
+
+  const onDateChange = (event, selectedDate) => {
+    setShowPicker(false);
+    if (selectedDate) {
+      // Use local date format YYYY-MM-DD instead of UTC-based ISO string
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      setDateFilters(prev => ({
+        ...prev,
+        [pickerTarget]: dateStr
+      }));
+    }
+  };
+
+  const openPicker = (target) => {
+    setPickerTarget(target);
+    setShowPicker(true);
   };
 
   useEffect(() => {
@@ -42,6 +70,8 @@ const OrdersScreen = ({ navigation }) => {
     if (!status) return COLORS.gray;
     switch (status.toLowerCase()) {
       case 'delivered': return '#4CAF50';
+      case 'ready': return '#2196F3'; // Blue for ready
+      case 'preparing': return '#FF9800'; // Orange for preparing
       case 'pending': return '#FF9800';
       case 'cancelled': return '#F44336';
       case 'confirmed': return '#2196F3';
@@ -109,6 +139,15 @@ const OrdersScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  const formatDateReadable = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      return format(parseISO(dateStr), 'dd MMM yyyy');
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -117,8 +156,82 @@ const OrdersScreen = ({ navigation }) => {
           <Icon name="arrow-left" size={24} color={COLORS.dark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Orders</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={() => setShowFilters(!showFilters)} style={styles.filterBtn}>
+          <Icon name="calendar-range" size={22} color={showFilters ? COLORS.primary : COLORS.dark} />
+        </TouchableOpacity>
       </View>
+
+      {showFilters && (
+        <View style={styles.filterSection}>
+          <View style={styles.filterRow}>
+            <View style={styles.dateInputContainer}>
+              <Text style={styles.filterLabel}>From Date</Text>
+              <TouchableOpacity style={styles.dateSelector} onPress={() => openPicker('startDate')}>
+                <Text style={styles.dateValue}>{formatDateReadable(dateFilters.startDate) || 'Select Date'}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dateInputContainer}>
+              <Text style={styles.filterLabel}>To Date</Text>
+              <TouchableOpacity style={styles.dateSelector} onPress={() => openPicker('endDate')}>
+                <Text style={styles.dateValue}>{formatDateReadable(dateFilters.endDate) || 'Select Date'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.filterActions}>
+            <TouchableOpacity 
+              style={[styles.filterActionBtn, { backgroundColor: '#F3F4F6' }]} 
+              onPress={() => {
+                const clear = { startDate: '', endDate: '' };
+                setDateFilters(clear);
+                fetchOrders(clear);
+                setShowFilters(false);
+              }}
+            >
+              <Text style={{ color: COLORS.dark }}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterActionBtn, { backgroundColor: COLORS.primary }]} 
+              onPress={() => {
+                // Pass current state explicitly to bypass async state update lag
+                fetchOrders(dateFilters);
+                setShowFilters(false);
+              }}
+            >
+              <Text style={{ color: COLORS.white }}>Apply Filter</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.helperText}>* Select dates to filter your order history.</Text>
+        </View>
+      )}
+
+      {(dateFilters.startDate || dateFilters.endDate) && !showFilters && (
+        <View style={styles.activeFilterBar}>
+          <Icon name="filter-variant" size={16} color={COLORS.primary} />
+          <Text style={styles.activeFilterText}>
+            Showing orders from {formatDateReadable(dateFilters.startDate) || 'Any'} to {formatDateReadable(dateFilters.endDate) || 'Any'}
+          </Text>
+          <TouchableOpacity 
+            onPress={() => {
+              const clear = { startDate: '', endDate: '' };
+              setDateFilters(clear);
+              fetchOrders(clear);
+            }}
+            style={styles.clearMiniBtn}
+          >
+            <Icon name="close-circle" size={18} color={COLORS.gray} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {showPicker && (
+        <DateTimePicker
+          value={dateFilters[pickerTarget] ? new Date(dateFilters[pickerTarget]) : new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onDateChange}
+          maximumDate={new Date()}
+        />
+      )}
 
       {loading ? (
         <LogoLoader fullScreen />
@@ -129,7 +242,7 @@ const OrdersScreen = ({ navigation }) => {
           <Text style={styles.emptySubtitle}>When you place an order, it will appear here.</Text>
           <TouchableOpacity 
             style={styles.shopBtn}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => navigation.navigate('AppTabs', { screen: 'Home' })}
           >
             <Text style={styles.shopBtnText}>Start Shopping</Text>
           </TouchableOpacity>
@@ -166,10 +279,82 @@ const styles = StyleSheet.create({
   backBtn: {
     padding: SPACING.s,
   },
+  filterBtn: {
+    padding: SPACING.s,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.dark,
+  },
+  filterSection: {
+    backgroundColor: COLORS.white,
+    padding: SPACING.m,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dateInputContainer: {
+    flex: 1,
+  },
+  filterLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.gray,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  dateSelector: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: '#F9FAFB',
+  },
+  dateValue: {
+    fontSize: 13,
+    color: COLORS.dark,
+  },
+  filterActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  filterActionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  helperText: {
+    fontSize: 10,
+    color: COLORS.gray,
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  activeFilterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: SPACING.m,
+    paddingVertical: 8,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E7FF',
+  },
+  activeFilterText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#3730A3',
+    fontWeight: '500',
+  },
+  clearMiniBtn: {
+    padding: 2,
   },
   listContainer: {
     padding: SPACING.m,

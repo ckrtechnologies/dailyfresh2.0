@@ -30,6 +30,10 @@ app.use(cors({
   allowedHeaders: '*'
 }));
 app.use(morgan('dev'));
+app.use((req, res, next) => {
+  console.log(`[BACKEND] ${req.method} ${req.url}`);
+  next();
+});
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -55,5 +59,14 @@ app.use((req, res) => {
 
 // 6. Global Error Handler
 app.use(errorHandler);
+
+// Global listeners for debugging crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[CRITICAL] Uncaught Exception:', err);
+});
 
 export default app;

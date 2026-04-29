@@ -40,8 +40,8 @@ const ProductDetailScreen = ({ route, navigation }) => {
   // Helper to find quantity for a specific config
   const getCartQuantity = (variant = null) => {
     if (!product) return 0;
-    const item = cartItems.find(i => 
-      i.id === product.id && 
+    const item = cartItems.find(i =>
+      i.id === product.id &&
       i.variant?.id === variant?.id &&
       i.cutPreference === (variant ? null : selectedCut) &&
       i.cleaningPreference === (variant ? null : selectedCleaning)
@@ -59,14 +59,14 @@ const ProductDetailScreen = ({ route, navigation }) => {
           setProduct(data);
           if (data.cut_options?.length > 0) setSelectedCut(data.cut_options[0]);
           if (data.cleaning_options?.length > 0) setSelectedCleaning(data.cleaning_options[0]);
-          
+
           // Auto-select Customize tab if variants exist
           if (data.variants?.length > 0) {
             setActiveTab('customize');
           } else {
             setActiveTab('about');
           }
-          
+
           fetchSimilarProducts(data.sub_category_id);
         }
       } catch (err) {
@@ -108,8 +108,8 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const handleAddToCart = (variant = null, overrideQuantity = null) => {
     const qty = overrideQuantity !== null ? overrideQuantity : quantity;
     const itemToAdd = {
-      product: { 
-        ...product, 
+      product: {
+        ...product,
         name: variant ? variant.name : (selectedCut ? `${selectedCut}` : product.name),
         price: variant ? (variant.discount_price || variant.price) : sellingPrice,
         image_url: (variant && variant.image_url) ? variant.image_url : product.image_url
@@ -300,48 +300,61 @@ const ProductDetailScreen = ({ route, navigation }) => {
                           </TouchableOpacity>
                         )}
                       </View>
-                      
+
                       <View style={styles.variantPriceRow}>
                         <Text style={styles.variantPrice}>₹{variant.discount_price || variant.price}</Text>
                         {variant.discount_price && (
-                           <View style={styles.memberBadge}>
-                             <Icon name="alpha-p-circle" size={16} color="#fbbf24" />
-                             <Text style={styles.memberPriceText}>₹{variant.discount_price}</Text>
-                             <Icon name="chevron-right" size={12} color="#fbbf24" />
-                           </View>
+                          <View style={styles.memberBadge}>
+                            <Icon name="alpha-p-circle" size={16} color="#fbbf24" />
+                            <Text style={styles.memberPriceText}>₹{variant.discount_price}</Text>
+                            <Icon name="chevron-right" size={12} color="#fbbf24" />
+                          </View>
                         )}
                       </View>
 
-                      <View style={styles.deliveryRow}>
-                        <Icon name="truck-delivery-outline" size={14} color={COLORS.gray} />
-                        <Text style={styles.deliveryText}>{variant.delivery_info || 'Tomorrow Morning'}</Text>
+                      <View style={styles.deliverySlotsContainer}>
+                        {(Array.isArray(variant.delivery_info) ? variant.delivery_info : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : ['Tomorrow Morning'])).map((slot, sIdx) => {
+                          let icon = 'truck-delivery-outline';
+                          let color = '#64748b'; // Default Slate
+                          
+                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#f59e0b'; }
+                          else if (slot.toLowerCase().includes('afternoon')) { icon = 'weather-partly-cloudy'; color = '#3b82f6'; }
+                          else if (slot.toLowerCase().includes('express')) { icon = 'flash'; color = '#ef4444'; }
+                          
+                          return (
+                            <View key={sIdx} style={[styles.deliveryBadge, { backgroundColor: color + '12' }]}>
+                              <Icon name={icon} size={12} color={color} />
+                              <Text style={[styles.deliveryBadgeText, { color }]}>{slot}</Text>
+                            </View>
+                          );
+                        })}
                       </View>
                     </View>
 
                     <View style={styles.variantImageContainer}>
-                      <Image 
-                        source={{ uri: variant.image_url || product.image_url }} 
-                        style={styles.variantImage} 
+                      <Image
+                        source={{ uri: variant.image_url || product.image_url }}
+                        style={styles.variantImage}
                       />
                       {getCartQuantity(variant) > 0 ? (
                         <View style={styles.variantQtySelector}>
-                          <TouchableOpacity 
-                            style={styles.variantQtyBtn} 
+                          <TouchableOpacity
+                            style={styles.variantQtyBtn}
                             onPress={() => handleRemoveFromCart(variant)}
                           >
                             <Icon name="minus" size={16} color={COLORS.primary} />
                           </TouchableOpacity>
                           <Text style={styles.variantQtyText}>{getCartQuantity(variant)}</Text>
-                          <TouchableOpacity 
-                            style={styles.variantQtyBtn} 
+                          <TouchableOpacity
+                            style={styles.variantQtyBtn}
                             onPress={() => handleAddToCart(variant, 1)}
                           >
                             <Icon name="plus" size={16} color={COLORS.primary} />
                           </TouchableOpacity>
                         </View>
                       ) : (
-                        <TouchableOpacity 
-                          style={styles.variantAddBtn} 
+                        <TouchableOpacity
+                          style={styles.variantAddBtn}
                           onPress={() => handleAddToCart(variant)}
                         >
                           <Text style={styles.variantAddText}>ADD</Text>
@@ -479,8 +492,8 @@ const ProductDetailScreen = ({ route, navigation }) => {
           )}
         </View>
         {product.variants?.length > 0 ? (
-          <TouchableOpacity 
-            style={styles.addBtn} 
+          <TouchableOpacity
+            style={styles.addBtn}
             onPress={() => {
               if (cartItems.some(i => i.id === product.id)) {
                 navigation.navigate('AppTabs', { screen: 'Cart' });
@@ -493,29 +506,29 @@ const ProductDetailScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         ) : getCartQuantity() > 0 ? (
           <View style={[styles.addBtn, styles.qtySelectorFooter]}>
-            <TouchableOpacity 
-              style={styles.footerQtyBtn} 
+            <TouchableOpacity
+              style={styles.footerQtyBtn}
               onPress={() => handleRemoveFromCart()}
             >
               <Icon name="minus" size={24} color={COLORS.white} />
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={{ flex: 1, alignItems: 'center' }}
               onPress={() => navigation.navigate('AppTabs', { screen: 'Cart' })}
             >
               <Text style={styles.footerQtyText}>{getCartQuantity()}</Text>
               <Text style={{ color: COLORS.white, fontSize: 10, fontWeight: '700' }}>VIEW CART</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.footerQtyBtn} 
+            <TouchableOpacity
+              style={styles.footerQtyBtn}
               onPress={() => handleAddToCart(null, 1)}
             >
               <Icon name="plus" size={24} color={COLORS.white} />
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity 
-            style={styles.addBtn} 
+          <TouchableOpacity
+            style={styles.addBtn}
             onPress={() => {
               handleAddToCart();
               navigation.navigate('AppTabs', { screen: 'Cart' });
@@ -1024,16 +1037,25 @@ const styles = StyleSheet.create({
     color: '#92400e',
     marginHorizontal: 2,
   },
-  deliveryRow: {
+  deliverySlotsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  deliveryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+    marginBottom: 6,
   },
-  deliveryText: {
-    fontSize: 12,
-    color: COLORS.gray,
+  deliveryBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
     marginLeft: 4,
-    fontWeight: '500',
+    textTransform: 'uppercase',
   },
   variantImageContainer: {
     alignItems: 'center',
