@@ -21,10 +21,22 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log(`[Socket] New connection: ${socket.id}`);
   
-  // Role-based room joining
-  socket.on('join', (room) => {
-    socket.join(room);
-    console.log(`[Socket] ${socket.id} joined room: ${room}`);
+  // Join a specific order room for private tracking
+  socket.on('joinOrder', ({ orderId }) => {
+    socket.join(`order_${orderId}`);
+    console.log(`[Socket] ${socket.id} joined tracking for order: ${orderId}`);
+  });
+
+  // Handle live location updates from Rider
+  socket.on('updateLocation', (data) => {
+    const { orderId, latitude, longitude, heading } = data;
+    // Broadcast to everyone in the order room EXCEPT the sender
+    socket.to(`order_${orderId}`).emit('locationUpdated', {
+      latitude,
+      longitude,
+      heading,
+      timestamp: new Date()
+    });
   });
 
   socket.on('disconnect', () => {

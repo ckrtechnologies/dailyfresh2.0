@@ -1,0 +1,102 @@
+:root {
+  --primary: #2563eb;
+  --bg: #f8fafc;
+  --text: #1e293b;
+  --text-light: #64748b;
+  --card-bg: #ffffff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  padding: 2rem;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.app-header h1 {
+  color: var(--primary);
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.app-header p {
+  color: var(--text-light);
+  margin-top: 0.5rem;
+}
+
+.app-content {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+.welcome-card {
+  background: var(--card-bg);
+  padding: 3rem;
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+}
+
+.welcome-card h2 {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+.welcome-card p {
+  color: var(--text-light);
+  margin-bottom: 2rem;
+}
+
+.placeholder-content {
+  background: #f1f5f9;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  margin-bottom: 2rem;
+  border: 2px dashed #cbd5e1;
+}
+
+.primary-button {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.primary-button:hover {
+  transform: translateY(-2px);
+}
+
+.app-footer {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 0.875rem;
+}
