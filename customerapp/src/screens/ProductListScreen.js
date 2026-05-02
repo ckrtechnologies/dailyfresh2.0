@@ -6,11 +6,12 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import ProductCard from '../components/ProductCard';
 import productService from '../api/productService';
 
@@ -18,25 +19,20 @@ const ProductListScreen = ({ route, navigation }) => {
   const { title, type, initialProducts, searchQuery, categoryId, subCategoryId } = route.params;
   const { storeId } = useSelector((state) => state.location);
   const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
   const [products, setProducts] = useState(initialProducts || []);
   const [loading, setLoading] = useState(!initialProducts);
-
-  const filteredProducts = products.filter(p => 
-    selectedSlot === 'all' || 
-    p.delivery_options?.includes(selectedSlot) || 
-    (!p.delivery_options && selectedSlot === 'express')
-  );
 
   useEffect(() => {
     if (!initialProducts || searchQuery || categoryId || subCategoryId) {
       fetchProducts();
     }
-  }, [searchQuery, categoryId, subCategoryId, storeId]);
+  }, [searchQuery, categoryId, subCategoryId, storeId, selectedSlot]);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const filters = { storeId };
+      const filters = { storeId, deliveryType: selectedSlot };
       if (searchQuery) filters.search = searchQuery;
       if (categoryId) filters.categoryId = categoryId;
       if (subCategoryId) filters.subCategoryId = subCategoryId;
@@ -56,16 +52,16 @@ const ProductListScreen = ({ route, navigation }) => {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, { backgroundColor: activeTheme.primary }]}>
       <TouchableOpacity
         style={styles.backBtn}
         onPress={() => navigation.goBack()}
       >
-        <Icon name="arrow-left" size={24} color={COLORS.dark} />
+        <Icon name="arrow-left" size={24} color={COLORS.white} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <Text style={[styles.headerTitle, { color: COLORS.white }]}>{title}</Text>
       <TouchableOpacity style={styles.filterBtn}>
-        <Icon name="tune-variant" size={20} color={COLORS.primary} />
+        <Icon name="tune-variant" size={20} color={COLORS.white} />
       </TouchableOpacity>
     </View>
   );
@@ -79,10 +75,14 @@ const ProductListScreen = ({ route, navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: activeTheme.background }]} edges={['bottom', 'left', 'right']}>
+      <StatusBar 
+        backgroundColor={activeTheme.primary} 
+        barStyle="light-content"
+      />
       {renderHeader()}
       <FlatList
-        data={filteredProducts}
+        data={products}
         keyExtractor={(item) => item.id}
         numColumns={2}
         contentContainerStyle={styles.listContent}

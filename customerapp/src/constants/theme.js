@@ -1,5 +1,5 @@
 export const THEMES = {
-  morning: {
+  tmrw_morning: {
     primary: '#CA8A04',     // Rich Golden Yellow
     secondary: '#D4A373',   // Sandy Gold
     background: '#FEFCE8',  // Very Light Yellow
@@ -11,7 +11,7 @@ export const THEMES = {
     badge: '#FEF9C3',
     statusBar: 'light-content',
   },
-  afternoon: {
+  today_evening: {
     primary: '#166534',     // Forest Green
     secondary: '#15803D',   // Emerald
     background: '#F0FDF4',  // Light Green Tint
@@ -21,6 +21,18 @@ export const THEMES = {
     accent: '#22C55E',      // Bright Green
     border: '#DCFCE7',
     badge: '#F0FDF4',
+    statusBar: 'light-content',
+  },
+  tmrw_evening: {
+    primary: '#1E40AF',     // Royal Blue
+    secondary: '#3B82F6',   // Blue-500
+    background: '#EFF6FF',  // Light Blue Tint
+    card: '#FFFFFF',
+    text: '#1E3A8A',        // Deepest Blue
+    textLight: '#1E40AF',   // Dark Blue
+    accent: '#60A5FA',      // Bright Blue
+    border: '#DBEAFE',
+    badge: '#EFF6FF',
     statusBar: 'light-content',
   },
   all: { 

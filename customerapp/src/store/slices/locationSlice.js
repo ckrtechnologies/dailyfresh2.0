@@ -31,7 +31,7 @@ const locationSlice = createSlice({
       if (storeName) storage.setItem('store_name', storeName);
       
       if (coords) {
-        storage.setItem('coords', JSON.stringify(coords));
+        storage.setItem('coords', coords);
       } else {
         storage.removeItem('coords');
       }
@@ -46,13 +46,13 @@ const locationSlice = createSlice({
         state.storeName = action.payload.store_name || null;
         state.isServiceable = true;
         
-        storage.setItem('selected_address', JSON.stringify(action.payload));
+        storage.setItem('selected_address', action.payload);
         if (action.payload.pincode) storage.setItem('pincode', action.payload.pincode);
         if (state.address) storage.setItem('address', state.address);
         if (action.payload.store_id) storage.setItem('store_id', action.payload.store_id);
         
         if (state.coords) {
-          storage.setItem('coords', JSON.stringify(state.coords));
+          storage.setItem('coords', state.coords);
         } else {
           storage.removeItem('coords');
         }
@@ -84,7 +84,9 @@ const locationSlice = createSlice({
       state.coords = action.payload.coords || null;
       state.storeId = action.payload.storeId || null;
       state.storeName = action.payload.storeName || null;
-      state.isServiceable = !!action.payload.pincode;
+      state.selectedAddress = action.payload.selectedAddress || null;
+      // It is only truly serviceable if we have an assigned storeId
+      state.isServiceable = !!action.payload.storeId;
       state.isHydrated = true;
     },
   },

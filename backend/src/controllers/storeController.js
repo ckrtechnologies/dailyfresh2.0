@@ -2,6 +2,7 @@ import { supabaseAdmin } from '../config/supabase.js';
 import crypto from 'crypto';
 import { successResponse, errorResponse } from '../utils/response.js';
 import * as notificationService from '../services/notificationService.js';
+import { validateTransition } from '../utils/statusTransitions.js';
 
 /**
  * Helper to get the store ID assigned to the logged-in manager
@@ -252,7 +253,10 @@ export const updateStock = async (req, res) => {
 
     const { data, error } = await supabaseAdmin
       .from('products')
-      .update({ stock_quantity: quantity })
+      .update({ 
+        express_stock_qty: quantity,
+        scheduled_stock_qty: quantity // Synchronize both by default for simple manager updates
+      })
       .eq('id', productId)
       .select()
       .single();
@@ -459,7 +463,34 @@ export const updateOrderStatus = async (req, res) => {
 
     if (!order || order.store_id !== storeId) return errorResponse(res, 'Access denied', 403);
 
-    const { data, error } = await supabaseAdmin.from('orders').update({ status }).eq('id', orderId).select().single();
+    // Fetch current status for transition validation
+    const { data: currentOrder } = await supabaseAdmin.from('orders').select('status, delivery_type').eq('id', orderId).single();
+    
+    try {
+      validateTransition(currentOrder.status, status, 'store');
+    } catch (err) {
+      return errorResponse(res, err.message, 400);
+    }
+
+    // Handle Stock Deduction for Scheduled Orders at 'confirmed' status
+    if (status === 'confirmed' && currentOrder.delivery_type !== 'express') {
+      const { data: items } = await supabaseAdmin.from('order_items').select('product_id, quantity').eq('order_id', orderId);
+      if (items) {
+        for (const item of items) {
+          const { data: product } = await supabaseAdmin.from('products').select('scheduled_stock_qty').eq('id', item.product_id).single();
+          if (product) {
+            const newStock = Math.max(0, (product.scheduled_stock_qty || 0) - item.quantity);
+            await supabaseAdmin.from('products').update({ scheduled_stock_qty: newStock }).eq('id', item.product_id);
+          }
+        }
+      }
+    }
+
+    const { data, error } = await supabaseAdmin.from('orders').update({ 
+      status,
+      status_updated_by: req.user.id,
+      status_updated_role: 'store'
+    }).eq('id', orderId).select().single();
     if (error) return errorResponse(res, 'Update failed', 400, error);
 
     // Send Notification to Customer
@@ -611,7 +642,8 @@ export const createProduct = async (req, res) => {
       image_url,
       price: parseFloat(req.body.price) || 0,
       discount_price: (req.body.discount_price && req.body.discount_price !== 'null') ? parseFloat(req.body.discount_price) : null,
-      stock_quantity: parseInt(req.body.stock_quantity) || 0,
+      express_stock_qty: parseInt(req.body.express_stock_qty) || parseInt(req.body.stock_quantity) || 0,
+      scheduled_stock_qty: parseInt(req.body.scheduled_stock_qty) || parseInt(req.body.stock_quantity) || 0,
       is_active: req.body.is_active === 'true' || req.body.is_active === true,
       delivery_options
     };
@@ -661,7 +693,7 @@ export const updateProduct = async (req, res) => {
       'stock_quantity', 'price', 'discount_price', 'sale_price', 'description',
       'is_active', 'weight_unit', 'name', 'cooking_guide', 'image_url',
       'is_deal', 'is_featured', 'is_trending', 'is_flash_sale', 'sub_category_id',
-      'delivery_options'
+      'delivery_options', 'express_stock_qty', 'scheduled_stock_qty'
     ];
 
     const image_url = getImageUrl(mainFile, req.body.image_url);

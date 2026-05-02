@@ -28,7 +28,7 @@ const FavoritesScreen = ({ navigation }) => {
   const renderItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.card}
-      onPress={() => navigation.navigate('ProductDetail', { product: item })}
+      onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
     >
       <Image source={{ uri: item.image_url }} style={styles.image} />
       <TouchableOpacity 

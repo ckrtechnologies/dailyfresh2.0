@@ -1,7 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
-  selectedSlot: 'all', // 'all', 'morning', 'afternoon', 'express'
+  selectedSlot: 'express', // default to express
 };
 
 const configSlice = createSlice({
@@ -11,11 +11,14 @@ const configSlice = createSlice({
     setSelectedSlot: (state, action) => {
       state.selectedSlot = action.payload;
     },
+    setDeliveryMode: (state, action) => {
+      state.selectedSlot = action.payload;
+    },
     resetConfig: (state) => {
-      state.selectedSlot = 'all';
+      state.selectedSlot = 'express';
     },
   },
 });
 
-export const { setSelectedSlot, resetConfig } = configSlice.actions;
+export const { setSelectedSlot, setDeliveryMode, resetConfig } = configSlice.actions;
 export default configSlice.reducer;

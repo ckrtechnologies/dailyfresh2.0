@@ -5,18 +5,26 @@ import { successResponse, errorResponse } from '../utils/response.js';
  * List all products with filters
  */
 export const listProducts = async (req, res) => {
-  const { category_id, sub_category_id, store_id, is_featured, is_deal, is_flash_sale, is_frozen, is_trending, is_exclusive, is_new_launch, search } = req.query;
+  const { category_id, sub_category_id, store_id, delivery_type, is_featured, is_deal, is_flash_sale, is_frozen, is_trending, is_exclusive, is_new_launch, search } = req.query;
 
   try {
     if (!store_id) {
        return successResponse(res, { products: [] }, 'Please select a location to view products');
     }
 
+    const stockColumn = delivery_type === 'express' ? 'express_stock_qty' : 'scheduled_stock_qty';
+
     let query = supabaseAdmin
       .from('products')
       .select('*, store:stores(name), sub_category:sub_categories(name)')
       .eq('is_active', true)
-      .eq('store_id', store_id);
+      .eq('store_id', store_id)
+      .gt(stockColumn, 0);
+
+    if (delivery_type) {
+      // For JSONB columns, we need to pass a JSON string of the array we're checking for
+      query = query.contains('delivery_options', JSON.stringify([delivery_type]));
+    }
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);

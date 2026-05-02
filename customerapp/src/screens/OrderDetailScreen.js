@@ -8,6 +8,7 @@ import {
   StatusBar,
   Image,
   Share,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -57,13 +58,14 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'delivered': return '#4CAF50';
-      case 'accepted': return '#4CAF50';
-      case 'confirmed': return '#2196F3'; // Blue for payment confirmed
-      case 'pending': return '#FF9800';
-      case 'preparing': return '#2196F3';
-      case 'out_for_delivery': return '#9C27B0';
-      case 'cancelled': return '#F44336';
+      case 'placed': return '#FF9800'; // Orange
+      case 'confirmed': return '#4CAF50'; // Green
+      case 'preparing': return '#2196F3'; // Blue
+      case 'ready': return '#3F51B5'; // Indigo
+      case 'out_for_delivery': return '#9C27B0'; // Purple
+      case 'delivered': return '#2E7D32'; // Dark Green
+      case 'cancelled': return '#F44336'; // Red
+      case 'failed': return '#757575'; // Gray
       default: return COLORS.gray;
     }
   };
@@ -77,13 +79,14 @@ const OrderDetailScreen = ({ route, navigation }) => {
       <View style={styles.stepIndicator}>
         <View style={[
           styles.stepCircle, 
-          completed && { backgroundColor: cancelled ? COLORS.error : COLORS.primary },
-          active && { borderColor: cancelled ? COLORS.error : COLORS.primary, borderWidth: 2, backgroundColor: COLORS.white }
+          (completed || active) && { backgroundColor: cancelled ? COLORS.error : COLORS.primary, borderColor: cancelled ? COLORS.error : COLORS.primary },
         ]}>
           {completed ? (
             <Icon name={cancelled ? "close" : "check"} size={14} color={COLORS.white} />
+          ) : active ? (
+            <View style={[styles.stepDot, { backgroundColor: COLORS.white }]} />
           ) : (
-            <View style={[styles.stepDot, active && { backgroundColor: cancelled ? COLORS.error : COLORS.primary }]} />
+            <View style={styles.stepDot} />
           )}
         </View>
         {!last && <View style={[styles.stepLine, completed && { backgroundColor: cancelled ? COLORS.error : COLORS.primary }]} />}
@@ -137,10 +140,11 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
   const isCancelled = order.status === 'cancelled';
   const orderSteps = [
-    { id: 'pending', title: 'Order Placed', statuses: ['pending', 'confirmed', 'accepted', 'preparing', 'out_for_delivery', 'delivered'] },
-    { id: 'accepted', title: 'Accepted', statuses: ['confirmed', 'accepted', 'preparing', 'out_for_delivery', 'delivered'] },
-    { id: 'preparing', title: 'Preparing', statuses: ['preparing', 'out_for_delivery', 'delivered'] },
-    { id: 'out_for_delivery', title: 'Out for Delivery', statuses: ['out_for_delivery', 'delivered'] },
+    { id: 'placed', title: 'Order Placed', statuses: ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] },
+    { id: 'confirmed', title: 'Confirmed', statuses: ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] },
+    { id: 'preparing', title: 'Packing', statuses: ['preparing', 'ready', 'out_for_delivery', 'delivered'] },
+    { id: 'ready', title: 'Ready', statuses: ['ready', 'out_for_delivery', 'delivered'] },
+    { id: 'out_for_delivery', title: 'On the Way', statuses: ['out_for_delivery', 'delivered'] },
     { id: 'delivered', title: 'Delivered', statuses: ['delivered'] },
   ];
 
@@ -186,6 +190,24 @@ const OrderDetailScreen = ({ route, navigation }) => {
               </Text>
             </View>
           </View>
+
+          {/* OTP Section for Secure Delivery */}
+          {(order.status === 'ready' || order.status === 'out_for_delivery') && order.delivery_otp && (
+            <View style={styles.otpCard}>
+              <View style={styles.otpHeader}>
+                <Icon name="shield-check" size={20} color={COLORS.primary} />
+                <Text style={styles.otpTitle}>Delivery Verification OTP</Text>
+              </View>
+              <Text style={styles.otpSub}>Share this with the rider only at the time of delivery.</Text>
+              <View style={styles.otpContainer}>
+                {order.delivery_otp.split('').map((digit, i) => (
+                  <View key={i} style={styles.otpDigit}>
+                    <Text style={styles.otpDigitText}>{digit}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
           
           <View style={styles.trackingContainer}>
             {isCancelled ? (
@@ -209,6 +231,31 @@ const OrderDetailScreen = ({ route, navigation }) => {
               ))
             )}
           </View>
+
+          {/* Rider Details (Prominent version) */}
+          {order.rider && (order.status === 'out_for_delivery' || order.status === 'delivered') && (
+            <View style={styles.riderProminentCard}>
+              <View style={styles.riderAvatar}>
+                <Icon name="account" size={24} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.riderName}>{order.rider.full_name}</Text>
+                <Text style={styles.riderStatus}>
+                  {order.status === 'delivered' ? 'Delivered your order' : 'Is delivering your order'}
+                </Text>
+              </View>
+              {order.status === 'out_for_delivery' && (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity 
+                    onPress={() => Linking.openURL(`tel:${order.rider.phone}`)}
+                    style={styles.riderActionBtn}
+                  >
+                    <Icon name="phone" size={20} color="#166534" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Items List */}
@@ -245,7 +292,16 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
         {/* Delivery Details */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Delivery Address</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.m }}>
+            <Text style={styles.sectionTitle}>Delivery Details</Text>
+            <View style={[styles.typeBadge, { backgroundColor: order.delivery_type === 'express' ? '#ffe4e1' : '#f0fdfa' }]}>
+              <Text style={[styles.typeText, { color: order.delivery_type === 'express' ? '#cd5c5c' : '#0d9488' }]}>
+                {(order.delivery_type || 'Scheduled').replace(/_/g, ' ').toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          {/* Rider Details (Old location removed, moving to prominent spot) */}
           <View style={styles.addressRow}>
             <Icon name="map-marker-outline" size={20} color={COLORS.primary} />
             <View style={{ flex: 1 }}>
@@ -541,6 +597,106 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  otpCard: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    alignItems: 'center',
+  },
+  otpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  otpTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3730A3',
+  },
+  otpSub: {
+    fontSize: 11,
+    color: '#4338CA',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  otpContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  otpDigit: {
+    width: 44,
+    height: 54,
+    backgroundColor: COLORS.white,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    elevation: 2,
+  },
+  otpDigitText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  typeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  typeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  riderProminentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    gap: 12
+  },
+  riderAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#DCFCE7'
+  },
+  riderName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#166534'
+  },
+  riderStatus: {
+    fontSize: 12,
+    color: '#15803d',
+    marginTop: 2
+  },
+  riderActionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2
+  }
 });
 
 export default OrderDetailScreen;

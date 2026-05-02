@@ -10,9 +10,10 @@ import {
   Dimensions,
   Share,
   Alert,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import productService from '../api/productService';
 import { useDispatch, useSelector } from 'react-redux';
 import { addItem, removeItem } from '../store/slices/cartSlice';
@@ -32,9 +33,12 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const [selectedCleaning, setSelectedCleaning] = useState(null);
   const [activeTab, setActiveTab] = useState('about');
   const [similarProducts, setSimilarProducts] = useState([]);
+  const [deliverySlotsConfig, setDeliverySlotsConfig] = useState(null);
 
   const { items: favorites } = useSelector((state) => state.favorites);
   const { items: cartItems } = useSelector((state) => state.cart);
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
   const isFavorite = product && favorites.some(item => item.id === product.id);
 
   // Helper to find quantity for a specific config
@@ -75,7 +79,20 @@ const ProductDetailScreen = ({ route, navigation }) => {
         setLoading(false);
       }
     };
+
+    const fetchConfig = async () => {
+      try {
+        const res = await productService.getSettings();
+        if (res.success && res.data.delivery_slots_config) {
+          setDeliverySlotsConfig(JSON.parse(res.data.delivery_slots_config));
+        }
+      } catch (error) {
+        console.error('Error fetching delivery config:', error);
+      }
+    };
+
     fetchDetail();
+    fetchConfig();
   }, [productId]);
 
   const fetchSimilarProducts = async (subCategoryId) => {
@@ -152,14 +169,18 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar 
+        backgroundColor={activeTheme.primary} 
+        barStyle="light-content"
+      />
       {/* Header with Premium Icons */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: activeTheme.primary }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
-          <Icon name="chevron-left" size={28} color={COLORS.primary} />
+          <Icon name="chevron-left" size={28} color={COLORS.white} />
         </TouchableOpacity>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
-            <Icon name="share-variant" size={22} color={COLORS.primary} />
+            <Icon name="share-variant" size={22} color={COLORS.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
@@ -168,7 +189,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
             <Icon
               name={isFavorite ? "heart" : "heart-outline"}
               size={24}
-              color={isFavorite ? COLORS.secondary : COLORS.primary}
+              color={isFavorite ? COLORS.secondary : COLORS.white}
             />
           </TouchableOpacity>
         </View>
@@ -246,18 +267,56 @@ const ProductDetailScreen = ({ route, navigation }) => {
           </View> */}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Delivery Availability</Text>
-            <View style={styles.optionsGrid}>
-              {(product.delivery_options || ['morning', 'afternoon', 'evening', 'express']).map((opt) => (
-                <View
-                  key={opt}
-                  style={[styles.optionChip, { borderColor: COLORS.primary, backgroundColor: 'rgba(0, 150, 0, 0.05)' }]}
-                >
-                  <Text style={[styles.optionText, { color: COLORS.primary, fontWeight: '600', textTransform: 'capitalize' }]}>
-                    {opt} Delivery
-                  </Text>
-                </View>
-              ))}
+            <View style={styles.sectionHeader}>
+              <Icon name="truck-delivery" size={22} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.sectionTitle}>Delivery Availability</Text>
+            </View>
+            <View style={styles.deliveryGrid}>
+              {(product.delivery_options || ['express']).map((opt) => {
+                const normalizedOpt = opt === 'morning' ? 'tmrw_morning' : 
+                                    opt === 'afternoon' ? 'today_evening' : opt;
+
+                const isExpress = normalizedOpt === 'express';
+                const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
+                if (!hasStock) return null;
+
+                const config = (deliverySlotsConfig && deliverySlotsConfig[normalizedOpt]) || {
+                  label: normalizedOpt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                  time: isExpress ? '90 Mins' : 'Scheduled',
+                  icon: isExpress ? 'lightning-bolt' : 'clock-outline',
+                  color: isExpress ? '#F59E0B' : COLORS.primary
+                };
+
+                const isActive = normalizedOpt === selectedSlot;
+
+                return (
+                  <View
+                    key={opt}
+                    style={[
+                      styles.deliveryCard, 
+                      { 
+                        backgroundColor: isActive ? config.color : COLORS.white,
+                        borderColor: isActive ? config.color : '#e2e8f0',
+                      }
+                    ]}
+                  >
+                    <View style={[styles.deliveryIconContainer, { backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : config.color + '10' }]}>
+                      <Icon name={config.icon} size={24} color={isActive ? COLORS.white : config.color} />
+                    </View>
+                    <Text style={[styles.deliveryLabel, { color: isActive ? COLORS.white : COLORS.dark }]} numberOfLines={1}>
+                      {config.label}
+                    </Text>
+                    <Text style={[styles.deliveryTime, { color: isActive ? 'rgba(255,255,255,0.8)' : COLORS.gray }]}>
+                      {config.time}
+                    </Text>
+                    {isActive && (
+                      <View style={styles.activeBadge}>
+                        <Icon name="check" size={12} color={config.color} />
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           </View>
 
@@ -316,11 +375,11 @@ const ProductDetailScreen = ({ route, navigation }) => {
                         {(Array.isArray(variant.delivery_info) ? variant.delivery_info : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : ['Tomorrow Morning'])).map((slot, sIdx) => {
                           let icon = 'truck-delivery-outline';
                           let color = '#64748b'; // Default Slate
-                          
+
                           if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#f59e0b'; }
                           else if (slot.toLowerCase().includes('afternoon')) { icon = 'weather-partly-cloudy'; color = '#3b82f6'; }
                           else if (slot.toLowerCase().includes('express')) { icon = 'flash'; color = '#ef4444'; }
-                          
+
                           return (
                             <View key={sIdx} style={[styles.deliveryBadge, { backgroundColor: color + '12' }]}>
                               <Icon name={icon} size={12} color={color} />
@@ -663,10 +722,58 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: COLORS.dark,
-    marginBottom: SPACING.m,
+  },
+  deliveryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: SPACING.s,
+  },
+  deliveryCard: {
+    width: '48.5%',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  deliveryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  deliveryLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  deliveryTime: {
+    fontSize: 11,
+    marginTop: 4,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  activeBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   optionsGrid: {
     flexDirection: 'row',

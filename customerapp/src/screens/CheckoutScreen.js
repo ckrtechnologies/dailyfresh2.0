@@ -9,31 +9,22 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
-  Modal,
-  FlatList,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import RazorpayCheckout from 'react-native-razorpay';
 import Config from 'react-native-config';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import { clearCart } from '../store/slices/cartSlice';
 import { fetchActiveOrder } from '../store/slices/orderSlice';
 import orderService from '../api/orderService';
 import LogoLoader from '../components/LogoLoader';
 
-const DELIVERY_SLOTS = [
-  { id: 'express', label: 'Express Delivery (90 mins)', subLabel: 'Immediate delivery', type: 'express' },
-  // Today Slots
-  { id: 'today_morning', label: 'Today (9 AM - 12 PM)', subLabel: 'Morning Delivery', type: 'morning' },
-  { id: 'today_afternoon', label: 'Today (12 PM - 6 PM)', subLabel: 'Afternoon Delivery', type: 'afternoon' },
-  // Tomorrow Slots
-  { id: 'tom_morning', label: 'Tomorrow (9 AM - 12 PM)', subLabel: 'Morning Delivery', type: 'morning' },
-  { id: 'tom_afternoon', label: 'Tomorrow (12 PM - 6 PM)', subLabel: 'Afternoon Delivery', type: 'afternoon' },
-];
+// Removed DELIVERY_SLOTS constant as it is now managed globally
 
 const CheckoutScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -41,41 +32,19 @@ const CheckoutScreen = ({ navigation }) => {
   const { user } = useSelector((state) => state.auth);
   const { address, pincode, storeId, coords, selectedAddress } = useSelector((state) => state.location);
   
-  // Calculate allowed slots based on product restrictions and current time
-  const getFilteredSlots = () => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    return DELIVERY_SLOTS.filter(slot => {
-      // 1. Product Restriction Check
-      const isProductCompatible = items.every(item => {
-        const productOptions = item.delivery_options || ['morning', 'afternoon', 'evening', 'express'];
-        return productOptions.includes(slot.type);
-      });
-
-      if (!isProductCompatible) return false;
-
-      // 2. Time-based Check for "Today" slots
-      if (slot.id === 'today_morning') {
-        // Available only if ordered before 9 AM
-        return currentHour < 9;
-      }
-
-      if (slot.id === 'today_afternoon') {
-        // Available only if ordered before 12 PM
-        return currentHour < 12;
-      }
-
-      // Express is always available if product supports it
-      // Tomorrow slots are always available
-
-      return true;
-    });
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
+  
+  // Slot labels for display
+  const slotLabels = {
+    'express': { label: 'Express Delivery', time: 'Within 90 mins', icon: 'lightning-bolt', color: '#F59E0B' },
+    'today_evening': { label: 'Today Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#4F46E5' },
+    'tmrw_morning': { label: 'Tomorrow Morning', time: '7 AM - 11 AM', icon: 'weather-sunset-up', color: '#10B981' },
+    'tmrw_evening': { label: 'Tomorrow Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#6366F1' },
   };
 
-  const allowedSlots = getFilteredSlots();
+  const currentSlot = slotLabels[selectedSlot] || slotLabels['express'];
 
-  const [selectedSlot, setSelectedSlot] = useState(allowedSlots.length > 0 ? allowedSlots[0].id : null);
   const [loading, setLoading] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [couponData, setCouponData] = useState(null);
@@ -143,7 +112,7 @@ const CheckoutScreen = ({ navigation }) => {
         discount_amount: discount,
         coupon_id: couponData?.coupon_id,
         total_amount: grandTotal,
-        address_id: selectedAddress.id, // Add this so backend links the address
+        address_id: selectedAddress.id,
         shipping_address: {
           label: selectedAddress.label,
           full_name: selectedAddress.full_name,
@@ -152,7 +121,8 @@ const CheckoutScreen = ({ navigation }) => {
           city: selectedAddress.city,
           pincode: selectedAddress.pincode
         },
-        delivery_slot: DELIVERY_SLOTS.find(s => s.id === selectedSlot).label,
+        delivery_slot: currentSlot.label,
+        delivery_type: selectedSlot,
         lat: selectedAddress.latitude || coords?.lat,
         lng: selectedAddress.longitude || coords?.lng,
         payment_method: 'razorpay'
@@ -209,16 +179,20 @@ const CheckoutScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: activeTheme.background }]} edges={['bottom', 'left', 'right']}>
+      <StatusBar 
+        backgroundColor={activeTheme.primary} 
+        barStyle="light-content"
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={{ flex: 1 }}
       >
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: activeTheme.primary, borderBottomWidth: 0 }]}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color={COLORS.dark} />
+            <Icon name="arrow-left" size={24} color={COLORS.white} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={[styles.headerTitle, { color: COLORS.white }]}>Checkout</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -251,54 +225,29 @@ const CheckoutScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Slot Selection */}
+        {/* Delivery Schedule Section - Commented out as per request (already selected by user)
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery Slot</Text>
-          <View style={styles.slots}>
-            {allowedSlots.length > 0 ? (
-              ['Express', 'Today', 'Tomorrow'].map((category) => {
-                const categorySlots = allowedSlots.filter(s => {
-                  if (category === 'Express') return s.type === 'express';
-                  if (category === 'Today') return s.id.startsWith('today_');
-                  if (category === 'Tomorrow') return s.id.startsWith('tom_');
-                  return false;
-                });
-
-                if (categorySlots.length === 0) return null;
-
-                return (
-                  <View key={category} style={styles.slotGroup}>
-                    <Text style={styles.slotGroupTitle}>{category}</Text>
-                    {categorySlots.map(slot => (
-                      <TouchableOpacity
-                        key={slot.id}
-                        style={[styles.slot, selectedSlot === slot.id && styles.activeSlot]}
-                        onPress={() => setSelectedSlot(slot.id)}
-                      >
-                        <View style={styles.slotRadio}>
-                           <View style={[styles.radioOuter, selectedSlot === slot.id && styles.radioActive]}>
-                              {selectedSlot === slot.id && <View style={styles.radioInner} />}
-                           </View>
-                        </View>
-                        <View style={styles.slotText}>
-                          <Text style={styles.slotLabel}>{slot.label}</Text>
-                          <Text style={styles.slotSub}>{slot.subLabel}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                );
-              })
-            ) : (
-              <View style={styles.noSlotsCard}>
-                <Icon name="alert-circle-outline" size={24} color={COLORS.error} />
-                <Text style={styles.noSlotsText}>
-                  The items in your cart have conflicting delivery options or it's too late for today's slots. Please try ordering separately or choosing a tomorrow slot.
-                </Text>
-              </View>
-            )}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Delivery Schedule</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('DeliveryMode')}>
+              <Text style={styles.actionText}>Change</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.confirmationCard}>
+            <View style={[styles.iconBox, { backgroundColor: currentSlot.color + '10' }]}>
+              <Icon name={currentSlot.icon} size={24} color={currentSlot.color} />
+            </View>
+            <View style={styles.slotDetails}>
+              <Text style={styles.slotLabel}>{currentSlot.label}</Text>
+              <Text style={styles.slotSub}>{currentSlot.time}</Text>
+            </View>
+            <View style={styles.verifiedBadge}>
+              <Icon name="check-decagram" size={20} color={COLORS.success} />
+            </View>
           </View>
         </View>
+        */}
 
         {/* Coupon Code */}
         <View style={styles.section}>
@@ -444,9 +393,9 @@ const CheckoutScreen = ({ navigation }) => {
           <Text style={styles.footerSub}>Final Amount</Text>
         </View>
         <TouchableOpacity 
-          style={[styles.payBtn, (!selectedAddress || !selectedSlot || loading) && styles.disabledBtn]}
+          style={[styles.payBtn, (!selectedAddress || loading) && styles.disabledBtn]}
           onPress={handlePlaceOrder}
-          disabled={!selectedAddress || !selectedSlot || loading}
+          disabled={!selectedAddress || loading}
         >
           {loading ? (
             <LogoLoader size={24} />
@@ -492,6 +441,29 @@ const styles = StyleSheet.create({
   addressLabel: { fontWeight: '700', color: COLORS.dark, fontSize: 14 },
   addressText: { color: COLORS.gray, fontSize: 13, marginTop: 2 },
   addressPlaceholder: { color: COLORS.gray, fontStyle: 'italic' },
+  confirmationCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    padding: SPACING.l,
+    borderRadius: RADIUS.card,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  iconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  slotDetails: {
+    flex: 1,
+  },
+  verifiedBadge: {
+    marginLeft: 8,
+  },
   slots: { gap: 12 },
   slotGroup: { marginBottom: 16 },
   slotGroupTitle: { 

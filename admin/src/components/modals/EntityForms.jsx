@@ -335,10 +335,13 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
   const { user } = useAuth();
 
   const [formData, setFormData] = useState(initialData || {
-    name: '', slug: '', price: 0, discount_price: '', stock_quantity: 0, weight_unit: 'kg',
+    name: '', slug: '', price: 0, discount_price: '', 
+    express_stock_qty: 0, scheduled_stock_qty: 0,
+    weight_unit: 'kg',
     store_id: isManager ? user?.store_id : (stores[0]?.id || ''),
     sub_category_id: subcategories[0]?.id || '', description: '',
     is_deal: false, is_featured: false,
+    delivery_options: ['express', 'today_evening', 'tmrw_morning', 'tmrw_evening'],
     variants: []
   });
   const [activeTab, setActiveTab] = useState('general');
@@ -410,7 +413,10 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
           <div>
             <h3 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '16px', color: 'var(--text-main)' }}>Stock & Units</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <Input label="Available Stock" type="number" value={formData.stock_quantity} onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })} required />
+              <Input label="Express Stock" type="number" value={formData.express_stock_qty} onChange={(e) => setFormData({ ...formData, express_stock_qty: e.target.value })} required />
+              <Input label="Scheduled Stock" type="number" value={formData.scheduled_stock_qty} onChange={(e) => setFormData({ ...formData, scheduled_stock_qty: e.target.value })} required />
+            </div>
+            <div style={{ marginTop: '16px' }}>
               <Select label="Unit Type" value={formData.weight_unit} onChange={(e) => setFormData({ ...formData, weight_unit: e.target.value })} options={[{ id: 'kg', name: 'kg' }, { id: 'gm', name: 'gm' }, { id: 'pcs', name: 'pcs' }]} />
             </div>
 
@@ -436,13 +442,13 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
 
             <h3 style={{ fontSize: '13px', fontWeight: '700', margin: '24px 0 16px', color: 'var(--text-main)' }}>Delivery Options</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {['morning', 'afternoon', 'express'].map(opt => (
+              {['express', 'today_evening', 'tmrw_morning', 'tmrw_evening'].map(opt => (
                 <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
                   <input
                     type="checkbox"
-                    checked={(formData.delivery_options || ['morning', 'afternoon', 'express']).includes(opt)}
+                    checked={(formData.delivery_options || []).includes(opt)}
                     onChange={(e) => {
-                      const current = formData.delivery_options || ['morning', 'afternoon', 'express'];
+                      const current = formData.delivery_options || [];
                       const next = e.target.checked
                         ? [...current, opt]
                         : current.filter(o => o !== opt);
@@ -450,7 +456,7 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                     }}
                     style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
                   />
-                  <span style={{ textTransform: 'capitalize' }}>{opt} Delivery</span>
+                  <span style={{ textTransform: 'capitalize' }}>{opt.replace(/_/g, ' ')}</span>
                 </label>
               ))}
             </div>

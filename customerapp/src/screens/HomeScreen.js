@@ -184,11 +184,23 @@ const HomeScreen = ({ navigation }) => {
   // Filter helper
   const filterBySlot = (products) => {
     if (!products) return [];
-    if (selectedSlot === 'all') return products;
-    return products.filter(p =>
-      p.delivery_options?.includes(selectedSlot) ||
-      (!p.delivery_options && selectedSlot === 'express') // Fallback if no options
-    );
+    if (!selectedSlot) return products;
+    return products.filter(p => {
+      const options = p.delivery_options || ['express'];
+      const normalizedOptions = options.map(o => 
+        o === 'morning' ? 'tmrw_morning' : 
+        o === 'afternoon' ? 'today_evening' : o
+      );
+      
+      const supportsSlot = normalizedOptions.includes(selectedSlot);
+      if (!supportsSlot) return false;
+
+      // Add stock check
+      const isExpress = selectedSlot === 'express';
+      const hasStock = isExpress ? (p.express_stock_qty > 0) : (p.scheduled_stock_qty > 0);
+      
+      return hasStock;
+    });
   };
   const [refreshing, setRefreshing] = useState(false);
   const [flashSaleTimer, setFlashSaleTimer] = useState('');
@@ -273,15 +285,15 @@ const HomeScreen = ({ navigation }) => {
         exclusiveRes,
         dealsRes
       ] = await Promise.all([
-        productService.getCategories(),
+        productService.getCategories(selectedSlot, currentStoreId),
         productService.getBanners(),
-        productService.getProducts({ isFeatured: true, storeId: currentStoreId }),
-        productService.getProducts({ isFlashSale: true, storeId: currentStoreId }),
-        productService.getProducts({ isTrending: true, storeId: currentStoreId }),
-        productService.getProducts({ isNewLaunch: true, storeId: currentStoreId }),
-        productService.getProducts({ isFrozen: true, storeId: currentStoreId }),
-        productService.getProducts({ isExclusive: true, storeId: currentStoreId }),
-        productService.getProducts({ isDeal: true, storeId: currentStoreId }),
+        productService.getProducts({ isFeatured: true, storeId: currentStoreId, deliveryType: selectedSlot }),
+        productService.getProducts({ isFlashSale: true, storeId: currentStoreId, deliveryType: selectedSlot }),
+        productService.getProducts({ isTrending: true, storeId: currentStoreId, deliveryType: selectedSlot }),
+        productService.getProducts({ isNewLaunch: true, storeId: currentStoreId, deliveryType: selectedSlot }),
+        productService.getProducts({ isFrozen: true, storeId: currentStoreId, deliveryType: selectedSlot }),
+        productService.getProducts({ isExclusive: true, storeId: currentStoreId, deliveryType: selectedSlot }),
+        productService.getProducts({ isDeal: true, storeId: currentStoreId, deliveryType: selectedSlot }),
       ]);
 
       if (isCancelled.current) return;
@@ -303,7 +315,11 @@ const HomeScreen = ({ navigation }) => {
       if (categoriesRes.success && categoriesRes.data.length > 0) {
         const categoryData = await Promise.all(
           categoriesRes.data.map(async (cat) => {
-            const prodRes = await productService.getProducts({ categoryId: cat.id, storeId: currentStoreId });
+            const prodRes = await productService.getProducts({ 
+              categoryId: cat.id, 
+              storeId: currentStoreId,
+              deliveryType: selectedSlot
+            });
             return {
               id: cat.id,
               title: cat.name,
@@ -443,6 +459,14 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.locationTitleRow}>
               <Text style={styles.locationTitle}>
                 {location.selectedAddress?.label || address?.split(',')[0] || 'Pick Location'}
+                {selectedSlot && (
+                  <Text style={styles.deliveryModeLabel}>
+                    {' • '}{selectedSlot === 'express' ? '⚡ Express' : 
+                     selectedSlot === 'today_evening' || selectedSlot === 'afternoon' ? '📅 Today Eve' :
+                     selectedSlot === 'tmrw_morning' || selectedSlot === 'morning' ? '📅 Tom. Morn' :
+                     '📅 Tom. Eve'}
+                  </Text>
+                )}
               </Text>
               <Icon name="chevron-down" size={14} color={COLORS.white} />
             </View>
@@ -455,25 +479,7 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.storeBadge}
-            onPress={() => setIsStoreModalVisible(true)}
-          >
-            <View style={styles.storeIconCircle}>
-              <Icon name="store" size={14} color={activeTheme.primary} />
-            </View>
-            <View>
-              <Text style={styles.storeNameText} numberOfLines={1}>
-                {storeName || 'Daily Fresh'}
-              </Text>
-              {distance && (
-                <View style={styles.distanceBadge}>
-                  <Icon name="map-marker-distance" size={10} color={COLORS.white} />
-                  <Text style={styles.distanceText}>{distance} km away</Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
+
 
           <TouchableOpacity 
             style={styles.notificationBtn}
@@ -772,6 +778,11 @@ const HomeScreen = ({ navigation }) => {
   }
   return (
     <View style={[styles.container, { backgroundColor: activeTheme.background }]}>
+      <StatusBar 
+        backgroundColor={activeTheme.primary} 
+        barStyle="light-content"
+        translucent={true}
+      />
       {renderHeader()}
       {renderStoreModal()}
       <Animated.ScrollView

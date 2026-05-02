@@ -10,6 +10,7 @@ import * as storeController from '../controllers/storeController.js';
 import * as favoritesController from '../controllers/favoritesController.js';
 
 import { authenticate, authorize } from '../middlewares/auth.js';
+import { cutoffGuard } from '../middlewares/cutoffGuard.js';
 
 const router = express.Router();
 
@@ -50,7 +51,7 @@ router.post('/favorites/toggle', favoritesController.toggleFavorite);
 router.get('/cart', cartController.getCart);
 router.post('/cart/sync', cartController.syncCart);
 router.delete('/cart', cartController.clearCart);
-router.post('/orders', orderController.placeOrder);
+router.post('/orders', cutoffGuard, orderController.placeOrder);
 router.post('/payments/verify', orderController.verifyPayment);
 router.get('/orders', orderController.getMyOrders);
 router.get('/orders/:id', orderController.getOrderById);

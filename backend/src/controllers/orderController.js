@@ -26,13 +26,15 @@ const haversine = (lat1, lng1, lat2, lng2) => {
  * Find the first store (ordered by proximity) that has sufficient stock
  * for ALL items in the cart.
  *
+ * @param {string}   deliveryType    - express | today_evening | tmrw_morning | tmrw_evening
  * @param {string}   preferredStoreId - Store chosen at location pick
  * @param {Array}    items            - [{ product_id, quantity }]
  * @param {number}   lat              - Customer latitude
  * @param {number}   lng              - Customer longitude
  * @returns {{ store, products } | null}
  */
-const findFulfillingStore = async (preferredStoreId, items, lat, lng) => {
+const findFulfillingStore = async (deliveryType, preferredStoreId, items, lat, lng) => {
+  const stockColumn = deliveryType === 'express' ? 'express_stock_qty' : 'scheduled_stock_qty';
   // Fetch all active stores
   const { data: stores } = await supabaseAdmin
     .from('stores')
@@ -60,7 +62,7 @@ const findFulfillingStore = async (preferredStoreId, items, lat, lng) => {
     // Fetch inventory for this store for the requested product IDs
     const { data: inventory } = await supabaseAdmin
       .from('products')
-      .select('id, name, stock_quantity')
+      .select(`id, name, ${stockColumn}`)
       .eq('store_id', store.id)
       .in('id', productIds);
 
@@ -70,7 +72,7 @@ const findFulfillingStore = async (preferredStoreId, items, lat, lng) => {
     const canFulfill = items.every(cartItem => {
       const pId = cartItem.product_id || cartItem.id;
       const p = inventory.find(inv => inv.id === pId);
-      return p && p.stock_quantity >= cartItem.quantity;
+      return p && p[stockColumn] >= cartItem.quantity;
     });
 
     if (canFulfill) {
@@ -92,6 +94,7 @@ export const placeOrder = async (req, res) => {
     subtotal,
     delivery_charge,
     gst_amount,
+    delivery_type,  // express | today_evening | tmrw_morning | tmrw_evening
     lat,            // customer coords for fallback store ranking
     lng,
   } = req.body;
@@ -99,7 +102,7 @@ export const placeOrder = async (req, res) => {
   try {
     // 1. Find the first store that can fulfil ALL items
     //    Checks preferred store first, then walks nearest stores by distance
-    const fulfillment = await findFulfillingStore(store_id, items, lat, lng);
+    const fulfillment = await findFulfillingStore(delivery_type || 'express', store_id, items, lat, lng);
 
     if (!fulfillment) {
       return errorResponse(
@@ -181,7 +184,8 @@ export const placeOrder = async (req, res) => {
         coupon_id: req.body.coupon_id || null,
         payment_method: payment_method === 'razorpay' ? 'upi' : payment_method,
         payment_status: 'unpaid',
-        status: 'pending',
+        status: 'placed',
+        delivery_type: delivery_type || 'express',
         delivery_slot,
         razorpay_order_id,
       }])
@@ -233,17 +237,19 @@ export const placeOrder = async (req, res) => {
 
     console.log(`[Order Success] Order #${order.order_number} created with ${orderItems.length} items`);
 
-    // 5. If COD, decrement stock immediately and send notification
+    // 5. If COD, decrement stock immediately (Express only) and send notification
     if (payment_method === 'cod') {
       try {
-        for (const item of orderItems) {
-          const { data: product } = await supabaseAdmin.from('products').select('stock_quantity').eq('id', item.product_id).single();
-          if (product) {
-            const newStock = Math.max(0, (product.stock_quantity || 0) - item.quantity);
-            await supabaseAdmin.from('products').update({ stock_quantity: newStock }).eq('id', item.product_id);
+        if (delivery_type === 'express') {
+          for (const item of orderItems) {
+            const { data: product } = await supabaseAdmin.from('products').select('express_stock_qty').eq('id', item.product_id).single();
+            if (product) {
+              const newStock = Math.max(0, (product.express_stock_qty || 0) - item.quantity);
+              await supabaseAdmin.from('products').update({ express_stock_qty: newStock }).eq('id', item.product_id);
+            }
           }
+          console.log('[Order COD] Express stock decremented successfully');
         }
-        console.log('[Order COD] Stock decremented successfully');
 
         // Send Initial Notification for COD
         await notificationService.sendToUser(
@@ -344,7 +350,7 @@ export const verifyPayment = async (req, res) => {
       .update({
         payment_status: 'paid',
         razorpay_payment_id: razorpay_payment_id,
-        status: 'pending'
+        status: 'placed'
       })
       .eq('id', order_id)
       .select('*');
@@ -391,20 +397,22 @@ export const verifyPayment = async (req, res) => {
           for (const item of items) {
             if (item.product_id) {
               console.log(`[Payment Background] Decrementing stock for product ${item.product_id} by ${item.quantity}`);
-              // 1. Fetch current stock
-              const { data: product } = await supabaseAdmin
-                .from('products')
-                .select('stock_quantity')
-                .eq('id', item.product_id)
-                .single();
-
-              if (product) {
-                // 2. Calculate and update new stock
-                const newStock = Math.max(0, (product.stock_quantity || 0) - item.quantity);
-                await supabaseAdmin
+              // 1. Fetch current stock (Express only)
+              if (order.delivery_type === 'express') {
+                const { data: product } = await supabaseAdmin
                   .from('products')
-                  .update({ stock_quantity: newStock })
-                  .eq('id', item.product_id);
+                  .select('express_stock_qty')
+                  .eq('id', item.product_id)
+                  .single();
+
+                if (product) {
+                  // 2. Calculate and update new stock
+                  const newStock = Math.max(0, (product.express_stock_qty || 0) - item.quantity);
+                  await supabaseAdmin
+                    .from('products')
+                    .update({ express_stock_qty: newStock })
+                    .eq('id', item.product_id);
+                }
               }
             }
           }
@@ -470,8 +478,9 @@ export const getMyOrders = async (req, res) => {
       .select(`
         *,
         store:stores(name),
+        rider:profiles!rider_id(full_name, phone),
         delivery_address:addresses(*),
-        items:order_items(
+        items:order_items!order_id(
           *,
           product:products!product_id(name, image_url)
         )
@@ -504,8 +513,9 @@ export const getOrderById = async (req, res) => {
       .select(`
         *,
         store:stores(*),
+        rider:profiles!rider_id(full_name, phone),
         delivery_address:addresses(*),
-        items:order_items(
+        items:order_items!order_id(
           *,
           product:products!product_id(*)
         )

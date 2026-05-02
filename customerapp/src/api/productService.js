@@ -5,16 +5,12 @@ const productService = {
   /**
    * Get all active categories
    */
-  getCategories: async () => {
+  getCategories: async (deliveryType, storeId) => {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('is_active', true)
-        .order('display_order', { ascending: true });
-
-      if (error) throw error;
-      return { success: true, data };
+      const response = await apiClient.get('/customer/categories', {
+        params: { delivery_type: deliveryType, store_id: storeId }
+      });
+      return { success: true, data: response.data?.data?.categories || [] };
     } catch (error) {
       console.error('Error fetching categories:', error);
       return { success: false, error };
@@ -53,6 +49,7 @@ const productService = {
         sub_category_id: filters.subCategoryId,
         category_id: filters.categoryId,
         store_id: filters.storeId,
+        delivery_type: filters.deliveryType,
         search: filters.search
       };
 

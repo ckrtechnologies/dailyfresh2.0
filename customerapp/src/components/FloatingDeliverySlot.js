@@ -20,10 +20,10 @@ const COLLAPSED_WIDTH = 110;
 const EXPANDED_WIDTH = SCREEN_WIDTH - 24;
 
 const SLOTS = [
-  { id: 'all',       label: 'Standard',  icon: 'all-inclusive' },
-  { id: 'morning',   label: 'Morning',   icon: 'weather-sunny' },
-  { id: 'afternoon', label: 'Evening',   icon: 'weather-sunset' },
-  { id: 'express',   label: 'Express',   icon: 'truck-fast' },
+  { id: 'express',          label: 'Express',     icon: 'truck-fast' },
+  { id: 'today_evening',    label: 'Today Eve',   icon: 'weather-night' },
+  { id: 'tmrw_morning', label: 'Tom. Morn',   icon: 'weather-sunny' },
+  { id: 'tmrw_evening', label: 'Tom. Eve',    icon: 'weather-night' },
 ];
 
 const FloatingDeliverySlot = () => {

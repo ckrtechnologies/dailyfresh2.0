@@ -21,12 +21,13 @@ const SettingsPage = () => {
   });
 
   const [platformForm, setPlatformForm] = useState({
-    gst_rate: 0,
-    free_delivery_threshold: 0,
-    standard_delivery_fee: 0,
-    min_order_value: 0,
+    gst_rate: '',
+    free_delivery_threshold: '',
+    standard_delivery_fee: '',
+    min_order_value: '',
     contact_support_phone: '',
-    contact_support_email: ''
+    contact_support_email: '',
+    delivery_slots_config: ''
   });
 
   // --- QUERIES ---
@@ -35,7 +36,17 @@ const SettingsPage = () => {
     queryFn: async () => {
       const resp = await apiClient.get('/admin/config');
       const data = resp.data.data.settings;
-      setPlatformForm(data);
+      setPlatformForm({
+        gst_rate: data.gst_rate ?? '',
+        free_delivery_threshold: data.free_delivery_threshold ?? '',
+        standard_delivery_fee: data.standard_delivery_fee ?? '',
+        min_order_value: data.min_order_value ?? '',
+        contact_support_phone: data.contact_support_phone ?? '',
+        contact_support_email: data.contact_support_email ?? '',
+        delivery_slots_config: typeof data.delivery_slots_config === 'object' 
+          ? JSON.stringify(data.delivery_slots_config, null, 2) 
+          : data.delivery_slots_config ?? ''
+      });
       return data;
     },
     enabled: isAdmin && activeTab === 'platform'
@@ -218,6 +229,7 @@ const SettingsPage = () => {
                 />
               </div>
             </div>
+
             <button type="submit" className="btn-compact" disabled={configMutation.isPending} style={{ background: 'var(--primary)', color: 'white', border: 'none', marginTop: '8px' }}>
               <Save size={14} /> {configMutation.isPending ? 'Applying...' : 'Apply Global Settings'}
             </button>

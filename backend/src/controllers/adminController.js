@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { deleteFileByUrl } from '../utils/fileHelper.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import * as notificationService from '../services/notificationService.js';
+import { validateTransition } from '../utils/statusTransitions.js';
 
 const getImageUrl = (file, bodyUrl, req = null, fieldname = 'image') => {
   // 1. Check direct file (upload.single)
@@ -379,7 +380,7 @@ export const listOrders = async (req, res) => {
   try {
     let query = supabaseAdmin
       .from('orders')
-      .select('*, customer:profiles(full_name, email), store:stores(name)', { count: 'exact' })
+      .select('*, customer:profiles!user_id(full_name, email), rider:profiles!rider_id(full_name, phone), store:stores(name)', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (startDate) query = query.gte('created_at', startDate);
@@ -432,15 +433,43 @@ export const listOrders = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
   const { status, rider_id } = req.body;
-  const validStatuses = ['pending', 'confirmed', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'dispatched', 'delivered', 'cancelled'];
+  const validStatuses = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'failed'];
 
   if (!validStatuses.includes(status)) {
     return errorResponse(res, `Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400);
   }
 
   try {
-    const updates = { status, updated_at: new Date() };
+    // Fetch current status for transition validation
+    const { data: currentOrder } = await supabaseAdmin.from('orders').select('status, delivery_type').eq('id', id).single();
+    
+    try {
+      validateTransition(currentOrder.status, status, 'admin');
+    } catch (err) {
+      return errorResponse(res, err.message, 400);
+    }
+
+    const updates = { 
+      status, 
+      status_updated_at: new Date(),
+      status_updated_by: req.user.id,
+      status_updated_role: 'admin'
+    };
     if (rider_id) updates.rider_id = rider_id;
+
+    // Handle Stock Deduction for Scheduled Orders at 'confirmed' status (if not already done)
+    if (status === 'confirmed' && currentOrder.delivery_type !== 'express') {
+      const { data: items } = await supabaseAdmin.from('order_items').select('product_id, quantity').eq('order_id', id);
+      if (items) {
+        for (const item of items) {
+          const { data: product } = await supabaseAdmin.from('products').select('scheduled_stock_qty').eq('id', item.product_id).single();
+          if (product) {
+            const newStock = Math.max(0, (product.scheduled_stock_qty || 0) - item.quantity);
+            await supabaseAdmin.from('products').update({ scheduled_stock_qty: newStock }).eq('id', item.product_id);
+          }
+        }
+      }
+    }
 
     // RBAC: Store Managers can only update their own store's orders
     let query = supabaseAdmin.from('orders').update(updates).eq('id', id);
@@ -448,12 +477,11 @@ export const updateOrderStatus = async (req, res) => {
       query = query.eq('store_id', req.user.store_id);
     }
 
-    const { data: order, error: updateError } = await query.select('*, customer:profiles(full_name, email)').single();
+    const { data: order, error: updateError } = await query.select('*, customer:profiles!user_id(full_name, email)').single();
 
     if (updateError) return errorResponse(res, 'Failed to update order status or access denied', 400, updateError);
 
-    // --- LOG STATUS CHANGE ---
-    await supabaseAdmin.from('order_tracking').insert([{ order_id: id, status }]);
+    // Note: status change is automatically logged via Supabase trigger created in the SQL migration
 
     // --- PUSH NOTIFICATIONS ---
     let title = '';
@@ -681,7 +709,10 @@ export const createProduct = async (req, res) => {
     const productData = {
       store_id: store_id || null,
       sub_category_id: sub_category_id || null,
-      name, slug, price, weight_unit, stock_quantity, image_url, description,
+      name, slug, price, weight_unit, 
+      express_stock_qty: parseInt(req.body.express_stock_qty) || parseInt(req.body.stock_quantity) || 0,
+      scheduled_stock_qty: parseInt(req.body.scheduled_stock_qty) || parseInt(req.body.stock_quantity) || 0,
+      image_url, description,
       cooking_guide,
       product_highlights: (() => {
         if (!product_highlights) return [];
@@ -859,7 +890,8 @@ export const updateProduct = async (req, res) => {
     price, 
     discount_price, 
     weight_unit, 
-    stock_quantity, 
+    express_stock_qty: req.body.express_stock_qty || req.body.stock_quantity,
+    scheduled_stock_qty: req.body.scheduled_stock_qty || req.body.stock_quantity,
     is_active, 
     is_deal, 
     cooking_guide,
@@ -887,11 +919,11 @@ export const updateProduct = async (req, res) => {
   else if (bodyUrl !== undefined) updateData.image_url = bodyUrl;
 
   // RBAC: Store Managers can only update specific fields (Catalog details like Name/SubCat are usually Admin-only)
-  if (req.user.role === 'store_manager') {
-    const fieldsToKeep = [
-      'stock_quantity', 'price', 'discount_price', 'is_active', 'image_url',
-      'is_deal', 'is_featured', 'is_flash_sale', 'is_exclusive', 'is_trending', 'is_frozen', 'is_new_launch', 'delivery_options'
-    ];
+    if (req.user.role === 'store_manager') {
+      const fieldsToKeep = [
+        'stock_quantity', 'express_stock_qty', 'scheduled_stock_qty', 'price', 'discount_price', 'is_active', 'image_url',
+        'is_deal', 'is_featured', 'is_flash_sale', 'is_exclusive', 'is_trending', 'is_frozen', 'is_new_launch', 'delivery_options'
+      ];
     Object.keys(updateData).forEach(key => {
       if (!fieldsToKeep.includes(key)) delete updateData[key];
     });
@@ -1086,7 +1118,8 @@ export const getPlatformSettings = async (req, res) => {
       standard_delivery_fee: config.default_delivery_charge,
       min_order_value: config.min_order_value,
       contact_support_phone: config.contact_support_phone || '',
-      contact_support_email: config.contact_support_email || ''
+      contact_support_email: config.contact_support_email || '',
+      delivery_slots_config: config.delivery_slots_config ? (typeof config.delivery_slots_config === 'string' ? config.delivery_slots_config : JSON.stringify(config.delivery_slots_config)) : null
     };
 
     return successResponse(res, { settings: mappedConfig });
@@ -1108,10 +1141,15 @@ export const updatePlatformSettings = async (req, res) => {
 
   if (updates.contact_support_phone) dbUpdates.push({ key: 'contact_support_phone', value: updates.contact_support_phone });
   if (updates.contact_support_email) dbUpdates.push({ key: 'contact_support_email', value: updates.contact_support_email });
+  if (updates.delivery_slots_config) dbUpdates.push({ key: 'delivery_slots_config', value: typeof updates.delivery_slots_config === 'string' ? updates.delivery_slots_config : JSON.stringify(updates.delivery_slots_config), data_type: 'json' });
 
   try {
     const results = await Promise.all(dbUpdates.map(u =>
-      supabaseAdmin.from('settings').update({ value: u.value }).eq('key', u.key)
+      supabaseAdmin.from('settings').upsert({ 
+        key: u.key, 
+        value: u.value,
+        data_type: u.data_type || 'string' 
+      }, { onConflict: 'key' })
     ));
 
     const errors = results.filter(r => r.error);

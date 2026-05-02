@@ -200,6 +200,7 @@ const AppContent = () => {
         const savedStoreId = await storage.getItem('store_id');
         const savedStoreName = await storage.getItem('store_name');
         const savedCoords = await storage.getItem('coords');
+        const savedSelectedAddress = await storage.getItem('selected_address');
 
         if (savedPincode) {
           dispatch(hydrateLocation({
@@ -207,7 +208,8 @@ const AppContent = () => {
             address: savedAddress,
             storeId: savedStoreId,
             storeName: savedStoreName,
-            coords: savedCoords || null
+            coords: savedCoords || null,
+            selectedAddress: savedSelectedAddress || null
           }));
         } else {
           // Force fresh location check ONLY if we have none

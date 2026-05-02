@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, Clock, Truck, XCircle, Eye } from 'lucide-react';
+import { Search, Clock, Eye } from 'lucide-react';
 import apiClient from '../services/api';
 import DataTable from '../components/common/DataTable';
 import { useFilters } from '../context/FilterContext';
@@ -27,7 +27,7 @@ const Orders = () => {
           startDate: dateRange.startDate || undefined,
           endDate: dateRange.endDate || undefined,
           search: searchQuery || undefined,
-          user_id: showOnlyMe ? user.id : undefined // Added to backend support below
+          user_id: showOnlyMe ? user.id : undefined
         }
       });
       return resp.data.data;
@@ -35,9 +35,9 @@ const Orders = () => {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ orderId, newStatus }) => {
+    mutationFn: async ({ orderId, newStatus, riderId }) => {
       setUpdatingId(orderId);
-      return apiClient.patch(`/admin/orders/${orderId}/status`, { status: newStatus });
+      return apiClient.patch(`/admin/orders/${orderId}/status`, { status: newStatus, rider_id: riderId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['orders']);
@@ -53,11 +53,24 @@ const Orders = () => {
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'delivered': return 'badge-active';
-      case 'cancelled': return 'badge-failed';
+      case 'cancelled': 
+      case 'failed': return 'badge-failed';
       case 'out_for_delivery': return 'badge-delivery';
+      case 'ready': return 'badge-ready';
       case 'preparing': return 'badge-processing';
-      case 'accepted': return 'badge-active';
+      case 'placed':
+      case 'confirmed': return 'badge-pending';
       default: return 'badge-pending';
+    }
+  };
+
+  const getDeliveryTypeBadgeClass = (type) => {
+    switch (type) {
+      case 'express': return 'badge-express';
+      case 'today_evening': return 'badge-today-evening';
+      case 'tmrw_morning': return 'badge-tomorrow-morning';
+      case 'tmrw_evening': return 'badge-tomorrow-evening';
+      default: return '';
     }
   };
 
@@ -66,6 +79,16 @@ const Orders = () => {
       header: 'Order #', 
       accessor: (row) => row.order_number,
       render: (row) => <span style={{ fontWeight: '600', color: 'var(--primary)' }}>{row.order_number}</span>
+    },
+    { 
+      header: 'Type', 
+      accessor: (row) => row.delivery_type,
+      align: 'center',
+      render: (row) => (
+        <span className={`badge ${getDeliveryTypeBadgeClass(row.delivery_type)}`} style={{ textTransform: 'capitalize' }}>
+          {row.delivery_type?.replace(/_/g, ' ')}
+        </span>
+      )
     },
     { header: 'Store', accessor: (row) => row.store?.name },
     { 
@@ -77,6 +100,16 @@ const Orders = () => {
           <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{row.customer?.email}</span>
         </div>
       )
+    },
+    { 
+      header: 'Rider', 
+      accessor: (row) => row.rider?.full_name,
+      render: (row) => row.rider ? (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: '600' }}>{row.rider.full_name}</span>
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{row.rider.phone}</span>
+        </div>
+      ) : <span className="badge" style={{ background: '#f1f5f9', color: '#94a3b8' }}>Unassigned</span>
     },
     { 
       header: 'Amount', 
@@ -95,47 +128,60 @@ const Orders = () => {
       )
     },
     { 
-      header: 'Created At', 
-      accessor: (row) => new Date(row.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }),
-      align: 'center'
+      header: 'Date', 
+      accessor: (row) => row.created_at,
+      align: 'center',
+      render: (row) => new Date(row.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     },
     {
       header: 'Quick Actions',
       accessor: 'id',
       align: 'center',
-      width: '220px',
+      width: '240px',
       render: (row) => (
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
           {updatingId === row.id ? (
             <div className="animate-spin" style={{ color: 'var(--primary)' }}><Clock size={16} /></div>
           ) : (
             <>
-              {(row.status === 'pending' || row.status === 'confirmed') && (
+              {row.status === 'placed' && (
                 <button 
-                  onClick={() => updateStatusMutation.mutate({ orderId: row.id, newStatus: 'accepted' })}
+                  onClick={() => updateStatusMutation.mutate({ orderId: row.id, newStatus: 'confirmed' })}
                   className="btn-text-action btn-accept"
                 >
-                  Accept
+                  Confirm
                 </button>
               )}
-              {row.status === 'accepted' && (
+              {row.status === 'confirmed' && (
                 <button 
                   onClick={() => updateStatusMutation.mutate({ orderId: row.id, newStatus: 'preparing' })}
                   className="btn-text-action btn-prepare"
                 >
-                  Prepare
+                  Pack
                 </button>
               )}
               {row.status === 'preparing' && (
                 <button 
-                  onClick={() => updateStatusMutation.mutate({ orderId: row.id, newStatus: 'out_for_delivery' })}
+                  onClick={() => updateStatusMutation.mutate({ orderId: row.id, newStatus: 'ready' })}
+                  className="btn-text-action btn-accept"
+                >
+                  Ready
+                </button>
+              )}
+              {row.status === 'ready' && (
+                <button 
+                  onClick={() => {
+                    // This would ideally open a rider assignment modal
+                    const riderId = prompt('Enter Rider ID (Mock for now):');
+                    if (riderId) updateStatusMutation.mutate({ orderId: row.id, newStatus: 'out_for_delivery', riderId });
+                  }}
                   className="btn-text-action btn-dispatch"
                 >
-                  Dispatch
+                  Assign Rider
                 </button>
               )}
               
-              {(row.status === 'pending' || row.status === 'confirmed' || row.status === 'accepted') && (
+              {(['placed', 'confirmed', 'preparing', 'ready'].includes(row.status)) && (
                 <button 
                   onClick={() => {
                     if (window.confirm('Are you sure you want to cancel this order?')) {
@@ -148,7 +194,7 @@ const Orders = () => {
                 </button>
               )}
 
-              <button className="btn-icon" title="View Detail" style={{ color: '#64748b', marginLeft: '4px' }}>
+              <button className="btn-icon" title="View Detail" style={{ color: '#64748b' }}>
                 <Eye size={16} />
               </button>
             </>
@@ -173,13 +219,14 @@ const Orders = () => {
             style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '13px' }}
           >
             <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed (Paid)</option>
-            <option value="accepted">Accepted</option>
+            <option value="placed">Placed (New)</option>
+            <option value="confirmed">Confirmed</option>
             <option value="preparing">Preparing</option>
+            <option value="ready">Ready for Pickup</option>
             <option value="out_for_delivery">Out for Delivery</option>
             <option value="delivered">Delivered</option>
             <option value="cancelled">Cancelled</option>
+            <option value="failed">Failed</option>
           </select>
 
           <div className="search-container" style={{ position: 'relative', width: '250px' }}>
@@ -188,32 +235,10 @@ const Orders = () => {
               type="text" 
               placeholder="Search Customer or Order #..." 
               style={{ padding: '6px 12px 6px 32px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '13px', width: '100%' }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  // This triggers the useFilters global search
-                  // Or we can add a local page-specific search state
-                }
-              }}
             />
           </div>
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', background: 'white', padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--border)' }}>
-            <input 
-              type="checkbox" 
-              checked={showOnlyMe}
-              onChange={(e) => setShowOnlyMe(e.target.checked)}
-            />
-            My Orders Only
-          </label>
         </div>
       </div>
-
-      {(dateRange.startDate || dateRange.endDate) && (
-        <div style={{ marginBottom: '16px', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px' }}>
-          <span>Active Date Filter: <b>{dateRange.startDate || 'Any'}</b> to <b>{dateRange.endDate || 'Any'}</b></span>
-          <button onClick={() => setDateRange({ startDate: '', endDate: '' })} style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear Dates</button>
-        </div>
-      )}
 
       <DataTable 
         title="Orders"

@@ -138,7 +138,8 @@ const Inventory = () => {
       { header: 'Hierarchy', accessor: (row) => row.sub_category?.name, render: (row) => <div style={{ fontSize: '11px' }}><span style={{ color: 'var(--primary)', fontWeight: '500' }}>{row.sub_category?.category?.name}</span><span style={{ margin: '0 4px', color: '#cbd5e1' }}>›</span><span>{row.sub_category?.name}</span></div> },
       isAdmin && { header: 'Store', accessor: (row) => row.store?.name, render: (row) => <div style={{ fontSize: '11px', fontWeight: '500' }}><span className="badge badge-pending">{row.store?.name || 'Global'}</span></div> },
       { header: 'Price', accessor: 'price', align: 'right', render: (row) => <b>₹{row.price}</b> },
-      { header: 'Stock', accessor: 'stock_quantity', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.stock_quantity < 10 ? 'var(--danger)' : 'inherit' }}>{row.stock_quantity} {row.weight_unit}</span> },
+      { header: 'Express Stock', accessor: 'express_stock_qty', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.express_stock_qty < 10 ? 'var(--danger)' : 'inherit' }}>{row.express_stock_qty} {row.weight_unit}</span> },
+      { header: 'Sched. Stock', accessor: 'scheduled_stock_qty', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.scheduled_stock_qty < 10 ? 'var(--danger)' : 'inherit' }}>{row.scheduled_stock_qty} {row.weight_unit}</span> },
       { header: 'Actions', accessor: 'id', align: 'center', render: (row) => (
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
           <button onClick={() => setModal({ show: true, type: 'products', data: row })} className="btn-icon"><Pencil size={12} /></button>

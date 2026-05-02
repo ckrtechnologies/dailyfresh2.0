@@ -49,7 +49,8 @@ import SearchScreen from '../screens/SearchScreen';
 import AddAddressScreen from '../screens/AddAddressScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import MiniOrderStatus from '../components/MiniOrderStatus';
-import FloatingDeliverySlot from '../components/FloatingDeliverySlot';
+import ProductListScreen from '../screens/ProductListScreen';
+import DeliveryModeScreen from '../screens/DeliveryModeScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -122,7 +123,7 @@ const AppTabs = () => {
   );
 };
 
-import ProductListScreen from '../screens/ProductListScreen';
+
 
 const MainStack = () => {
   const { isServiceable } = useSelector((state) => state.location);
@@ -134,6 +135,7 @@ const MainStack = () => {
     >
       {/* LocationPicker is ALWAYS registered so it can be navigated to at any time */}
       <Stack.Screen name="LocationPicker" component={LocationPickerScreen} />
+      <Stack.Screen name="DeliveryMode" component={DeliveryModeScreen} />
       <Stack.Screen name="AppTabs" component={AppTabs} />
       <Stack.Screen name="ProductListing" component={ProductListingScreen} />
       <Stack.Screen name="ProductList" component={ProductListScreen} />
@@ -229,7 +231,6 @@ const RootNavigator = () => {
         <>
           <MiniCart />
           <MiniOrderStatus />
-          <FloatingDeliverySlot />
         </>
       )}
     </GestureHandlerRootView>

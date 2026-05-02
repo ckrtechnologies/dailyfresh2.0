@@ -129,33 +129,18 @@ h6 {
   font-weight: 600;
 }
 
-.badge-active {
-  background: #dcfce7;
-  color: #166534;
-}
+.badge-active { background: #dcfce7; color: #166534; } /* Delivered */
+.badge-pending { background: #fef9c3; color: #854d0e; } /* Placed / Confirmed */
+.badge-failed { background: #fee2e2; color: #991b1b; } /* Cancelled / Failed */
+.badge-processing { background: #e0f2fe; color: #0369a1; } /* Preparing */
+.badge-ready { background: #e0e7ff; color: #3730a3; } /* Ready */
+.badge-delivery { background: #f3e8ff; color: #6b21a8; } /* Out for Delivery */
 
-.badge-pending {
-  background: #fef9c3;
-  color: #854d0e;
-}
-
-.badge-failed {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.badge-processing {
-  background: #e0f2fe;
-  color: #0369a1;
-}
-
-/* For 'preparing' */
-.badge-delivery {
-  background: #f3e8ff;
-  color: #6b21a8;
-}
-
-/* For 'out_for_delivery' */
+/* Delivery Type Badges (HSL-based premium colors) */
+.badge-express { background: #ffe4e1; color: #cd5c5c; } /* Coral-ish */
+.badge-today-evening { background: #fffbeb; color: #92400e; } /* Amber */
+.badge-tomorrow-morning { background: #f0fdfa; color: #0d9488; } /* Teal */
+.badge-tomorrow-evening { background: #faf5ff; color: #7e22ce; } /* Purple */
 
 /* Icon Buttons */
 .btn-icon {

@@ -52,7 +52,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   // If we already have a selected address, don't stay here
   useEffect(() => {
     if (selectedAddress) {
-      navigation.replace('AppTabs');
+      navigation.replace('DeliveryMode');
     }
   }, [selectedAddress]);
 
@@ -162,7 +162,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
                   ]
                 );
               } else {
-                navigation.replace('AppTabs');
+                navigation.replace('DeliveryMode');
               }
             }}]
           );
@@ -239,7 +239,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
             if (params?.from === 'SavedAddresses' || (isAuthenticated && isMandatory)) {
               navigation.navigate('AddAddress', { locationData });
             } else {
-              navigation.replace('AppTabs');
+              navigation.replace('DeliveryMode');
             }
           }}]
         );

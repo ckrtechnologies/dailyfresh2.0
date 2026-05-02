@@ -22,6 +22,7 @@ import LogoLoader from '../components/LogoLoader';
 
 const SearchScreen = ({ navigation }) => {
   const { storeId } = useSelector((state) => state.location);
+  const { selectedSlot } = useSelector((state) => state.config);
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -37,12 +38,16 @@ const SearchScreen = ({ navigation }) => {
     }, 400);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery, storeId]);
+  }, [searchQuery, storeId, selectedSlot]);
 
   const handleSearch = async (query) => {
     setLoading(true);
     try {
-      const res = await productService.getProducts({ search: query, storeId });
+      const res = await productService.getProducts({ 
+        search: query, 
+        storeId, 
+        deliveryType: selectedSlot 
+      });
       if (res.success) {
         // Group products by sub_category
         const grouped = res.data.reduce((acc, product) => {

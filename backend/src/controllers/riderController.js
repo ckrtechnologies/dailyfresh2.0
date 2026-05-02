@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import * as notificationService from '../services/notificationService.js';
+import { validateTransition } from '../utils/statusTransitions.js';
 
 /**
  * Get Rider Profile & Assigned Store
@@ -108,32 +109,52 @@ export const updateDeliveryStatus = async (req, res) => {
 
     if (fetchError || !delivery) return errorResponse(res, 'Delivery not found', 404);
 
-    if (status === 'delivered') {
-      if (!otp || otp !== delivery.otp) {
+    let orderStatus = 'out_for_delivery';
+    if (status === 'delivered') orderStatus = 'delivered';
+    
+    // Fetch current status for transition validation
+    const { data: currentOrder } = await supabaseAdmin.from('orders').select('status').eq('id', delivery.order.id).single();
+    
+    try {
+      validateTransition(currentOrder.status, orderStatus, 'rider');
+    } catch (err) {
+      return errorResponse(res, err.message, 400);
+    }
+
+    if (orderStatus === 'delivered') {
+      // Delivered status requires proof or valid OTP
+      if (!otp && !req.body.proof_url) {
+        return errorResponse(res, 'Proof or OTP is required for delivery', 400);
+      }
+      
+      if (otp && otp !== delivery.otp) {
         return errorResponse(res, 'Invalid Delivery OTP', 400);
       }
     }
 
     const { data: updatedDelivery, error: updateError } = await supabaseAdmin
       .from('deliveries')
-      .update({ status, ...(status === 'delivered' ? { delivered_at: new Date().toISOString() } : {}) })
+      .update({ 
+        status, 
+        ...(status === 'delivered' ? { delivered_at: new Date().toISOString() } : {}),
+        ...(req.body.proof_url ? { delivery_proof: req.body.proof_url } : {})
+      })
       .eq('id', deliveryId)
       .select()
       .single();
 
     if (updateError) return errorResponse(res, 'Failed to update delivery', 400, updateError);
 
-    let orderStatus = 'pending';
-    if (status === 'picked_up') orderStatus = 'out_for_delivery';
-    if (status === 'delivered') orderStatus = 'delivered';
-
     await supabaseAdmin
       .from('orders')
-      .update({ status: orderStatus, updated_at: new Date() })
+      .update({ 
+        status: orderStatus, 
+        status_updated_by: req.user.id,
+        status_updated_role: 'rider',
+        ...(req.body.proof_url ? { delivery_proof_url: req.body.proof_url } : {}),
+        ...(status === 'delivered' ? { delivery_otp_verified: true } : {})
+      })
       .eq('id', delivery.order.id);
-
-    // --- LOG STATUS CHANGE ---
-    await supabaseAdmin.from('order_tracking').insert([{ order_id: delivery.order.id, status: orderStatus }]);
 
     // --- PUSH NOTIFICATIONS ---
     try {

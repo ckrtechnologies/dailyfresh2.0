@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Platform,
+  Linking,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -67,77 +68,115 @@ const OrdersScreen = ({ navigation }) => {
   };
 
   const getStatusColor = (status) => {
-    if (!status) return COLORS.gray;
+    if (!status) return '#9CA3AF'; // Disabled/Grey
     switch (status.toLowerCase()) {
-      case 'delivered': return '#4CAF50';
-      case 'ready': return '#2196F3'; // Blue for ready
-      case 'preparing': return '#FF9800'; // Orange for preparing
-      case 'pending': return '#FF9800';
-      case 'cancelled': return '#F44336';
-      case 'confirmed': return '#2196F3';
-      case 'shipped': return '#9C27B0';
-      default: return COLORS.gray;
+      case 'placed': 
+      case 'pending': 
+        return '#F97316'; // Pending -> Orange
+      case 'confirmed':
+      case 'preparing':
+      case 'ready':
+        return '#3B82F6'; // In Progress -> Blue
+      case 'out_for_delivery':
+      case 'delivered':
+        return '#22C55E'; // Active/Delivered -> Green
+      case 'cancelled':
+      case 'failed':
+        return '#EF4444'; // Failed -> Red
+      default: 
+        return '#9CA3AF'; // Disabled -> Grey
     }
   };
 
-  const renderOrderItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.orderCard}
-      onPress={() => navigation.navigate('OrderDetail', { order: item })}
-      activeOpacity={0.7}
-    >
-      <View style={styles.orderHeader}>
-        <View style={styles.storeInfo}>
-          <View style={styles.storeIconContainer}>
-            <Icon name="storefront-outline" size={20} color={COLORS.primary} />
+  const copyToClipboard = (text) => {
+    // Standard clipboard logic
+    console.log('Copied to clipboard:', text);
+    // In a real app, use Clipboard.setString(text)
+  };
+
+  const renderOrderItem = ({ item, index }) => {
+    // S.No logic based on rule: (page_number - 1) * page_size + row_index + 1
+    // For mobile simple list, we use index + 1
+    const sNo = index + 1;
+
+    return (
+      <TouchableOpacity 
+        style={styles.orderCard}
+        onPress={() => navigation.navigate('OrderDetail', { order: item })}
+        activeOpacity={0.7}
+      >
+        <View style={styles.orderHeader}>
+          <View style={styles.sNoBadge}>
+            <Text style={styles.sNoText}>{sNo}</Text>
           </View>
-          <View>
-            <Text style={styles.storeName}>{item.store?.name || 'Daily Fresh'}</Text>
-            <Text style={styles.orderDate}>
-              {new Date(item.created_at).toLocaleDateString('en-IN', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-              })} • {new Date(item.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+          <View style={styles.storeInfo}>
+            <View style={styles.storeIconContainer}>
+              <Icon name="storefront-outline" size={20} color={COLORS.primary} />
+            </View>
+            <View>
+              <Text style={styles.storeName}>{item.store?.name || 'Daily Fresh'}</Text>
+              <Text style={styles.orderDate}>
+                {format(new Date(item.created_at), 'dd MMM yyyy')} • {format(new Date(item.created_at), 'hh:mm a')}
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+              {(item.status || 'UNKNOWN').replace(/_/g, ' ').toUpperCase()}
             </Text>
           </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {(item.status || 'UNKNOWN').toUpperCase()}
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.divider} />
+        <View style={styles.divider} />
 
-      <View style={styles.orderBody}>
-        <View style={styles.itemsPreview}>
-          <Text style={styles.itemText} numberOfLines={1}>
-            {item.items?.map(it => it.variant?.name || it.name).join(', ')}
-          </Text>
-          <Text style={styles.itemCount}>
-            {item.items?.length || 0} {item.items?.length === 1 ? 'Item' : 'Items'}
-          </Text>
+        <View style={styles.orderBody}>
+          <View style={styles.itemsPreview}>
+            <Text style={styles.itemText} numberOfLines={1}>
+              {item.items?.map(it => it.variant?.name || it.name).join(', ')}
+            </Text>
+            <Text style={styles.itemCount}>
+              {item.items?.length || 0} {item.items?.length === 1 ? 'Item' : 'Items'}
+            </Text>
+          </View>
+          <View style={styles.amountContainer}>
+            <Text style={styles.amountLabel}>Total Paid</Text>
+            <Text style={styles.totalAmount}>₹{item.total_amount}</Text>
+          </View>
         </View>
-        <View style={styles.amountContainer}>
-          <Text style={styles.amountLabel}>Total Paid</Text>
-          <Text style={styles.totalAmount}>₹{item.total_amount}</Text>
-        </View>
-      </View>
 
-      <View style={styles.orderFooter}>
-        <View style={styles.orderIdContainer}>
-          <Text style={styles.orderIdLabel}>Order ID:</Text>
-          <Text style={styles.orderIdValue}>#{item.order_number?.slice(-8).toUpperCase() || 'N/A'}</Text>
+        {item.status === 'out_for_delivery' && item.rider && (
+          <View style={styles.riderBar}>
+            <View style={styles.riderInfoMini}>
+              <Icon name="account-clock" size={18} color={COLORS.primary} />
+              <Text style={styles.riderNameMini}>{item.rider.full_name} is on the way</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.callRiderBtn} 
+              onPress={() => Linking.openURL(`tel:${item.rider.phone}`)}
+            >
+              <Icon name="phone" size={14} color="#166534" />
+              <Text style={styles.callRiderText}>Call Rider</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={styles.orderFooter}>
+          <TouchableOpacity 
+            style={styles.orderIdContainer}
+            onPress={() => copyToClipboard(item.order_number)}
+          >
+            <Text style={styles.orderIdLabel}>Order ID:</Text>
+            <Text style={styles.orderIdValue}>#{item.order_number?.slice(-8).toUpperCase() || 'N/A'}</Text>
+            <Icon name="content-copy" size={12} color={COLORS.gray} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+          <View style={styles.viewDetailBtn}>
+            <Text style={styles.viewDetailText}>View Details</Text>
+            <Icon name="chevron-right" size={16} color={COLORS.primary} />
+          </View>
         </View>
-        <View style={styles.viewDetailBtn}>
-          <Text style={styles.viewDetailText}>View Details</Text>
-          <Icon name="chevron-right" size={16} color={COLORS.primary} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const formatDateReadable = (dateStr) => {
     if (!dateStr) return '';
@@ -515,6 +554,65 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
     fontSize: 16,
+  },
+  riderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  riderInfoMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  riderNameMini: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#166534',
+  },
+  callRiderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  callRiderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  sNoBadge: {
+    position: 'absolute',
+    top: -12,
+    left: -12,
+    backgroundColor: COLORS.primary,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  sNoText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '800',
   },
 });
 

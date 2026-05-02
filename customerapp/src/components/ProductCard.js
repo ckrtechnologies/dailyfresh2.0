@@ -73,10 +73,10 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
 
   const handleAddToCart = () => {
     // If product has customization options or variants, navigate to detail screen instead
-    const hasCustomization = (product.cut_options?.length > 0) || 
-                            (product.cleaning_options?.length > 0) || 
-                            (product.variants?.length > 0);
-    
+    const hasCustomization = (product.cut_options?.length > 0) ||
+      (product.cleaning_options?.length > 0) ||
+      (product.variants?.length > 0);
+
     if (hasCustomization && onPress) {
       onPress();
       return;
@@ -171,11 +171,32 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
           </View>
           <View style={styles.slotsContainer}>
             {(product.delivery_options || ['express']).map((slot, idx) => {
-              const slotTheme = THEMES[slot] || THEMES.all;
+              // Map legacy keys to new ones
+              const normalizedSlot = slot === 'morning' ? 'tmrw_morning' : 
+                                   slot === 'afternoon' ? 'today_evening' : slot;
+              
+              // Only show the badge if it matches the currently selected slot 
+              if (selectedSlot !== 'all' && normalizedSlot !== selectedSlot) return null;
+
+              // Check inventory availability
+              const isExpress = normalizedSlot === 'express';
+              const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
+              if (!hasStock) return null;
+
+              const slotTheme = THEMES[normalizedSlot] || THEMES.all;
+              const labelMap = {
+                'express': 'Express',
+                'today_evening': 'Today Eve',
+                'tmrw_morning': 'Tom. Morn',
+                'tmrw_evening': 'Tom. Eve',
+                'all': 'Standard'
+              };
+              const label = labelMap[normalizedSlot] || normalizedSlot.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              
               return (
                 <View key={idx} style={[styles.slotBadge, { backgroundColor: slotTheme.primary + '15' }]}>
                   <Text style={[styles.slotText, { color: slotTheme.primary }]}>
-                    {slot === 'all' ? 'Standard' : slot.charAt(0).toUpperCase() + slot.slice(1)}
+                    {label}
                   </Text>
                 </View>
               );
