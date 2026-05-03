@@ -91,35 +91,35 @@ const HomeScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       let isSubscribed = true;
-      
+
       const fetchAddressAndNotifications = async () => {
         if (!isAuthenticated) return;
-        
+
         try {
           // 1. Check if we have a location (either selected address OR manual pick)
           if (!location.selectedAddress && !location.storeId) {
             console.log('🔄 [HOME] No location context, fetching addresses...');
             const addrRes = await apiClient.get('/customer/addresses');
-            
+
             if (!isSubscribed) return;
 
             if (addrRes.data?.success && addrRes.data.data.addresses.length > 0) {
               const defaultAddr = addrRes.data.data.addresses.find(a => a.is_default) || addrRes.data.data.addresses[0];
-              
+
               // Resolve store for this address
-              const storeRes = await apiClient.get('/customer/stores/nearest', { 
-                params: { pincode: defaultAddr.pincode, lat: defaultAddr.latitude, lng: defaultAddr.longitude } 
+              const storeRes = await apiClient.get('/customer/stores/nearest', {
+                params: { pincode: defaultAddr.pincode, lat: defaultAddr.latitude, lng: defaultAddr.longitude }
               });
-              
+
               if (!isSubscribed) return;
               const store = storeRes.data?.data?.store;
-              
+
               const addressWithStore = {
                 ...defaultAddr,
                 store_id: store?.id,
                 store_name: store?.name
               };
-              
+
               dispatch(setSelectedAddress(addressWithStore));
             } else {
               // MANDATORY LOCATION: Redirect to LocationPicker if no location at all exists
@@ -141,7 +141,7 @@ const HomeScreen = ({ navigation }) => {
           console.log('Failed to fetch home focus data:', error);
         }
       };
-      
+
       fetchAddressAndNotifications();
       return () => { isSubscribed = false; };
     }, [isAuthenticated, location.selectedAddress, navigation, dispatch])
@@ -187,28 +187,28 @@ const HomeScreen = ({ navigation }) => {
     if (!selectedSlot) return products;
     return products.filter(p => {
       const options = p.delivery_options || ['express'];
-      const normalizedOptions = options.map(o => 
-        o === 'morning' ? 'tmrw_morning' : 
-        o === 'afternoon' ? 'today_evening' : o
+      const normalizedOptions = options.map(o =>
+        o === 'morning' ? 'tmrw_morning' :
+          o === 'afternoon' ? 'today_evening' : o
       );
-      
+
       let supportsSlot = normalizedOptions.includes(selectedSlot);
 
       // Fallback: Check if any variant supports this slot
       if (!supportsSlot && p.variants && p.variants.length > 0) {
         const slotMap = {
-          'tmrw_morning': ['morning', 'tomorrow morning'], 
-          'today_evening': ['afternoon', 'today evening'], 
+          'tmrw_morning': ['morning', 'tomorrow morning'],
+          'today_evening': ['afternoon', 'today evening'],
           'tmrw_evening': ['evening', 'tomorrow evening'],
           'express': ['express', 'express delivery']
         };
         const searchTerms = [selectedSlot, ...(slotMap[selectedSlot] || [])];
 
         supportsSlot = p.variants.some(v => {
-          const vInfo = Array.isArray(v.delivery_info) 
-            ? v.delivery_info 
+          const vInfo = Array.isArray(v.delivery_info)
+            ? v.delivery_info
             : (v.delivery_info ? v.delivery_info.split(',').map(s => s.trim().toLowerCase()) : []);
-          
+
           return vInfo.some(slot => searchTerms.includes(slot.toLowerCase()));
         });
       }
@@ -218,7 +218,7 @@ const HomeScreen = ({ navigation }) => {
       // Add stock check
       const isExpress = selectedSlot === 'express';
       const hasStock = isExpress ? (p.express_stock_qty > 0) : (p.scheduled_stock_qty > 0);
-      
+
       return hasStock;
     });
   };
@@ -269,7 +269,7 @@ const HomeScreen = ({ navigation }) => {
 
         const res = await apiClient.get('/customer/stores/nearest', { params });
         const store = res.data?.data?.store;
-        
+
         if (store) {
           console.log('✅ [HOME_DEBUG] Successfully re-assigned store:', store.name);
           currentStoreId = store.id;
@@ -335,8 +335,8 @@ const HomeScreen = ({ navigation }) => {
       if (categoriesRes.success && categoriesRes.data.length > 0) {
         const categoryData = await Promise.all(
           categoriesRes.data.map(async (cat) => {
-            const prodRes = await productService.getProducts({ 
-              categoryId: cat.id, 
+            const prodRes = await productService.getProducts({
+              categoryId: cat.id,
               storeId: currentStoreId,
               deliveryType: selectedSlot
             });
@@ -347,7 +347,7 @@ const HomeScreen = ({ navigation }) => {
             };
           })
         );
-        
+
         if (isCancelled.current) return;
         dispatch(setCategorySections(categoryData.filter(c => c.products.length > 0)));
       }
@@ -481,17 +481,17 @@ const HomeScreen = ({ navigation }) => {
                 {location.selectedAddress?.label || address?.split(',')[0] || 'Pick Location'}
                 {selectedSlot && (
                   <Text style={styles.deliveryModeLabel}>
-                    {' • '}{selectedSlot === 'express' ? '⚡ Express' : 
-                     selectedSlot === 'today_evening' || selectedSlot === 'afternoon' ? '📅 Today Eve' :
-                     selectedSlot === 'tmrw_morning' || selectedSlot === 'morning' ? '📅 Tom. Morn' :
-                     '📅 Tom. Eve'}
+                    {' • '}{selectedSlot === 'express' ? '⚡ Express' :
+                      selectedSlot === 'today_evening' || selectedSlot === 'afternoon' ? '📅 Today Eve' :
+                        selectedSlot === 'tmrw_morning' || selectedSlot === 'morning' ? '📅 Tom. Morn' :
+                          '📅 Tom. Eve'}
                   </Text>
                 )}
               </Text>
               <Icon name="chevron-down" size={14} color={COLORS.white} />
             </View>
             <Text style={styles.addressText} numberOfLines={1}>
-              {location.selectedAddress 
+              {location.selectedAddress
                 ? `${location.selectedAddress.line1}${location.selectedAddress.line2 ? ', ' + location.selectedAddress.line2 : ''}`
                 : address || 'Select your delivery address'}
             </Text>
@@ -501,7 +501,7 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.headerRight}>
 
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.notificationBtn}
             onPress={() => navigation.navigate('Notifications')}
           >
@@ -798,8 +798,8 @@ const HomeScreen = ({ navigation }) => {
   }
   return (
     <View style={[styles.container, { backgroundColor: activeTheme.background }]}>
-      <StatusBar 
-        backgroundColor={activeTheme.primary} 
+      <StatusBar
+        backgroundColor={activeTheme.primary}
         barStyle="light-content"
         translucent={true}
       />

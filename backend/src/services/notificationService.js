@@ -171,3 +171,83 @@ export const logInAppNotification = async (userId, title, body, type = 'info', d
     throw error;
   }
 };
+/**
+ * Notify all Available Riders about a new order
+ */
+export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => {
+  try {
+    // 1. Fetch all online and approved riders
+    const { data: riders, error } = await supabaseAdmin
+      .from('riders')
+      .select('id, fcm_token, user_id')
+      .eq('is_online', true)
+      .eq('approval_status', 'approved');
+
+    if (error) throw error;
+    if (!riders || riders.length === 0) {
+      console.log('[Notification] No online riders available for broadcast');
+      return;
+    }
+
+    console.log(`[Notification] Broadcasting new order #${orderNumber} to ${riders.length} riders`);
+
+    const title = 'New Order Available! 📦';
+    const body = `Order #${orderNumber} from ${storeName} is ready for dispatch. Tap to accept.`;
+
+    const promises = riders.map(async (rider) => {
+      // 1. Log to Database for History (linked to rider's user_id)
+      try {
+        await supabaseAdmin.from('notifications').insert([{
+          user_id: rider.user_id,
+          title,
+          body,
+          type: 'order',
+          data: {
+            type: 'NEW_ORDER_AVAILABLE',
+            order_id: String(orderId),
+            order_number: String(orderNumber),
+            store_name: String(storeName)
+          }
+        }]);
+      } catch (logErr) {
+        console.error(`[Notification Log Error] Rider ${rider.id}:`, logErr.message);
+      }
+
+      if (!rider.fcm_token) return;
+
+      const message = {
+        notification: { title, body },
+        data: {
+          type: 'NEW_ORDER_AVAILABLE',
+          order_id: String(orderId),
+          order_number: String(orderNumber),
+          store_name: String(storeName),
+          title: String(title),
+          body: String(body),
+          timestamp: new Date().toISOString()
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: 'default',
+            priority: 'high',
+            sound: 'default',
+            visibility: 'public',
+            vibrateTimingsMillis: [0, 500, 200, 500],
+          }
+        },
+        token: rider.fcm_token
+      };
+
+      try {
+        return admin.messaging().send(message);
+      } catch (err) {
+        console.error(`[FCM Error] Failed to send to rider ${rider.id}:`, err.message);
+      }
+    });
+
+    await Promise.all(promises);
+  } catch (error) {
+    console.error(`[Broadcast Riders Error] ${error.message}`);
+  }
+};

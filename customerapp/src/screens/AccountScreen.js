@@ -22,7 +22,7 @@ const AccountScreen = ({ navigation }) => {
   const { user } = useSelector((state) => state.auth);
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
-  
+
   // Safely extract user details from Supabase user_metadata
   const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.full_name || user?.name || 'Daily Fresh User';
   const userPhone = user?.phone || user?.user_metadata?.phone || 'No phone linked';
@@ -34,8 +34,8 @@ const AccountScreen = ({ navigation }) => {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
+        {
+          text: 'Logout',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -74,8 +74,8 @@ const AccountScreen = ({ navigation }) => {
 
   const renderMenuItem = (item) => {
     return (
-      <TouchableOpacity 
-        key={item.label} 
+      <TouchableOpacity
+        key={item.label}
         style={styles.menuItem}
         onPress={() => {
           if (item.action) item.action();
@@ -105,9 +105,9 @@ const AccountScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View style={styles.profileInfo}>
             {user?.avatar_url ? (
-              <Image 
-                source={{ uri: user.avatar_url }} 
-                style={[styles.avatarContainer, { width: 64, height: 64, borderRadius: 32 }]} 
+              <Image
+                source={{ uri: user.avatar_url }}
+                style={[styles.avatarContainer, { width: 64, height: 64, borderRadius: 32 }]}
               />
             ) : (
               <View style={[styles.avatarContainer, { backgroundColor: activeTheme.primary }]}>
@@ -122,7 +122,7 @@ const AccountScreen = ({ navigation }) => {
               {user?.email && <Text style={styles.userEmail}>{user.email}</Text>}
             </View>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.editBtn, { backgroundColor: activeTheme.primary + '15' }]}
             onPress={() => navigation.navigate('EditProfile')}
           >

@@ -433,7 +433,7 @@ export const listOrders = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
   const { status, rider_id } = req.body;
-  const validStatuses = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'failed'];
+  const validStatuses = ['placed', 'confirmed', 'preparing', 'ready', 'accepted', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled', 'failed'];
 
   if (!validStatuses.includes(status)) {
     return errorResponse(res, `Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400);
@@ -477,7 +477,7 @@ export const updateOrderStatus = async (req, res) => {
       query = query.eq('store_id', req.user.store_id);
     }
 
-    const { data: order, error: updateError } = await query.select('*, customer:profiles!user_id(full_name, email)').single();
+    const { data: order, error: updateError } = await query.select('*, customer:profiles!user_id(full_name, email), store:stores(name)').single();
 
     if (updateError) return errorResponse(res, 'Failed to update order status or access denied', 400, updateError);
 
@@ -500,6 +500,12 @@ export const updateOrderStatus = async (req, res) => {
       case 'ready':
         title = 'Order Ready! 📦';
         body = 'Your order is packed and ready for pickup.';
+        
+        // --- NOTIFY RIDERS ---
+        // We broadcast to all online riders when the order is ready for dispatch
+        if (order?.order_number && order?.store?.name) {
+          notificationService.notifyAvailableRiders(id, order.order_number, order.store.name);
+        }
         break;
       case 'out_for_delivery':
       case 'dispatched':

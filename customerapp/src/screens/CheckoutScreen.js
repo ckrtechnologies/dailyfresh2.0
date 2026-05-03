@@ -34,10 +34,10 @@ const CheckoutScreen = ({ navigation }) => {
   const { items, totalAmount } = useSelector((state) => state.cart);
   const { user } = useSelector((state) => state.auth);
   const { address, pincode, storeId, coords, selectedAddress } = useSelector((state) => state.location);
-  
+
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
-  
+
   // Slot labels for display
   const slotLabels = {
     'express': { label: 'Express Delivery', time: 'Within 90 mins', icon: 'lightning-bolt', color: '#F59E0B' },
@@ -177,7 +177,7 @@ const CheckoutScreen = ({ navigation }) => {
       };
 
       const paymentData = await RazorpayCheckout.open(options);
-      
+
       const verifyRes = await orderService.verifyPayment({
         order_id,
         razorpay_payment_id: paymentData.razorpay_payment_id,
@@ -194,7 +194,7 @@ const CheckoutScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.log('Order Error:', error);
-      
+
       // Layman-friendly recovery for Cutoff Passed
       if (error.message?.includes('Today evening slot is closed') || error.error === 'CUTOFF_PASSED') {
         showAlert(
@@ -217,8 +217,8 @@ const CheckoutScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: activeTheme.background }]} edges={['bottom', 'left', 'right']}>
-      <StatusBar 
-        backgroundColor={activeTheme.primary} 
+      <StatusBar
+        backgroundColor={activeTheme.primary}
         barStyle="light-content"
       />
       <KeyboardAvoidingView
@@ -234,35 +234,35 @@ const CheckoutScreen = ({ navigation }) => {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Address Selection */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Delivery Address</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}>
-              <Text style={styles.actionText}>{selectedAddress ? 'Change' : 'Add'}</Text>
+          {/* Address Selection */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Delivery Address</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}>
+                <Text style={styles.actionText}>{selectedAddress ? 'Change' : 'Add'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.addressCard}
+              onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}
+            >
+              <Icon name="map-marker" size={24} color={COLORS.primary} />
+              <View style={styles.addressInfo}>
+                {selectedAddress ? (
+                  <>
+                    <Text style={styles.addressLabel}>{selectedAddress.label}</Text>
+                    <Text style={styles.addressText}>{selectedAddress.line1}, {selectedAddress.city}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.addressPlaceholder}>Select a delivery address</Text>
+                )}
+              </View>
+              <Icon name="chevron-right" size={20} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.addressCard}
-            onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}
-          >
-            <Icon name="map-marker" size={24} color={COLORS.primary} />
-            <View style={styles.addressInfo}>
-              {selectedAddress ? (
-                <>
-                  <Text style={styles.addressLabel}>{selectedAddress.label}</Text>
-                  <Text style={styles.addressText}>{selectedAddress.line1}, {selectedAddress.city}</Text>
-                </>
-              ) : (
-                <Text style={styles.addressPlaceholder}>Select a delivery address</Text>
-              )}
-            </View>
-            <Icon name="chevron-right" size={20} color={COLORS.gray} />
-          </TouchableOpacity>
-        </View>
 
-        {/* Delivery Schedule Section - Commented out as per request (already selected by user)
+          {/* Delivery Schedule Section - Commented out as per request (already selected by user)
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Delivery Schedule</Text>
@@ -286,80 +286,80 @@ const CheckoutScreen = ({ navigation }) => {
         </View>
         */}
 
-        {/* Coupon Code */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Coupons & Offers</Text>
-            <TouchableOpacity onPress={fetchCoupons}>
-              <Text style={styles.actionText}>View Offers</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.couponContainer}>
-            <View style={styles.couponInputWrapper}>
-              <Icon name="ticket-percent-outline" size={20} color={COLORS.primary} style={{ marginLeft: 12 }} />
-              <TextInput
-                style={styles.couponInput}
-                placeholder="Enter Coupon Code"
-                value={couponCode}
-                onChangeText={(text) => setCouponCode(text.toUpperCase())}
-                autoCapitalize="characters"
-              />
-            </View>
-            <TouchableOpacity 
-              style={[styles.applyBtn, (!couponCode || applyingCoupon) && styles.disabledApply]} 
-              onPress={handleApplyCoupon}
-              disabled={!couponCode || applyingCoupon}
-            >
-              {applyingCoupon ? (
-                <ActivityIndicator color={COLORS.white} size="small" />
-              ) : (
-                <Text style={styles.applyText}>{couponData ? 'Apply New' : 'Apply'}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-          {couponData && (
-            <View style={styles.appliedCoupon}>
-              <Icon name="check-circle" size={16} color={COLORS.success} />
-              <Text style={styles.appliedText}>
-                Coupon <Text style={{fontWeight:'700'}}>{couponData.code}</Text> applied! Saved ₹{couponData.discount_amount}
-              </Text>
-              <TouchableOpacity onPress={() => { setCouponData(null); setCouponCode(''); }}>
-                <Icon name="close-circle" size={18} color={COLORS.gray} />
+          {/* Coupon Code */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Coupons & Offers</Text>
+              <TouchableOpacity onPress={fetchCoupons}>
+                <Text style={styles.actionText}>View Offers</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
-
-        {/* Order Summary */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bill Summary</Text>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Item Total</Text>
-              <Text style={styles.summaryValue}>₹{(totalAmount || 0).toFixed(2)}</Text>
+            <View style={styles.couponContainer}>
+              <View style={styles.couponInputWrapper}>
+                <Icon name="ticket-percent-outline" size={20} color={COLORS.primary} style={{ marginLeft: 12 }} />
+                <TextInput
+                  style={styles.couponInput}
+                  placeholder="Enter Coupon Code"
+                  value={couponCode}
+                  onChangeText={(text) => setCouponCode(text.toUpperCase())}
+                  autoCapitalize="characters"
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.applyBtn, (!couponCode || applyingCoupon) && styles.disabledApply]}
+                onPress={handleApplyCoupon}
+                disabled={!couponCode || applyingCoupon}
+              >
+                {applyingCoupon ? (
+                  <ActivityIndicator color={COLORS.white} size="small" />
+                ) : (
+                  <Text style={styles.applyText}>{couponData ? 'Apply New' : 'Apply'}</Text>
+                )}
+              </TouchableOpacity>
             </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Delivery Fee</Text>
-              <Text style={styles.summaryValue}>{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Taxes</Text>
-              <Text style={styles.summaryValue}>₹{(tax || 0).toFixed(2)}</Text>
-            </View>
-            {(discount || 0) > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: COLORS.success }]}>Coupon Discount</Text>
-                <Text style={[styles.summaryValue, { color: COLORS.success }]}>-₹{(discount || 0).toFixed(2)}</Text>
+            {couponData && (
+              <View style={styles.appliedCoupon}>
+                <Icon name="check-circle" size={16} color={COLORS.success} />
+                <Text style={styles.appliedText}>
+                  Coupon <Text style={{ fontWeight: '700' }}>{couponData.code}</Text> applied! Saved ₹{couponData.discount_amount}
+                </Text>
+                <TouchableOpacity onPress={() => { setCouponData(null); setCouponCode(''); }}>
+                  <Icon name="close-circle" size={18} color={COLORS.gray} />
+                </TouchableOpacity>
               </View>
             )}
-            <View style={[styles.summaryRow, styles.grandTotalRow]}>
-              <Text style={styles.grandTotalLabel}>Grand Total</Text>
-              <Text style={styles.grandTotalValue}>₹{(grandTotal || 0).toFixed(2)}</Text>
+          </View>
+
+          {/* Order Summary */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Bill Summary</Text>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Item Total</Text>
+                <Text style={styles.summaryValue}>₹{(totalAmount || 0).toFixed(2)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Delivery Fee</Text>
+                <Text style={styles.summaryValue}>{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Taxes</Text>
+                <Text style={styles.summaryValue}>₹{(tax || 0).toFixed(2)}</Text>
+              </View>
+              {(discount || 0) > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: COLORS.success }]}>Coupon Discount</Text>
+                  <Text style={[styles.summaryValue, { color: COLORS.success }]}>-₹{(discount || 0).toFixed(2)}</Text>
+                </View>
+              )}
+              <View style={[styles.summaryRow, styles.grandTotalRow]}>
+                <Text style={styles.grandTotalLabel}>Grand Total</Text>
+                <Text style={styles.grandTotalValue}>₹{(grandTotal || 0).toFixed(2)}</Text>
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Available Coupons Modal */}
       <Modal
@@ -387,14 +387,14 @@ const CheckoutScreen = ({ navigation }) => {
                 keyExtractor={(item) => String(item.id)}
                 contentContainerStyle={{ padding: 20 }}
                 renderItem={({ item }) => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.couponCard}
                     onPress={() => {
                       setCouponCode(item.code);
                       setShowCouponsModal(false);
                       // Trigger apply automatically
                       setTimeout(() => {
-                         handleApplyCoupon();
+                        handleApplyCoupon();
                       }, 500);
                     }}
                   >
@@ -407,7 +407,7 @@ const CheckoutScreen = ({ navigation }) => {
                       </Text>
                       <Text style={styles.couponCardDesc}>{item.description}</Text>
                       {item.min_order_amount > 0 && (
-                         <Text style={styles.couponCardMin}>Min. order ₹{item.min_order_amount}</Text>
+                        <Text style={styles.couponCardMin}>Min. order ₹{item.min_order_amount}</Text>
                       )}
                     </View>
                     <Text style={styles.applyAction}>APPLY</Text>
@@ -429,7 +429,7 @@ const CheckoutScreen = ({ navigation }) => {
           <Text style={styles.footerTotal}>₹{(grandTotal || 0).toFixed(2)}</Text>
           <Text style={styles.footerSub}>Final Amount</Text>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.payBtn, (!selectedAddress || loading) && styles.disabledBtn]}
           onPress={handlePlaceOrder}
           disabled={!selectedAddress || loading}
@@ -445,7 +445,7 @@ const CheckoutScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <CustomAlert 
+      <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}
         message={alertConfig.message}
@@ -459,10 +459,10 @@ const CheckoutScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    padding: SPACING.l, 
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: SPACING.l,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     borderBottomWidth: 1,
@@ -474,10 +474,10 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.m },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.dark, marginBottom: SPACING.m },
   actionText: { color: COLORS.primary, fontWeight: '600' },
-  addressCard: { 
-    flexDirection: 'row', 
-    backgroundColor: COLORS.white, 
-    padding: SPACING.l, 
+  addressCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    padding: SPACING.l,
     borderRadius: RADIUS.card,
     alignItems: 'center',
     borderWidth: 1,
@@ -512,19 +512,19 @@ const styles = StyleSheet.create({
   },
   slots: { gap: 12 },
   slotGroup: { marginBottom: 16 },
-  slotGroupTitle: { 
-    fontSize: 12, 
-    fontWeight: '800', 
-    color: COLORS.gray, 
-    textTransform: 'uppercase', 
+  slotGroupTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.gray,
+    textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 8,
     marginLeft: 4
   },
-  slot: { 
-    flexDirection: 'row', 
-    backgroundColor: COLORS.white, 
-    padding: SPACING.m, 
+  slot: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    padding: SPACING.m,
     borderRadius: RADIUS.m,
     alignItems: 'center',
     borderWidth: 1,
@@ -539,21 +539,21 @@ const styles = StyleSheet.create({
   slotLabel: { fontWeight: '600', color: COLORS.dark, fontSize: 14 },
   slotSub: { fontSize: 11, color: COLORS.gray },
   summaryCard: { backgroundColor: COLORS.white, padding: SPACING.l, borderRadius: RADIUS.card },
-  noSlotsCard: { 
-    flexDirection: 'row', 
-    backgroundColor: '#fef2f2', 
-    padding: SPACING.l, 
-    borderRadius: RADIUS.m, 
-    alignItems: 'center', 
+  noSlotsCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fef2f2',
+    padding: SPACING.l,
+    borderRadius: RADIUS.m,
+    alignItems: 'center',
     gap: 12,
     borderWidth: 1,
     borderColor: '#fee2e2'
   },
-  noSlotsText: { 
-    flex: 1, 
-    fontSize: 13, 
-    color: '#991b1b', 
-    lineHeight: 18 
+  noSlotsText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#991b1b',
+    lineHeight: 18
   },
   couponContainer: {
     flexDirection: 'row',
@@ -614,22 +614,22 @@ const styles = StyleSheet.create({
   grandTotalRow: { borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: SPACING.m, marginTop: SPACING.s },
   grandTotalLabel: { fontSize: 16, fontWeight: '700', color: COLORS.dark },
   grandTotalValue: { fontSize: 18, fontWeight: '800', color: COLORS.primary },
-  footer: { 
-    backgroundColor: COLORS.white, 
-    padding: SPACING.l, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
+  footer: {
+    backgroundColor: COLORS.white,
+    padding: SPACING.l,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9'
   },
   footerTotal: { fontSize: 20, fontWeight: '800', color: COLORS.dark },
   footerSub: { fontSize: 12, color: COLORS.gray },
-  payBtn: { 
-    backgroundColor: COLORS.primary, 
-    flexDirection: 'row', 
-    paddingHorizontal: SPACING.xl, 
-    paddingVertical: 12, 
+  payBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: 12,
     borderRadius: RADIUS.m,
     alignItems: 'center',
     gap: 8

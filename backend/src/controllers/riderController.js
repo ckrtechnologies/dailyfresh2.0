@@ -22,6 +22,34 @@ export const getProfile = async (req, res) => {
 };
 
 /**
+ * Update FCM Token for Notifications
+ */
+export const updateFCMToken = async (req, res) => {
+  const { fcm_token } = req.body;
+  try {
+    // Update profiles table (used by notificationService)
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .update({ fcm_token })
+      .eq('id', req.user.id);
+
+    if (profileError) return errorResponse(res, 'Failed to update profile FCM token', 400, profileError);
+
+    // Update riders table (for redundancy/rider specific logic)
+    const { error: riderError } = await supabaseAdmin
+      .from('riders')
+      .update({ fcm_token })
+      .eq('user_id', req.user.id);
+
+    if (riderError) return errorResponse(res, 'Failed to update rider FCM token', 400, riderError);
+
+    return successResponse(res, {}, 'FCM token updated successfully');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
  * Toggle Online/Offline Status
  */
 export const toggleOnline = async (req, res) => {
@@ -47,16 +75,25 @@ export const toggleOnline = async (req, res) => {
 export const updateLocation = async (req, res) => {
   const { latitude, longitude } = req.body;
   try {
-    const { error } = await supabaseAdmin
+    const { error: riderError } = await supabaseAdmin
       .from('riders')
-      .update({ current_lat: latitude, current_lng: longitude })
+      .update({ current_lat: latitude, current_lng: longitude, updated_at: new Date().toISOString() })
       .eq('user_id', req.user.id);
 
-    if (error) return errorResponse(res, 'Failed to update location', 400, error);
+    if (riderError) return errorResponse(res, 'Failed to update rider table', 400, riderError);
 
-    const io = req.app.get('io');
-    if (io) {
-       io.to(`rider-${req.user.id}`).emit('location_update', { latitude, longitude });
+    const { data: rider } = await supabaseAdmin
+      .from('riders')
+      .select('id, user_id')
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (rider) {
+      await supabaseAdmin.rpc('update_rider_location', {
+        p_rider_id: rider.id,
+        p_lat: latitude,
+        p_long: longitude
+      });
     }
 
     return successResponse(res, {}, 'Location updated');
@@ -66,128 +103,280 @@ export const updateLocation = async (req, res) => {
 };
 
 /**
- * List Deliveries for the Rider
+ * Accept a New Order
  */
-export const getDeliveries = async (req, res) => {
-  const { status } = req.query;
+export const acceptOrder = async (req, res) => {
+  const { orderId } = req.body;
   try {
     const { data: rider } = await supabaseAdmin
       .from('riders')
-      .select('id')
+      .select('id, user_id, approval_status')
       .eq('user_id', req.user.id)
       .single();
 
-    let query = supabaseAdmin
-      .from('deliveries')
-      .select('*, order:orders(*)')
-      .eq('rider_id', rider.id);
+    if (!rider || rider.approval_status !== 'approved') {
+      return errorResponse(res, 'Rider not found or not approved', 403);
+    }
 
-    if (status) query = query.eq('status', status);
+    const { data: order, error: fetchError } = await supabaseAdmin
+      .from('orders')
+      .select('id, rider_id, status')
+      .eq('id', orderId)
+      .single();
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    if (fetchError || !order) return errorResponse(res, 'Order not found', 404);
+    if (order.rider_id) return errorResponse(res, 'Order already accepted by another rider', 400);
 
-    if (error) return errorResponse(res, 'Failed to fetch deliveries', 400, error);
-    return successResponse(res, { deliveries: data });
+    const { data: updatedOrder, error: updateError } = await supabaseAdmin
+      .from('orders')
+      .update({ 
+        rider_id: rider.user_id, 
+        status: 'accepted',
+        status_updated_at: new Date().toISOString(),
+        status_updated_by: req.user.id,
+        status_updated_role: 'rider'
+      })
+      .eq('id', orderId)
+      .select('*, store:stores(name, address, latitude, longitude), address:addresses(*)')
+      .single();
+
+    if (updateError) return errorResponse(res, 'Failed to accept order', 400, updateError);
+
+    return successResponse(res, { order: updatedOrder }, 'Order accepted successfully');
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
   }
 };
 
 /**
- * Update Delivery Task Status
+ * List Active Orders for the Rider
+ */
+export const getActiveOrders = async (req, res) => {
+  try {
+    const { data: rider } = await supabaseAdmin
+      .from('riders')
+      .select('id, user_id')
+      .eq('user_id', req.user.id)
+      .single();
+
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .select('*, store:stores(name, address, latitude, longitude), address:addresses(*)')
+      .eq('rider_id', rider.user_id)
+      .in('status', ['accepted', 'picked_up', 'ready'])
+      .order('updated_at', { ascending: false });
+
+    if (error) return errorResponse(res, 'Failed to fetch orders', 400, error);
+    return successResponse(res, { orders: data });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Update Delivery Status (Picked up -> Delivered)
  */
 export const updateDeliveryStatus = async (req, res) => {
-  const { deliveryId } = req.params;
-  const { status, otp } = req.body;
+  const { orderId } = req.params;
+  const { status } = req.body;
 
   try {
-    const { data: delivery, error: fetchError } = await supabaseAdmin
-      .from('deliveries')
-      .select('*, order:orders(id)')
-      .eq('id', deliveryId)
+    const { data: order, error: fetchError } = await supabaseAdmin
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
       .single();
 
-    if (fetchError || !delivery) return errorResponse(res, 'Delivery not found', 404);
+    if (fetchError || !order) return errorResponse(res, 'Order not found', 404);
 
-    let orderStatus = 'out_for_delivery';
-    if (status === 'delivered') orderStatus = 'delivered';
-    
-    // Fetch current status for transition validation
-    const { data: currentOrder } = await supabaseAdmin.from('orders').select('status').eq('id', delivery.order.id).single();
-    
-    try {
-      validateTransition(currentOrder.status, orderStatus, 'rider');
-    } catch (err) {
-      return errorResponse(res, err.message, 400);
-    }
-
-    if (orderStatus === 'delivered') {
-      // Delivered status requires proof or valid OTP
-      if (!otp && !req.body.proof_url) {
-        return errorResponse(res, 'Proof or OTP is required for delivery', 400);
-      }
-      
-      if (otp && otp !== delivery.otp) {
-        return errorResponse(res, 'Invalid Delivery OTP', 400);
-      }
-    }
-
-    const { data: updatedDelivery, error: updateError } = await supabaseAdmin
-      .from('deliveries')
-      .update({ 
-        status, 
-        ...(status === 'delivered' ? { delivered_at: new Date().toISOString() } : {}),
-        ...(req.body.proof_url ? { delivery_proof: req.body.proof_url } : {})
-      })
-      .eq('id', deliveryId)
-      .select()
-      .single();
-
-    if (updateError) return errorResponse(res, 'Failed to update delivery', 400, updateError);
-
-    await supabaseAdmin
+    const { data: updatedOrder, error: updateError } = await supabaseAdmin
       .from('orders')
       .update({ 
-        status: orderStatus, 
+        status: status, 
+        status_updated_at: new Date().toISOString(),
         status_updated_by: req.user.id,
-        status_updated_role: 'rider',
-        ...(req.body.proof_url ? { delivery_proof_url: req.body.proof_url } : {}),
-        ...(status === 'delivered' ? { delivery_otp_verified: true } : {})
+        status_updated_role: 'rider'
       })
-      .eq('id', delivery.order.id);
+      .eq('id', orderId)
+      .select('*, store:stores(name, address, latitude, longitude), address:addresses(*)')
+      .single();
 
-    // --- PUSH NOTIFICATIONS ---
+    if (updateError) return errorResponse(res, 'Failed to update delivery status', 400, updateError);
+
     try {
-      const { data: fullOrder } = await supabaseAdmin
-        .from('orders')
-        .select('user_id, order_number')
-        .eq('id', delivery.order.id)
-        .single();
+      let title = '';
+      let body = '';
+      if (status === 'picked_up') {
+        title = 'Order Out for Delivery! 🚚';
+        body = `Our rider has picked up your order #${updatedOrder.order_number} and is on the way.`;
+      } else if (status === 'delivered') {
+        title = 'Order Delivered! 🎉';
+        body = `Your order #${updatedOrder.order_number} has been delivered successfully.`;
+      }
 
-      if (fullOrder) {
-        let title = '';
-        let body = '';
-        if (status === 'picked_up') {
-          title = 'Order Out for Delivery! 🚚';
-          body = `Our rider has picked up your order #${fullOrder.order_number} and is on the way.`;
-        } else if (status === 'delivered') {
-          title = 'Order Delivered! 🎉';
-          body = `Your order #${fullOrder.order_number} has been delivered successfully. Enjoy your fresh products!`;
-        }
-
-        if (title) {
-          notificationService.sendToUser(fullOrder.user_id, title, body, { 
-            type: 'delivery_update', 
-            status: status, 
-            order_id: fullOrder.id 
-          });
-        }
+      if (title) {
+        await notificationService.sendToUser(updatedOrder.user_id, title, body, { 
+          type: 'delivery_update', 
+          status: status, 
+          order_id: updatedOrder.id 
+        });
       }
     } catch (err) {
       console.error('[Notification Error] Failed to send delivery update:', err);
     }
 
-    return successResponse(res, { delivery: updatedDelivery }, `Status updated to ${status}`);
+    return successResponse(res, { order: updatedOrder }, `Status updated to ${status}`);
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Get Today's Dashboard Stats
+ */
+export const getDashboardStats = async (req, res) => {
+  try {
+    const { data: rider } = await supabaseAdmin
+      .from('riders')
+      .select('id, user_id')
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (!rider) return errorResponse(res, 'Rider not found', 404);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const { count, error: countError } = await supabaseAdmin
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('rider_id', rider.user_id)
+      .eq('status', 'delivered')
+      .gte('updated_at', today.toISOString());
+
+    const { data: activity, error: activityError } = await supabaseAdmin
+      .from('orders')
+      .select('id, order_number, status, updated_at, store:stores(name)')
+      .eq('rider_id', rider.user_id)
+      .order('updated_at', { ascending: false })
+      .limit(5);
+
+    const recent_activity = (activity || []).map(a => ({
+      id: a.id,
+      title: `Order ${a.status.replace('_', ' ')} #${a.order_number}`,
+      time: new Date(a.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      location: a.store?.name || 'Local'
+    }));
+
+    return successResponse(res, {
+      today_orders: count || 0,
+      recent_activity
+    });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Get Complete Order History
+ */
+export const getOrderHistory = async (req, res) => {
+  const { startDate, endDate, status, page = 1, pageSize = 20 } = req.query;
+  const from = (Number(page) - 1) * Number(pageSize);
+  const to = from + Number(pageSize) - 1;
+
+  try {
+    const { data: rider } = await supabaseAdmin
+      .from('riders')
+      .select('id, user_id')
+      .eq('user_id', req.user.id)
+      .single();
+
+    let query = supabaseAdmin
+      .from('orders')
+      .select('*, store:stores(name)', { count: 'exact' })
+      .eq('rider_id', rider.user_id);
+
+    if (startDate) query = query.gte('updated_at', startDate);
+    if (endDate) query = query.lte('updated_at', `${endDate} 23:59:59`);
+    if (status && status !== 'all') query = query.eq('status', status);
+
+    const { data, count, error } = await query
+      .order('updated_at', { ascending: false })
+      .range(from, to);
+
+    if (error) return errorResponse(res, 'Failed to fetch history', 400, error);
+
+    const formattedOrders = data.map(o => ({
+      id: o.order_number,
+      original_id: o.id,
+      date: new Date(o.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      status: o.status,
+      store: o.store?.name || 'Hub'
+    }));
+
+    return successResponse(res, { 
+      orders: formattedOrders,
+      pagination: {
+        total: count,
+        page: Number(page),
+        pageSize: Number(pageSize)
+      }
+    });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Get Specific Order Details for Rider
+ */
+export const getOrderDetails = async (req, res) => {
+  const { orderId } = req.params;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .select(`
+        *,
+        store:stores(*),
+        address:addresses(*),
+        customer:profiles!user_id(full_name, phone, email),
+        items:order_items(*)
+      `)
+      .eq('id', orderId)
+      .single();
+
+    if (error) return errorResponse(res, 'Order details not found', 404, error);
+    return successResponse(res, { order: data });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Get Available Orders Pool (Pending Assignment)
+ */
+export const getAvailableOrders = async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .select('*, store:stores(name, address)')
+      .eq('status', 'ready')
+      .is('rider_id', null)
+      .order('created_at', { ascending: false });
+
+    if (error) return errorResponse(res, 'Failed to fetch available orders', 400, error);
+
+    const formattedOrders = data.map(o => ({
+      id: o.order_number,
+      original_id: o.id,
+      date: new Date(o.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      status: o.status,
+      store: o.store?.name || 'Store',
+      store_address: o.store?.address || ''
+    }));
+
+    return successResponse(res, { orders: formattedOrders });
   } catch (error) {
     return errorResponse(res, 'Internal server error', 500, error);
   }

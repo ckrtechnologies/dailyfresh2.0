@@ -182,8 +182,13 @@ const Notifications = () => {
       accessor: 'type',
       align: 'center',
       render: (row) => (
-        <span className={`badge badge-${row.type === 'promo' ? 'active' : row.type === 'system' ? 'failed' : 'processing'}`}>
-          {row.type.toUpperCase()}
+        <span className={`badge badge-${
+          row.type === 'promo' ? 'active' : 
+          row.type === 'system' ? 'failed' : 
+          row.type === 'NEW_ORDER_AVAILABLE' ? 'warning' :
+          row.type === 'order' ? 'processing' : 'disabled'
+        }`}>
+          {row.type.replace(/_/g, ' ').toUpperCase()}
         </span>
       )
     },
@@ -329,8 +334,14 @@ const Notifications = () => {
                   <option value="promo">Promotion 🎁</option>
                   <option value="system">System Alert ⚠️</option>
                   <option value="order">Order Update 📦</option>
+                  <option value="NEW_ORDER_AVAILABLE">New Order Available (Rider Alert) 🚨</option>
                   <option value="wallet">Wallet/Payment 💰</option>
                 </select>
+                {formData.type === 'NEW_ORDER_AVAILABLE' && (
+                  <p style={{ fontSize: '11px', color: 'var(--warning)', marginTop: '4px', fontWeight: '500' }}>
+                    🚨 This will trigger the "Accept Order" modal and continuous vibration on the rider app.
+                  </p>
+                )}
               </div>
               <div className="form-group">
                 <label>IMAGE URL (OPTIONAL)</label>

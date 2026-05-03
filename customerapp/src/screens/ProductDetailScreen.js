@@ -98,7 +98,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
     fetchDetail();
     fetchConfig();
-    
+
     // Sync initial quantity if already in cart
     const existingItem = cartItems.find(i => i.id === productId && !i.variant);
     if (existingItem) {
@@ -187,15 +187,15 @@ const ProductDetailScreen = ({ route, navigation }) => {
         : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim().toLowerCase()) : []);
 
       const normalizedSlot = selectedSlot.toLowerCase();
-      const legacyMap = { 
-        'tmrw_morning': ['morning', 'tomorrow morning'], 
-        'today_evening': ['afternoon', 'today evening'], 
+      const legacyMap = {
+        'tmrw_morning': ['morning', 'tomorrow morning'],
+        'today_evening': ['afternoon', 'today evening'],
         'tmrw_evening': ['evening', 'tomorrow evening'],
         'express': ['express', 'express delivery']
       };
-      
+
       const allowedMatches = [normalizedSlot, ...(legacyMap[normalizedSlot] || [])];
-      
+
       return info.some(slot => {
         const s = slot.toLowerCase();
         return allowedMatches.includes(s);
@@ -447,7 +447,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
                           let icon = 'truck-delivery-outline';
                           let color = '#64748b'; // Default Slate
 
-                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#CA8A04'; } 
+                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#CA8A04'; }
                           else if (slot.toLowerCase().includes('today evening')) { icon = 'weather-night'; color = '#166534'; }
                           else if (slot.toLowerCase().includes('tomorrow evening')) { icon = 'weather-night'; color = '#1E40AF'; }
                           else if (slot.toLowerCase().includes('afternoon')) { icon = 'weather-partly-cloudy'; color = '#3b82f6'; }
@@ -627,7 +627,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
             )}
           </View>
         )}
-        
+
         {!isAvailable ? (
           <View style={[styles.addBtn, { backgroundColor: '#cbd5e1', flex: 1 }]}>
             <Text style={styles.addBtnText}>UNAVAILABLE FOR THIS SLOT</Text>

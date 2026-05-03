@@ -69,7 +69,7 @@ const AppContent = () => {
               access_token: params.access_token,
               refresh_token: params.refresh_token,
             });
-            
+
             // Only log errors that aren't related to "Session Missing" race conditions
             if (error && !error.message.includes('AuthSessionMissingError')) {
               console.error('Error setting session:', error);
@@ -92,67 +92,67 @@ const AppContent = () => {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth State Changed:', event, session ? 'Session exists' : 'No session');
 
-        // Handle all events that mean we have a valid session
-        const isActiveSession = (
-          event === 'SIGNED_IN' ||
-          event === 'INITIAL_SESSION' ||
-          event === 'TOKEN_REFRESHED'
-        );
+      // Handle all events that mean we have a valid session
+      const isActiveSession = (
+        event === 'SIGNED_IN' ||
+        event === 'INITIAL_SESSION' ||
+        event === 'TOKEN_REFRESHED'
+      );
 
-        if (isActiveSession && session) {
-          // IMPORTANT: If this is a fresh login, clear any stale location data immediately
-          if (event === 'SIGNED_IN') {
-            dispatch(clearLocation());
-          }
-          
-          setAccessToken(session.access_token);
-          dispatch(hydrateAuth(session.access_token));
+      if (isActiveSession && session) {
+        // IMPORTANT: If this is a fresh login, clear any stale location data immediately
+        if (event === 'SIGNED_IN') {
+          dispatch(clearLocation());
+        }
 
-          // Fetch real profile from backend
-          if (event === 'SIGNED_IN') {
-            try {
-              const res = await authService.getUserProfile();
-              let backendUser = res.success ? res.data : session.user;
+        setAccessToken(session.access_token);
+        dispatch(hydrateAuth(session.access_token));
 
-              if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
-                const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
-                const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
+        // Fetch real profile from backend
+        if (event === 'SIGNED_IN') {
+          try {
+            const res = await authService.getUserProfile();
+            let backendUser = res.success ? res.data : session.user;
 
-                if (providerName || providerAvatar) {
-                  try {
-                    const updatePayload = {};
-                    if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
-                    if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
+            if (res.success && (!res.data.full_name || !res.data.avatar_url)) {
+              const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
+              const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
 
-                    if (Object.keys(updatePayload).length > 0) {
-                      const updateRes = await authService.updateProfile(updatePayload);
-                      if (updateRes.success) {
-                        backendUser = { ...backendUser, ...updatePayload };
-                      }
+              if (providerName || providerAvatar) {
+                try {
+                  const updatePayload = {};
+                  if (!res.data.full_name && providerName) updatePayload.full_name = providerName;
+                  if (!res.data.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
+
+                  if (Object.keys(updatePayload).length > 0) {
+                    const updateRes = await authService.updateProfile(updatePayload);
+                    if (updateRes.success) {
+                      backendUser = { ...backendUser, ...updatePayload };
                     }
-                  } catch (err) {
-                    console.error('Auto profile update failed', err);
                   }
+                } catch (err) {
+                  console.error('Auto profile update failed', err);
                 }
               }
-
-              dispatch(setCredentials({ user: backendUser, token: session.access_token }));
-              if (res.success) {
-                setProfileLoaded(true);
-                // 3. Restore Favorites & Cart from Backend
-                dispatch(fetchFavoritesAsync());
-              }
-            } catch (e) {
-              console.error('Error fetching profile after auth change:', e);
-              dispatch(setCredentials({ user: session.user, token: session.access_token }));
-              setProfileLoaded(false);
             }
+
+            dispatch(setCredentials({ user: backendUser, token: session.access_token }));
+            if (res.success) {
+              setProfileLoaded(true);
+              // 3. Restore Favorites & Cart from Backend
+              dispatch(fetchFavoritesAsync());
+            }
+          } catch (e) {
+            console.error('Error fetching profile after auth change:', e);
+            dispatch(setCredentials({ user: session.user, token: session.access_token }));
+            setProfileLoaded(false);
           }
-        } else if (event === 'SIGNED_OUT') {
+        }
+      } else if (event === 'SIGNED_OUT') {
         console.log('🚪 [AUTH] User signed out, clearing all data...');
         setAccessToken(null);
         setProfileLoaded(false);
-        
+
         // 1. Reset Redux state IMMEDIATELY to avoid race conditions
         dispatch(logout());
         dispatch(clearLocation());
@@ -161,7 +161,7 @@ const AppContent = () => {
         dispatch(clearOrders());
         dispatch(resetConfig());
         dispatch(clearProducts());
-        
+
         // 2. Clear all storage in background
         storage.clearAll().catch(err => {
           console.error('Error during logout cleanup:', err);
@@ -179,7 +179,7 @@ const AppContent = () => {
         if (session) {
           setAccessToken(session.access_token);
           dispatch(hydrateAuth(session.access_token));
-          
+
           // Fetch real profile from backend with the fresh token
           const res = await authService.getUserProfile();
           if (res.success) {
@@ -188,12 +188,12 @@ const AppContent = () => {
             if (!backendUser.full_name || !backendUser.avatar_url) {
               const providerName = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name;
               const providerAvatar = session.user?.user_metadata?.avatar_url || session.user?.user_metadata?.picture;
-              
+
               if (providerName || providerAvatar) {
                 const updatePayload = {};
                 if (!backendUser.full_name && providerName) updatePayload.full_name = providerName;
                 if (!backendUser.avatar_url && providerAvatar) updatePayload.avatar_url = providerAvatar;
-                
+
                 if (Object.keys(updatePayload).length > 0) {
                   const updateRes = await authService.updateProfile(updatePayload);
                   if (updateRes.success) backendUser = { ...backendUser, ...updatePayload };
@@ -269,25 +269,25 @@ const AppContent = () => {
     const validateLocation = async () => {
       if (isReady && locationHydrated) {
         const { pincode, coords, storeId } = store.getState().location;
-        
+
         // If we have a location but no storeId, or if we just logged in, re-verify
         if ((pincode || coords) && !storeId) {
           try {
             const params = {};
             if (coords) { params.lat = coords.lat; params.lng = coords.lng; }
             if (pincode) params.pincode = pincode;
-            
+
             const res = await apiClient.get('/customer/stores/nearest', { params });
             const storeData = res.data?.data?.store;
-            
+
             if (!storeData) {
               dispatch(hydrateLocation({ ...store.getState().location, isServiceable: false }));
             } else {
-              dispatch(hydrateLocation({ 
-                ...store.getState().location, 
-                storeId: storeData.id, 
+              dispatch(hydrateLocation({
+                ...store.getState().location,
+                storeId: storeData.id,
                 storeName: storeData.name,
-                isServiceable: true 
+                isServiceable: true
               }));
             }
           } catch (e) {
@@ -317,7 +317,7 @@ const AppContent = () => {
       }
     };
     fetchSavedCart();
-    
+
     const fetchSavedFavorites = async () => {
       if (isReady && profileLoaded && token && user) {
         const res = await favoritesService.getFavorites();

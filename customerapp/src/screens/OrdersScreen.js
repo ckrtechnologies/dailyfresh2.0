@@ -78,6 +78,7 @@ const OrdersScreen = ({ navigation }) => {
       case 'ready':
         return '#3B82F6'; // In Progress -> Blue
       case 'out_for_delivery':
+      case 'picked_up':
       case 'delivered':
         return '#22C55E'; // Active/Delivered -> Green
       case 'cancelled':
@@ -144,7 +145,7 @@ const OrdersScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {item.status === 'out_for_delivery' && item.rider && (
+        {(item.status === 'out_for_delivery' || item.status === 'picked_up') && item.rider && (
           <View style={styles.riderBar}>
             <View style={styles.riderInfoMini}>
               <Icon name="account-clock" size={18} color={COLORS.primary} />

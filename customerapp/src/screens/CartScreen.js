@@ -19,7 +19,7 @@ const CartScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { items, totalAmount } = useSelector((state) => state.cart);
   const { address, selectedAddress } = useSelector((state) => state.location);
-  
+
   const [gstRate, setGstRate] = useState(12);
   const [deliveryFee, setDeliveryFee] = useState(30);
   const flatListRef = useRef(null);
@@ -134,9 +134,9 @@ const CartScreen = ({ navigation }) => {
           <Text style={styles.footerPrice}>₹{Number(grandTotal || 0).toFixed(2)}</Text>
           <Text style={styles.footerSub}>Incl. all taxes</Text>
         </View>
-        
+
         {selectedAddress ? (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.checkoutBtn}
             onPress={() => navigation.navigate('Checkout')}
           >
@@ -144,7 +144,7 @@ const CartScreen = ({ navigation }) => {
             <Icon name="chevron-right" size={24} color={COLORS.white} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.checkoutBtn, { backgroundColor: '#f59e0b' }]}
             onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}
           >

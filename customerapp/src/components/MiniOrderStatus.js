@@ -62,6 +62,7 @@ const MiniOrderStatus = () => {
       case 'preparing':
         return { label: 'Preparing Items', icon: 'food-variant', color: '#3B82F6' };
       case 'out_for_delivery':
+      case 'picked_up':
         return { label: 'Out for Delivery', icon: 'truck-delivery', color: '#8B5CF6' };
       default:
         return { label: status, icon: 'information-outline', color: COLORS.gray };

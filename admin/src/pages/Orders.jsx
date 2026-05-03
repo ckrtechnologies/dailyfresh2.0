@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Clock, Eye } from 'lucide-react';
+import OrderDetailModal from '../components/modals/OrderDetailModal';
 import apiClient from '../services/api';
 import DataTable from '../components/common/DataTable';
 import { useFilters } from '../context/FilterContext';
@@ -10,6 +11,7 @@ const Orders = () => {
   const { isAdmin, user } = useAuth();
   const { globalStoreId, dateRange, searchQuery } = useFilters();
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [status, setStatus] = useState('all');
   const [updatingId, setUpdatingId] = useState(null);
   const [showOnlyMe, setShowOnlyMe] = useState(false);
@@ -55,7 +57,9 @@ const Orders = () => {
       case 'delivered': return 'badge-active';
       case 'cancelled': 
       case 'failed': return 'badge-failed';
-      case 'out_for_delivery': return 'badge-delivery';
+      case 'accepted':
+      case 'out_for_delivery':
+      case 'picked_up': return 'badge-delivery';
       case 'ready': return 'badge-ready';
       case 'preparing': return 'badge-processing';
       case 'placed':
@@ -169,16 +173,10 @@ const Orders = () => {
                 </button>
               )}
               {row.status === 'ready' && (
-                <button 
-                  onClick={() => {
-                    // This would ideally open a rider assignment modal
-                    const riderId = prompt('Enter Rider ID (Mock for now):');
-                    if (riderId) updateStatusMutation.mutate({ orderId: row.id, newStatus: 'out_for_delivery', riderId });
-                  }}
-                  className="btn-text-action btn-dispatch"
-                >
-                  Assign Rider
-                </button>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Waiting for Rider</span>
+              )}
+              {row.status === 'accepted' && (
+                <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 'bold' }}>Accepted by Rider</span>
               )}
               
               {(['placed', 'confirmed', 'preparing', 'ready'].includes(row.status)) && (
@@ -194,7 +192,12 @@ const Orders = () => {
                 </button>
               )}
 
-              <button className="btn-icon" title="View Detail" style={{ color: '#64748b' }}>
+              <button 
+                className="btn-icon" 
+                title="View Detail" 
+                style={{ color: '#64748b' }}
+                onClick={() => setSelectedOrder(row)}
+              >
                 <Eye size={16} />
               </button>
             </>
@@ -223,6 +226,7 @@ const Orders = () => {
             <option value="confirmed">Confirmed</option>
             <option value="preparing">Preparing</option>
             <option value="ready">Ready for Pickup</option>
+            <option value="accepted">Accepted by Rider</option>
             <option value="out_for_delivery">Out for Delivery</option>
             <option value="delivered">Delivered</option>
             <option value="cancelled">Cancelled</option>
@@ -249,6 +253,13 @@ const Orders = () => {
         onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
         onPageSizeChange={(pageSize) => setPagination({ page: 1, pageSize })}
       />
+
+      {selectedOrder && (
+        <OrderDetailModal 
+          order={selectedOrder} 
+          onClose={() => setSelectedOrder(null)} 
+        />
+      )}
     </div>
   );
 };

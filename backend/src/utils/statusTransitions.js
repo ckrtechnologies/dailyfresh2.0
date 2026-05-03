@@ -5,8 +5,9 @@ export const ALLOWED_TRANSITIONS = {
   placed:           ['confirmed', 'cancelled', 'failed'],
   confirmed:        ['preparing', 'cancelled'],
   preparing:        ['ready', 'cancelled'],
-  ready:            ['out_for_delivery'],
-  out_for_delivery: ['delivered'],
+  ready:            ['accepted', 'cancelled'],
+  accepted:         ['out_for_delivery', 'cancelled'],
+  out_for_delivery: ['delivered', 'cancelled'],
   delivered:        [],
   cancelled:        [],
   failed:           [],
@@ -17,8 +18,8 @@ export const ALLOWED_TRANSITIONS = {
  */
 export const ROLE_ALLOWED_STATUSES = {
   store:  ['confirmed', 'preparing', 'ready'],
-  rider:  ['out_for_delivery', 'delivered'],
-  admin:  ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'],
+  rider:  ['accepted', 'out_for_delivery', 'delivered'],
+  admin:  ['confirmed', 'preparing', 'ready', 'accepted', 'out_for_delivery', 'delivered', 'cancelled'],
   system: ['placed', 'failed', 'cancelled'],
 };
 

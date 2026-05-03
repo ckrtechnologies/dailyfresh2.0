@@ -43,16 +43,29 @@ export const sendManualNotification = async (req, res) => {
  * Admin: Get Notification History
  */
 export const getAllNotifications = async (req, res) => {
+  const { page = 1, pageSize = 50, search } = req.query;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('notifications')
-      .select('*, profile:profiles(full_name, email, role)')
-      .order('created_at', { ascending: false })
-      .limit(100);
+      .select('*, profile:profiles(full_name, email, role)', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,body.ilike.%${search}%`);
+    }
+
+    const { data, count, error } = await query.range(from, to);
 
     if (error) throw error;
-    return successResponse(res, { notifications: data });
+    return successResponse(res, { 
+      notifications: data,
+      pagination: { total: count, page: Number(page), pageSize: Number(pageSize) }
+    });
   } catch (error) {
+    console.error('[NMS] Fetch History Error:', error);
     return errorResponse(res, 'Failed to fetch notification history', 500, error);
   }
 };

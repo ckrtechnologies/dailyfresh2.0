@@ -69,7 +69,8 @@ const OrderDetailScreen = ({ route, navigation }) => {
       case 'confirmed': return '#4CAF50'; // Green
       case 'preparing': return '#2196F3'; // Blue
       case 'ready': return '#3F51B5'; // Indigo
-      case 'out_for_delivery': return '#9C27B0'; // Purple
+      case 'out_for_delivery':
+      case 'picked_up': return '#9C27B0'; // Purple
       case 'delivered': return '#2E7D32'; // Dark Green
       case 'cancelled': return '#F44336'; // Red
       case 'failed': return '#757575'; // Gray
@@ -78,6 +79,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
   };
 
   const getStatusText = (status) => {
+    if (status === 'picked_up') return 'ON THE WAY';
     return status?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN';
   };
 
@@ -147,11 +149,11 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
   const isCancelled = order.status === 'cancelled';
   const orderSteps = [
-    { id: 'placed', title: 'Order Placed', statuses: ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] },
-    { id: 'confirmed', title: 'Confirmed', statuses: ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] },
-    { id: 'preparing', title: 'Packing', statuses: ['preparing', 'ready', 'out_for_delivery', 'delivered'] },
-    { id: 'ready', title: 'Ready', statuses: ['ready', 'out_for_delivery', 'delivered'] },
-    { id: 'out_for_delivery', title: 'On the Way', statuses: ['out_for_delivery', 'delivered'] },
+    { id: 'placed', title: 'Order Placed', statuses: ['placed', 'confirmed', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered'] },
+    { id: 'confirmed', title: 'Confirmed', statuses: ['confirmed', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered'] },
+    { id: 'preparing', title: 'Packing', statuses: ['preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered'] },
+    { id: 'ready', title: 'Ready', statuses: ['ready', 'picked_up', 'out_for_delivery', 'delivered'] },
+    { id: 'out_for_delivery', title: 'On the Way', statuses: ['picked_up', 'out_for_delivery', 'delivered'], isActive: (s) => s === 'picked_up' || s === 'out_for_delivery' },
     { id: 'delivered', title: 'Delivered', statuses: ['delivered'] },
   ];
 
@@ -235,7 +237,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
                 <StatusStep 
                   key={step.id}
                   title={step.title}
-                  active={order.status === step.id}
+                  active={step.isActive ? step.isActive(order.status) : order.status === step.id}
                   completed={step.statuses.includes(order.status)}
                   last={index === orderSteps.length - 1}
                 />
@@ -244,7 +246,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* Rider Details (Prominent version) */}
-          {order.rider && (order.status === 'out_for_delivery' || order.status === 'delivered') && (
+          {order.rider && (order.status === 'picked_up' || order.status === 'out_for_delivery') && (
             <View style={styles.riderProminentCard}>
               <View style={styles.riderAvatar}>
                 <Icon name="account" size={24} color={COLORS.primary} />
@@ -255,7 +257,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
                   {order.status === 'delivered' ? 'Delivered your order' : 'Is delivering your order'}
                 </Text>
               </View>
-              {order.status === 'out_for_delivery' && (
+              {(order.status === 'picked_up' || order.status === 'out_for_delivery') && (
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <TouchableOpacity 
                     onPress={() => Linking.openURL(`tel:${order.rider.phone}`)}
