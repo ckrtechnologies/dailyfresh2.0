@@ -121,26 +121,37 @@ const CartScreen = ({ navigation }) => {
         ListFooterComponent={() => (
           <View style={styles.billContainer}>
             <Text style={styles.billTitle}>Bill Details</Text>
-            <View style={styles.billRow}><Text style={styles.billLabel}>Item Total</Text><Text style={styles.billValue}>₹{totalAmount.toFixed(2)}</Text></View>
-            <View style={styles.billRow}><Text style={styles.billLabel}>Delivery Fee</Text><Text style={[styles.billValue, currentDeliveryFee === 0 && { color: COLORS.primary }]}>{currentDeliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</Text></View>
-            <View style={styles.billRow}><Text style={styles.billLabel}>Taxes</Text><Text style={styles.billValue}>₹{tax.toFixed(2)}</Text></View>
-            <View style={[styles.billRow, styles.totalRow]}><Text style={styles.totalLabel}>Grand Total</Text><Text style={styles.totalValue}>₹{grandTotal.toFixed(2)}</Text></View>
+            <View style={styles.billRow}><Text style={styles.billLabel}>Item Total</Text><Text style={styles.billValue}>₹{Number(totalAmount || 0).toFixed(2)}</Text></View>
+            <View style={styles.billRow}><Text style={styles.billLabel}>Delivery Fee</Text><Text style={[styles.billValue, currentDeliveryFee === 0 && { color: COLORS.primary }]}>{currentDeliveryFee === 0 ? 'FREE' : `₹${Number(deliveryFee || 0).toFixed(2)}`}</Text></View>
+            <View style={styles.billRow}><Text style={styles.billLabel}>Taxes</Text><Text style={styles.billValue}>₹{Number(tax || 0).toFixed(2)}</Text></View>
+            <View style={[styles.billRow, styles.totalRow]}><Text style={styles.totalLabel}>Grand Total</Text><Text style={styles.totalValue}>₹{Number(grandTotal || 0).toFixed(2)}</Text></View>
           </View>
         )}
       />
 
       <View style={styles.footer}>
         <View>
-          <Text style={styles.footerPrice}>₹{grandTotal.toFixed(2)}</Text>
+          <Text style={styles.footerPrice}>₹{Number(grandTotal || 0).toFixed(2)}</Text>
           <Text style={styles.footerSub}>Incl. all taxes</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.checkoutBtn}
-          onPress={() => navigation.navigate('Checkout')}
-        >
-          <Text style={styles.checkoutText}>Proceed to Checkout</Text>
-          <Icon name="chevron-right" size={24} color={COLORS.white} />
-        </TouchableOpacity>
+        
+        {selectedAddress ? (
+          <TouchableOpacity 
+            style={styles.checkoutBtn}
+            onPress={() => navigation.navigate('Checkout')}
+          >
+            <Text style={styles.checkoutText}>Proceed to Checkout</Text>
+            <Icon name="chevron-right" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={[styles.checkoutBtn, { backgroundColor: '#f59e0b' }]}
+            onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}
+          >
+            <Text style={styles.checkoutText}>Pick Delivery Address</Text>
+            <Icon name="map-marker-plus" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

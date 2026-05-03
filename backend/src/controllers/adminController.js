@@ -1205,9 +1205,12 @@ export const createBanner = async (req, res) => {
 
 export const updateBanner = async (req, res) => {
   const { id } = req.params;
+  const { image_url: bodyUrl } = req.body;
   const updateData = { ...req.body };
 
-  if (req.file || req.files) updateData.image_url = getImageUrl(req.file, bodyUrl, req);
+  if (req.file || req.files) {
+    updateData.image_url = getImageUrl(req.file, bodyUrl, req);
+  }
   delete updateData.imageFile; // Remove frontend-only field
 
   try {

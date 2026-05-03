@@ -84,7 +84,12 @@ const ProductDetailScreen = ({ route, navigation }) => {
       try {
         const res = await productService.getSettings();
         if (res.success && res.data.delivery_slots_config) {
-          setDeliverySlotsConfig(JSON.parse(res.data.delivery_slots_config));
+          try {
+            setDeliverySlotsConfig(JSON.parse(res.data.delivery_slots_config));
+          } catch (parseError) {
+            console.error('Failed to parse delivery_slots_config:', parseError);
+            setDeliverySlotsConfig({}); // Fallback to empty object
+          }
         }
       } catch (error) {
         console.error('Error fetching delivery config:', error);
@@ -93,7 +98,13 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
     fetchDetail();
     fetchConfig();
-  }, [productId]);
+    
+    // Sync initial quantity if already in cart
+    const existingItem = cartItems.find(i => i.id === productId && !i.variant);
+    if (existingItem) {
+      setQuantity(existingItem.quantity);
+    }
+  }, [productId, cartItems]);
 
   const fetchSimilarProducts = async (subCategoryId) => {
     try {
@@ -167,23 +178,72 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const sellingPrice = product.discount_price || product.price;
   const hasDiscount = product.discount_price && product.discount_price < product.price;
 
+  // Availability Logic
+  const getAvailableVariants = () => {
+    if (!product.variants || product.variants.length === 0) return [];
+    return product.variants.filter(variant => {
+      const info = Array.isArray(variant.delivery_info)
+        ? variant.delivery_info
+        : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim().toLowerCase()) : []);
+
+      const normalizedSlot = selectedSlot.toLowerCase();
+      const legacyMap = { 
+        'tmrw_morning': ['morning', 'tomorrow morning'], 
+        'today_evening': ['afternoon', 'today evening'], 
+        'tmrw_evening': ['evening', 'tomorrow evening'],
+        'express': ['express', 'express delivery']
+      };
+      
+      const allowedMatches = [normalizedSlot, ...(legacyMap[normalizedSlot] || [])];
+      
+      return info.some(slot => {
+        const s = slot.toLowerCase();
+        return allowedMatches.includes(s);
+      }) || info.length === 0;
+    });
+  };
+
+  const availableVariants = getAvailableVariants();
+  const hasVariants = product.variants?.length > 0;
+
+  const isProductSlotAvailable = () => {
+    if (hasVariants) return availableVariants.length > 0;
+
+    const options = product.delivery_options || [];
+    const normalizedSlot = selectedSlot.toLowerCase();
+    const legacyMap = { 'tmrw_morning': 'morning', 'today_evening': 'afternoon', 'tmrw_evening': 'evening' };
+
+    return options.some(opt => {
+      const o = opt.toLowerCase();
+      return o === normalizedSlot || o === legacyMap[normalizedSlot];
+    });
+  };
+
+  const isAvailable = isProductSlotAvailable();
+
   return (
     <View style={styles.container}>
-      <StatusBar 
-        backgroundColor={activeTheme.primary} 
+      <StatusBar
+        backgroundColor={activeTheme.primary}
         barStyle="light-content"
       />
       {/* Header with Premium Icons */}
-      <View style={[styles.header, { backgroundColor: activeTheme.primary }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
+        >
           <Icon name="chevron-left" size={28} color={COLORS.white} />
         </TouchableOpacity>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
+            onPress={handleShare}
+          >
             <Icon name="share-variant" size={22} color={COLORS.white} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.iconButton}
+            style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
             onPress={handleToggleFavorite}
           >
             <Icon
@@ -203,7 +263,14 @@ const ProductDetailScreen = ({ route, navigation }) => {
           <Text style={styles.name}>{product.name}</Text>
           <Text style={styles.weight}>{product.weight_unit || '500g'}</Text>
 
-          {!(product.variants?.length > 0) && (
+          {!isAvailable && (
+            <View style={styles.unavailableBanner}>
+              <Icon name="alert-circle-outline" size={20} color="#ef4444" />
+              <Text style={styles.unavailableText}>Not available for your selected delivery slot</Text>
+            </View>
+          )}
+
+          {isAvailable && !hasVariants && (
             <View style={styles.priceRow}>
               <View style={styles.priceContainer}>
                 <Text style={styles.price}>₹{sellingPrice}</Text>
@@ -266,87 +333,91 @@ const ProductDetailScreen = ({ route, navigation }) => {
             </View>
           </View> */}
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Icon name="truck-delivery" size={22} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.sectionTitle}>Delivery Availability</Text>
-            </View>
-            <View style={styles.deliveryGrid}>
-              {(product.delivery_options || ['express']).map((opt) => {
-                const normalizedOpt = opt === 'morning' ? 'tmrw_morning' : 
-                                    opt === 'afternoon' ? 'today_evening' : opt;
+          {!(product.variants?.length > 0) && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Icon name="truck-delivery" size={22} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.sectionTitle}>Delivery Availability</Text>
+              </View>
+              <View style={styles.deliveryGrid}>
+                {(product.delivery_options || ['express']).map((opt) => {
+                  const normalizedOpt = opt === 'morning' ? 'tmrw_morning' :
+                    opt === 'afternoon' ? 'today_evening' : opt;
 
-                const isExpress = normalizedOpt === 'express';
-                const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
-                if (!hasStock) return null;
+                  const isExpress = normalizedOpt === 'express';
+                  const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
+                  if (!hasStock) return null;
 
-                const config = (deliverySlotsConfig && deliverySlotsConfig[normalizedOpt]) || {
-                  label: normalizedOpt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                  time: isExpress ? '90 Mins' : 'Scheduled',
-                  icon: isExpress ? 'lightning-bolt' : 'clock-outline',
-                  color: isExpress ? '#F59E0B' : COLORS.primary
-                };
+                  const config = (deliverySlotsConfig && deliverySlotsConfig[normalizedOpt]) || {
+                    label: normalizedOpt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    time: isExpress ? '90 Mins' : 'Scheduled',
+                    icon: isExpress ? 'lightning-bolt' : 'clock-outline',
+                    color: isExpress ? '#F59E0B' : COLORS.primary
+                  };
 
-                const isActive = normalizedOpt === selectedSlot;
+                  const isActive = normalizedOpt === selectedSlot;
 
-                return (
-                  <View
-                    key={opt}
-                    style={[
-                      styles.deliveryCard, 
-                      { 
-                        backgroundColor: isActive ? config.color : COLORS.white,
-                        borderColor: isActive ? config.color : '#e2e8f0',
-                      }
-                    ]}
-                  >
-                    <View style={[styles.deliveryIconContainer, { backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : config.color + '10' }]}>
-                      <Icon name={config.icon} size={24} color={isActive ? COLORS.white : config.color} />
-                    </View>
-                    <Text style={[styles.deliveryLabel, { color: isActive ? COLORS.white : COLORS.dark }]} numberOfLines={1}>
-                      {config.label}
-                    </Text>
-                    <Text style={[styles.deliveryTime, { color: isActive ? 'rgba(255,255,255,0.8)' : COLORS.gray }]}>
-                      {config.time}
-                    </Text>
-                    {isActive && (
-                      <View style={styles.activeBadge}>
-                        <Icon name="check" size={12} color={config.color} />
+                  return (
+                    <View
+                      key={opt}
+                      style={[
+                        styles.deliveryCard,
+                        {
+                          backgroundColor: isActive ? config.color : COLORS.white,
+                          borderColor: isActive ? config.color : '#e2e8f0',
+                        }
+                      ]}
+                    >
+                      <View style={[styles.deliveryIconContainer, { backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : config.color + '10' }]}>
+                        <Icon name={config.icon} size={24} color={isActive ? COLORS.white : config.color} />
                       </View>
-                    )}
-                  </View>
-                );
-              })}
+                      <Text style={[styles.deliveryLabel, { color: isActive ? COLORS.white : COLORS.dark }]} numberOfLines={1}>
+                        {config.label}
+                      </Text>
+                      <Text style={[styles.deliveryTime, { color: isActive ? 'rgba(255,255,255,0.8)' : COLORS.gray }]}>
+                        {config.time}
+                      </Text>
+                      {isActive && (
+                        <View style={styles.activeBadge}>
+                          <Icon name="check" size={12} color={config.color} />
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Product Detail Tabs */}
-          <View style={styles.tabContainer}>
-            {product.variants?.length > 0 && (
+          {isAvailable && (
+            <View style={styles.tabContainer}>
+              {hasVariants && (
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'customize' && styles.activeTab]}
+                  onPress={() => setActiveTab('customize')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'customize' && styles.activeTabText]}>Customize</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={[styles.tab, activeTab === 'customize' && styles.activeTab]}
-                onPress={() => setActiveTab('customize')}
+                style={[styles.tab, activeTab === 'about' && styles.activeTab]}
+                onPress={() => setActiveTab('about')}
               >
-                <Text style={[styles.tabText, activeTab === 'customize' && styles.activeTabText]}>Customize</Text>
+                <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>About</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'about' && styles.activeTab]}
-              onPress={() => setActiveTab('about')}
-            >
-              <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>About</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'recipe' && styles.activeTab]}
-              onPress={() => setActiveTab('recipe')}
-            >
-              <Text style={[styles.tabText, activeTab === 'recipe' && styles.activeTabText]}>Recipe</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'recipe' && styles.activeTab]}
+                onPress={() => setActiveTab('recipe')}
+              >
+                <Text style={[styles.tabText, activeTab === 'recipe' && styles.activeTabText]}>Recipe</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-          {activeTab === 'customize' && product.variants?.length > 0 && (
+          {isAvailable && activeTab === 'customize' && hasVariants && (
             <View style={styles.tabContent}>
-              {product.variants.map((variant) => (
+              {availableVariants.map((variant) => (
                 <View key={variant.id} style={styles.variantCard}>
                   <View style={styles.variantTop}>
                     <View style={styles.variantInfo}>
@@ -376,7 +447,9 @@ const ProductDetailScreen = ({ route, navigation }) => {
                           let icon = 'truck-delivery-outline';
                           let color = '#64748b'; // Default Slate
 
-                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#f59e0b'; }
+                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#CA8A04'; } 
+                          else if (slot.toLowerCase().includes('today evening')) { icon = 'weather-night'; color = '#166534'; }
+                          else if (slot.toLowerCase().includes('tomorrow evening')) { icon = 'weather-night'; color = '#1E40AF'; }
                           else if (slot.toLowerCase().includes('afternoon')) { icon = 'weather-partly-cloudy'; color = '#3b82f6'; }
                           else if (slot.toLowerCase().includes('express')) { icon = 'flash'; color = '#ef4444'; }
 
@@ -426,7 +499,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {activeTab === 'about' ? (
+          {isAvailable && activeTab === 'about' && (
             <View style={styles.tabContent}>
               <View style={styles.descriptionSection}>
                 <View style={styles.sectionHeader}>
@@ -449,7 +522,9 @@ const ProductDetailScreen = ({ route, navigation }) => {
                 </View>
               </View>
             </View>
-          ) : (
+          )}
+
+          {isAvailable && activeTab === 'recipe' && (
             <View style={styles.tabContent}>
               {/* Visual Steps from Highlights */}
               {product.product_highlights && product.product_highlights.length > 0 && (
@@ -541,18 +616,25 @@ const ProductDetailScreen = ({ route, navigation }) => {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      <View style={styles.footer}>
-        <View style={styles.totalContainer}>
-          {!(product.variants?.length > 0) && (
-            <>
-              <Text style={styles.totalLabel}>Total Price</Text>
-              <Text style={styles.totalPrice}>₹{sellingPrice * quantity}</Text>
-            </>
-          )}
-        </View>
-        {product.variants?.length > 0 ? (
+      <View style={[styles.footer, getCartQuantity() > 0 && styles.footerInCart]}>
+        {getCartQuantity() === 0 && (
+          <View style={styles.totalContainer}>
+            {!(product.variants?.length > 0) && (
+              <>
+                <Text style={styles.totalLabel}>Total Price</Text>
+                <Text style={styles.totalPrice}>₹{(sellingPrice * quantity).toFixed(2)}</Text>
+              </>
+            )}
+          </View>
+        )}
+        
+        {!isAvailable ? (
+          <View style={[styles.addBtn, { backgroundColor: '#cbd5e1', flex: 1 }]}>
+            <Text style={styles.addBtnText}>UNAVAILABLE FOR THIS SLOT</Text>
+          </View>
+        ) : product.variants?.length > 0 ? (
           <TouchableOpacity
-            style={styles.addBtn}
+            style={[styles.addBtn, { flex: 1 }]}
             onPress={() => {
               if (cartItems.some(i => i.id === product.id)) {
                 navigation.navigate('AppTabs', { screen: 'Cart' });
@@ -561,10 +643,12 @@ const ProductDetailScreen = ({ route, navigation }) => {
               }
             }}
           >
-            <Text style={styles.addBtnText}>ADD TO CART</Text>
+            <Text style={styles.addBtnText}>
+              {cartItems.some(i => i.id === product.id) ? 'VIEW IN CART' : 'ADD TO CART'}
+            </Text>
           </TouchableOpacity>
         ) : getCartQuantity() > 0 ? (
-          <View style={[styles.addBtn, styles.qtySelectorFooter]}>
+          <View style={[styles.addBtn, styles.qtySelectorFooter, { flex: 1 }]}>
             <TouchableOpacity
               style={styles.footerQtyBtn}
               onPress={() => handleRemoveFromCart()}
@@ -590,7 +674,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
             style={styles.addBtn}
             onPress={() => {
               handleAddToCart();
-              navigation.navigate('AppTabs', { screen: 'Cart' });
+              // Removed auto-navigate to cart for better UX, let them stay on page
             }}
           >
             <Text style={styles.addBtnText}>ADD TO CART</Text>
@@ -610,6 +694,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  unavailableBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#fee2e2',
+  },
+  unavailableText: {
+    fontSize: 13,
+    color: '#ef4444',
+    fontWeight: '700',
+    marginLeft: 8,
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -1196,16 +1297,20 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.l,
-    paddingVertical: SPACING.m,
+    paddingTop: SPACING.m,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    elevation: 10,
+    borderTopColor: '#f1f5f9',
+    elevation: 25,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  footerInCart: {
+    paddingHorizontal: 0,
   },
   totalContainer: {
     flex: 1,

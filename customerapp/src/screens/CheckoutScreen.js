@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -23,6 +25,7 @@ import { clearCart } from '../store/slices/cartSlice';
 import { fetchActiveOrder } from '../store/slices/orderSlice';
 import orderService from '../api/orderService';
 import LogoLoader from '../components/LogoLoader';
+import CustomAlert from '../components/CustomAlert';
 
 // Removed DELIVERY_SLOTS constant as it is now managed globally
 
@@ -53,6 +56,23 @@ const CheckoutScreen = ({ navigation }) => {
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
 
+  // Branded Alert State
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: []
+  });
+
+  const showAlert = (title, message, type = 'info', buttons = []) => {
+    setAlertConfig({ visible: true, title, message, type, buttons });
+  };
+
+  const hideAlert = () => {
+    setAlertConfig(prev => ({ ...prev, visible: false }));
+  };
+
   const fetchCoupons = async () => {
     setLoadingCoupons(true);
     setShowCouponsModal(true);
@@ -65,10 +85,10 @@ const CheckoutScreen = ({ navigation }) => {
 
   // Constants
   const gstRate = 12;
-  const deliveryFee = totalAmount >= 499 ? 0 : 30;
-  const tax = totalAmount * (gstRate / 100);
-  const discount = couponData ? couponData.discount_amount : 0;
-  const grandTotal = Math.max(0, totalAmount + deliveryFee + tax - discount);
+  const deliveryFee = (totalAmount || 0) >= 499 ? 0 : 30;
+  const tax = (totalAmount || 0) * (gstRate / 100);
+  const discount = (couponData || {}).discount_amount || 0;
+  const grandTotal = Math.max(0, (totalAmount || 0) + deliveryFee + tax - discount);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -77,16 +97,19 @@ const CheckoutScreen = ({ navigation }) => {
     setApplyingCoupon(false);
     if (res.success) {
       setCouponData(res.data);
-      Alert.alert('Success', `Coupon applied! You saved ₹${res.data.discount_amount}`);
+      showAlert('Coupon Applied', `Success! You saved ₹${res.data.discount_amount} on this order.`, 'success');
     } else {
       setCouponData(null);
-      Alert.alert('Invalid Coupon', res.error);
+      showAlert('Invalid Coupon', res.error || 'This coupon code is not valid.', 'error');
     }
   };
 
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
-      Alert.alert('Address Required', 'Please select a delivery address');
+      showAlert('Where to Deliver?', 'Please select a delivery address to ensure we reach you correctly.', 'warning', [
+        { text: 'Choose Address', onPress: () => { hideAlert(); navigation.navigate('SavedAddresses', { selectMode: true }); } },
+        { text: 'Later', style: 'cancel', onPress: hideAlert }
+      ]);
       return;
     }
 
@@ -167,12 +190,26 @@ const CheckoutScreen = ({ navigation }) => {
         dispatch(fetchActiveOrder()); // Refresh with 'confirmed' status
         navigation.replace('OrderSuccess', { orderId: order_id });
       } else {
-        Alert.alert('Payment Verification Failed', 'Please contact support.');
+        showAlert('Verification Failed', 'We couldn\'t verify your payment. If money was debited, please contact support.', 'error');
       }
     } catch (error) {
       console.log('Order Error:', error);
-      const msg = typeof error === 'string' ? error : (error.description || 'Order could not be placed.');
-      if (error.code !== 0) Alert.alert('Payment Cancelled', msg);
+      
+      // Layman-friendly recovery for Cutoff Passed
+      if (error.message?.includes('Today evening slot is closed') || error.error === 'CUTOFF_PASSED') {
+        showAlert(
+          'Slot Closed',
+          'Oops! The evening delivery window just closed. Please pick another time for your fresh delivery.',
+          'warning',
+          [
+            { text: 'Change Delivery Time', onPress: () => { hideAlert(); navigation.navigate('DeliveryMode'); } },
+            { text: 'Cancel', style: 'cancel', onPress: hideAlert }
+          ]
+        );
+      } else {
+        const msg = typeof error === 'string' ? error : (error.description || error.message || 'Order could not be placed.');
+        if (error.code !== 0) showAlert('Order Failed', msg, 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -299,7 +336,7 @@ const CheckoutScreen = ({ navigation }) => {
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Item Total</Text>
-              <Text style={styles.summaryValue}>₹{totalAmount.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>₹{(totalAmount || 0).toFixed(2)}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Delivery Fee</Text>
@@ -307,17 +344,17 @@ const CheckoutScreen = ({ navigation }) => {
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Taxes</Text>
-              <Text style={styles.summaryValue}>₹{tax.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>₹{(tax || 0).toFixed(2)}</Text>
             </View>
-            {discount > 0 && (
+            {(discount || 0) > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: COLORS.success }]}>Coupon Discount</Text>
-                <Text style={[styles.summaryValue, { color: COLORS.success }]}>-₹{discount.toFixed(2)}</Text>
+                <Text style={[styles.summaryValue, { color: COLORS.success }]}>-₹{(discount || 0).toFixed(2)}</Text>
               </View>
             )}
             <View style={[styles.summaryRow, styles.grandTotalRow]}>
               <Text style={styles.grandTotalLabel}>Grand Total</Text>
-              <Text style={styles.grandTotalValue}>₹{grandTotal.toFixed(2)}</Text>
+              <Text style={styles.grandTotalValue}>₹{(grandTotal || 0).toFixed(2)}</Text>
             </View>
           </View>
         </View>
@@ -344,10 +381,10 @@ const CheckoutScreen = ({ navigation }) => {
               <View style={styles.modalLoader}>
                 <ActivityIndicator color={COLORS.primary} size="large" />
               </View>
-            ) : availableCoupons.length > 0 ? (
+            ) : (availableCoupons || []).length > 0 ? (
               <FlatList
-                data={availableCoupons}
-                keyExtractor={(item) => item.id}
+                data={availableCoupons || []}
+                keyExtractor={(item) => String(item.id)}
                 contentContainerStyle={{ padding: 20 }}
                 renderItem={({ item }) => (
                   <TouchableOpacity 
@@ -389,7 +426,7 @@ const CheckoutScreen = ({ navigation }) => {
 
       <View style={styles.footer}>
         <View>
-          <Text style={styles.footerTotal}>₹{grandTotal.toFixed(2)}</Text>
+          <Text style={styles.footerTotal}>₹{(grandTotal || 0).toFixed(2)}</Text>
           <Text style={styles.footerSub}>Final Amount</Text>
         </View>
         <TouchableOpacity 
@@ -407,6 +444,15 @@ const CheckoutScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </View>
+
+      <CustomAlert 
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttons={alertConfig.buttons}
+        onClose={hideAlert}
+      />
     </SafeAreaView>
   );
 };

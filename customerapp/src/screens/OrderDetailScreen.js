@@ -51,8 +51,15 @@ const OrderDetailScreen = ({ route, navigation }) => {
   if (loading) return <LogoLoader fullScreen />;
   if (!order) return (
     <View style={styles.centerContainer}>
-      <Icon name="alert-circle-outline" size={48} color={COLORS.gray} />
-      <Text style={styles.errorText}>Order not found</Text>
+      <Icon name="package-variant-remove" size={80} color={COLORS.gray} />
+      <Text style={styles.errorTitle}>Order Not Found</Text>
+      <Text style={styles.errorSubtitle}>We couldn't find this order. It might have been moved or doesn't exist anymore.</Text>
+      <TouchableOpacity 
+        style={styles.recoveryBtn}
+        onPress={() => navigation.navigate('Home')}
+      >
+        <Text style={styles.recoveryBtnText}>Go Back Home</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -162,7 +169,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
           <TouchableOpacity style={styles.helpBtn} onPress={handleShare}>
             <Icon name="share-variant" size={22} color={COLORS.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.helpBtn}>
+          <TouchableOpacity style={styles.helpBtn} onPress={() => Linking.openURL('tel:+919876543210')}>
             <Icon name="help-circle-outline" size={22} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
@@ -177,11 +184,15 @@ const OrderDetailScreen = ({ route, navigation }) => {
               <Text style={styles.orderIdText}>Order #{order.order_number}</Text>
               <Text style={styles.storeText}>{order.store?.name || 'Daily Fresh Store'}</Text>
               <Text style={styles.orderTimeText}>
-                {new Date(order.created_at).toLocaleDateString('en-IN', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric',
-                })} • {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                {order.created_at ? (
+                  <>
+                    {new Date(order.created_at).toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    })} • {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                  </>
+                ) : 'Time N/A'}
               </Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '15' }]}>
@@ -200,7 +211,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
               </View>
               <Text style={styles.otpSub}>Share this with the rider only at the time of delivery.</Text>
               <View style={styles.otpContainer}>
-                {order.delivery_otp.split('').map((digit, i) => (
+                {String(order.delivery_otp || '----').split('').map((digit, i) => (
                   <View key={i} style={styles.otpDigit}>
                     <Text style={styles.otpDigitText}>{digit}</Text>
                   </View>
@@ -696,7 +707,43 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 2
-  }
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: COLORS.white,
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.dark,
+    marginTop: 20,
+  },
+  errorSubtitle: {
+    textAlign: 'center',
+    color: COLORS.gray,
+    marginTop: 10,
+    marginBottom: 30,
+    lineHeight: 20,
+  },
+  recoveryBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: RADIUS.l,
+    elevation: 3,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  recoveryBtnText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 16,
+  },
 });
 
 export default OrderDetailScreen;

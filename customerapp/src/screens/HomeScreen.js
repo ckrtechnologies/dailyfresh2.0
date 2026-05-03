@@ -192,7 +192,27 @@ const HomeScreen = ({ navigation }) => {
         o === 'afternoon' ? 'today_evening' : o
       );
       
-      const supportsSlot = normalizedOptions.includes(selectedSlot);
+      let supportsSlot = normalizedOptions.includes(selectedSlot);
+
+      // Fallback: Check if any variant supports this slot
+      if (!supportsSlot && p.variants && p.variants.length > 0) {
+        const slotMap = {
+          'tmrw_morning': ['morning', 'tomorrow morning'], 
+          'today_evening': ['afternoon', 'today evening'], 
+          'tmrw_evening': ['evening', 'tomorrow evening'],
+          'express': ['express', 'express delivery']
+        };
+        const searchTerms = [selectedSlot, ...(slotMap[selectedSlot] || [])];
+
+        supportsSlot = p.variants.some(v => {
+          const vInfo = Array.isArray(v.delivery_info) 
+            ? v.delivery_info 
+            : (v.delivery_info ? v.delivery_info.split(',').map(s => s.trim().toLowerCase()) : []);
+          
+          return vInfo.some(slot => searchTerms.includes(slot.toLowerCase()));
+        });
+      }
+
       if (!supportsSlot) return false;
 
       // Add stock check

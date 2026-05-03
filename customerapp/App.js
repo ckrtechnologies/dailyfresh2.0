@@ -26,6 +26,8 @@ import { Linking } from 'react-native';
 import { supabase } from './src/api/supabase';
 import { notificationService } from './src/services/notificationService';
 import { setAccessToken } from './src/api/apiClient';
+import ErrorBoundary from './src/components/ErrorBoundary';
+import { AlertProvider } from './src/context/AlertContext';
 
 const AppContent = () => {
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,12 @@ const AppContent = () => {
     const handleDeepLink = async (event) => {
       const { url } = event;
       if (url && url.includes('login-callback')) {
+        // Check if we already have a session to avoid redundant updates
+        const { data: existingSession } = await supabase.auth.getSession();
+        if (existingSession?.session) return;
+
         const params = {};
+        // Split by both # and ? to handle different OAuth redirect formats
         const queryString = url.split('#')[1] || url.split('?')[1];
         if (queryString) {
           queryString.split('&').forEach(pair => {
@@ -57,11 +64,19 @@ const AppContent = () => {
         }
 
         if (params.access_token && params.refresh_token) {
-          const { error } = await supabase.auth.setSession({
-            access_token: params.access_token,
-            refresh_token: params.refresh_token,
-          });
-          if (error) console.error('Error setting session:', error);
+          try {
+            const { error } = await supabase.auth.setSession({
+              access_token: params.access_token,
+              refresh_token: params.refresh_token,
+            });
+            
+            // Only log errors that aren't related to "Session Missing" race conditions
+            if (error && !error.message.includes('AuthSessionMissingError')) {
+              console.error('Error setting session:', error);
+            }
+          } catch (err) {
+            console.error('Deep link session error:', err);
+          }
         }
       }
     };
@@ -359,7 +374,11 @@ const App = () => {
   return (
     <StoreProvider store={store}>
       <SafeAreaProvider>
-        <AppContent />
+        <AlertProvider>
+          <ErrorBoundary>
+            <AppContent />
+          </ErrorBoundary>
+        </AlertProvider>
       </SafeAreaProvider>
     </StoreProvider>
   );

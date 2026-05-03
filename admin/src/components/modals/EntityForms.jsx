@@ -359,7 +359,37 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
     <FormWrapper
       title={`${initialData ? 'Edit' : 'Add'} Product`}
       onClose={onClose}
-      onSubmit={(e) => { e.preventDefault(); onSave(formData); }}
+      onSubmit={(e) => { 
+        e.preventDefault(); 
+        
+        // Sync main product delivery_options with variant slots
+        const variantSlots = new Set(formData.delivery_options || []);
+        const slotMap = {
+          'Express Delivery': 'express',
+          'Today Evening': 'today_evening',
+          'Tomorrow Morning': 'tmrw_morning',
+          'Tomorrow Evening': 'tmrw_evening'
+        };
+
+        (formData.variants || []).forEach(v => {
+          const info = Array.isArray(v.delivery_info) 
+            ? v.delivery_info 
+            : (v.delivery_info ? v.delivery_info.split(',').map(s => s.trim()) : []);
+          
+          info.forEach(slot => {
+            if (slotMap[slot]) {
+              variantSlots.add(slotMap[slot]);
+            }
+          });
+        });
+
+        const syncedData = {
+          ...formData,
+          delivery_options: Array.from(variantSlots)
+        };
+        
+        onSave(syncedData); 
+      }}
       loading={loading}
       tabs={tabs}
       activeTab={activeTab}
@@ -442,23 +472,31 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
 
             <h3 style={{ fontSize: '13px', fontWeight: '700', margin: '24px 0 16px', color: 'var(--text-main)' }}>Delivery Options</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {['express', 'today_evening', 'tmrw_morning', 'tmrw_evening'].map(opt => (
-                <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
-                  <input
-                    type="checkbox"
-                    checked={(formData.delivery_options || []).includes(opt)}
-                    onChange={(e) => {
-                      const current = formData.delivery_options || [];
-                      const next = e.target.checked
-                        ? [...current, opt]
-                        : current.filter(o => o !== opt);
-                      setFormData({ ...formData, delivery_options: next });
-                    }}
-                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
-                  />
-                  <span style={{ textTransform: 'capitalize' }}>{opt.replace(/_/g, ' ')}</span>
-                </label>
-              ))}
+              {['express', 'today_evening', 'tmrw_morning', 'tmrw_evening'].map(opt => {
+                const labels = {
+                  'express': 'Express Delivery',
+                  'today_evening': 'Today Evening',
+                  'tmrw_morning': 'Tomorrow Morning',
+                  'tmrw_evening': 'Tomorrow Evening'
+                };
+                return (
+                  <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                    <input
+                      type="checkbox"
+                      checked={(formData.delivery_options || []).includes(opt)}
+                      onChange={(e) => {
+                        const current = formData.delivery_options || [];
+                        const next = e.target.checked
+                          ? [...current, opt]
+                          : current.filter(o => o !== opt);
+                        setFormData({ ...formData, delivery_options: next });
+                      }}
+                      style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+                    />
+                    <span>{labels[opt]}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -593,7 +631,7 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Delivery Slots</label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {['Tomorrow Morning', 'Tomorrow Afternoon', 'Express Delivery'].map(slot => {
+                          {['Express Delivery', 'Today Evening', 'Tomorrow Morning', 'Tomorrow Evening'].map(slot => {
                             const current = Array.isArray(variant.delivery_info) 
                               ? variant.delivery_info 
                               : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : []);
