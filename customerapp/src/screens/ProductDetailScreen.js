@@ -13,6 +13,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import productService from '../api/productService';
 import { useDispatch, useSelector } from 'react-redux';
@@ -26,6 +27,7 @@ const { width } = Dimensions.get('window');
 const ProductDetailScreen = ({ route, navigation }) => {
   const { productId } = route.params;
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -37,7 +39,9 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
   const { items: favorites } = useSelector((state) => state.favorites);
   const { items: cartItems } = useSelector((state) => state.cart);
-  const { selectedSlot } = useSelector((state) => state.config);
+  const selectedSlot = useSelector((state) => state.config.selectedSlot);
+  const configFromRedux = useSelector((state) => state.config.delivery_slots_config);
+  
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
   const isFavorite = product && favorites.some(item => item.id === product.id);
 
@@ -81,6 +85,11 @@ const ProductDetailScreen = ({ route, navigation }) => {
     };
 
     const fetchConfig = async () => {
+      // Prioritize config from Redux if available
+      if (configFromRedux) {
+        setDeliverySlotsConfig(configFromRedux);
+        return;
+      }
       try {
         const res = await productService.getSettings();
         if (res.success && res.data.delivery_slots_config) {
@@ -88,7 +97,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
             setDeliverySlotsConfig(JSON.parse(res.data.delivery_slots_config));
           } catch (parseError) {
             console.error('Failed to parse delivery_slots_config:', parseError);
-            setDeliverySlotsConfig({}); // Fallback to empty object
+            setDeliverySlotsConfig({}); 
           }
         }
       } catch (error) {
@@ -279,19 +288,30 @@ const ProductDetailScreen = ({ route, navigation }) => {
                 )}
               </View>
               <View style={styles.quantityContainer}>
-                <TouchableOpacity
-                  style={styles.qtyBtn}
-                  onPress={() => setQuantity(Math.max(1, quantity - 1))}
-                >
-                  <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>−</Text>
-                </TouchableOpacity>
-                <Text style={styles.qtyText}>{quantity}</Text>
-                <TouchableOpacity
-                  style={styles.qtyBtn}
-                  onPress={() => setQuantity(quantity + 1)}
-                >
-                  <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>+</Text>
-                </TouchableOpacity>
+                {getCartQuantity() > 0 ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => handleRemoveFromCart()}
+                    >
+                      <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.qtyText}>{getCartQuantity()}</Text>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => handleAddToCart(null, 1)}
+                    >
+                      <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>+</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.addBtn, { paddingHorizontal: 24, height: 40 }]}
+                    onPress={() => handleAddToCart()}
+                  >
+                    <Text style={styles.addBtnText}>ADD</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}
@@ -616,71 +636,6 @@ const ProductDetailScreen = ({ route, navigation }) => {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      <View style={[styles.footer, getCartQuantity() > 0 && styles.footerInCart]}>
-        {getCartQuantity() === 0 && (
-          <View style={styles.totalContainer}>
-            {!(product.variants?.length > 0) && (
-              <>
-                <Text style={styles.totalLabel}>Total Price</Text>
-                <Text style={styles.totalPrice}>₹{(sellingPrice * quantity).toFixed(2)}</Text>
-              </>
-            )}
-          </View>
-        )}
-
-        {!isAvailable ? (
-          <View style={[styles.addBtn, { backgroundColor: '#cbd5e1', flex: 1 }]}>
-            <Text style={styles.addBtnText}>UNAVAILABLE FOR THIS SLOT</Text>
-          </View>
-        ) : product.variants?.length > 0 ? (
-          <TouchableOpacity
-            style={[styles.addBtn, { flex: 1 }]}
-            onPress={() => {
-              if (cartItems.some(i => i.id === product.id)) {
-                navigation.navigate('AppTabs', { screen: 'Cart' });
-              } else {
-                setActiveTab('customize');
-              }
-            }}
-          >
-            <Text style={styles.addBtnText}>
-              {cartItems.some(i => i.id === product.id) ? 'VIEW IN CART' : 'ADD TO CART'}
-            </Text>
-          </TouchableOpacity>
-        ) : getCartQuantity() > 0 ? (
-          <View style={[styles.addBtn, styles.qtySelectorFooter, { flex: 1 }]}>
-            <TouchableOpacity
-              style={styles.footerQtyBtn}
-              onPress={() => handleRemoveFromCart()}
-            >
-              <Icon name="minus" size={24} color={COLORS.white} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ flex: 1, alignItems: 'center' }}
-              onPress={() => navigation.navigate('AppTabs', { screen: 'Cart' })}
-            >
-              <Text style={styles.footerQtyText}>{getCartQuantity()}</Text>
-              <Text style={{ color: COLORS.white, fontSize: 10, fontWeight: '700' }}>VIEW CART</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.footerQtyBtn}
-              onPress={() => handleAddToCart(null, 1)}
-            >
-              <Icon name="plus" size={24} color={COLORS.white} />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => {
-              handleAddToCart();
-              // Removed auto-navigate to cart for better UX, let them stay on page
-            }}
-          >
-            <Text style={styles.addBtnText}>ADD TO CART</Text>
-          </TouchableOpacity>
-        )}
-      </View>
     </View>
   );
 };
@@ -1366,17 +1321,30 @@ const styles = StyleSheet.create({
   },
   qtySelectorFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.l,
+    width: '100%',
+  },
+  footerQtyValue: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footerQtyBtn: {
-    padding: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   footerQtyText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
-    color: COLORS.white,
   },
 });
 

@@ -361,7 +361,7 @@ export const getOrders = async (req, res) => {
     // 1. Fetch Orders and Customers (Direct join with profiles)
     let orderQuery = supabaseAdmin
       .from('orders')
-      .select('*, customer:profiles(full_name, phone)', { count: 'exact' })
+      .select('*, customer:profiles!user_id(full_name, phone)', { count: 'exact' })
       .eq('store_id', storeId);
 
     if (startDate) orderQuery = orderQuery.gte('created_at', startDate);
@@ -633,7 +633,7 @@ export const createProduct = async (req, res) => {
 
     const image_url = getImageUrl(mainFile, req.body.image_url);
     const variants = safeParseOptions(req.body.variants);
-    const delivery_options = safeParseOptions(req.body.delivery_options, ['morning', 'afternoon', 'express']);
+    const delivery_options = safeParseOptions(req.body.delivery_options, ['express', 'today_evening', 'tmrw_morning', 'tmrw_evening']);
 
     const productData = {
       ...req.body,
@@ -778,7 +778,7 @@ export const exportOrdersCSV = async (req, res) => {
 
     let query = supabaseAdmin
       .from('orders')
-      .select('id, total_amount, status, payment_status, created_at, customer:profiles(full_name)')
+      .select('id, total_amount, status, payment_status, created_at, customer:profiles!user_id(full_name)')
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
 

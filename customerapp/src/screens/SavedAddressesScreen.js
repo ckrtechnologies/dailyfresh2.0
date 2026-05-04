@@ -98,8 +98,8 @@ const SavedAddressesScreen = ({ route, navigation }) => {
       };
 
       dispatch(setSelectedAddress(addressWithStore));
-      // User requested to be taken to Home screen upon selection
-      navigation.navigate('AppTabs', { screen: 'Home' });
+      // User must choose delivery mode (slot) after address selection
+      navigation.navigate('DeliveryMode');
     } catch (error) {
       console.error('Error resolving store for address:', error);
       Alert.alert('Error', 'Failed to select address. Please try again.');

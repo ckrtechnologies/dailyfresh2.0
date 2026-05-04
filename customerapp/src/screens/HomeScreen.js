@@ -60,24 +60,7 @@ const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const scrollY = useRef(new Animated.Value(0)).current;
-  const flowAnim = useRef(new Animated.Value(0)).current; // For header flow effect
   const bannerRef = useRef(null);
-
-  useEffect(() => {
-    // Continuous flow animation for the header glow
-    Animated.loop(
-      Animated.timing(flowAnim, {
-        toValue: 1,
-        duration: 4000,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const flowTranslateX = flowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-width, width],
-  });
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const location = useSelector((state) => state.location);
   const { address, storeId, coords, storeName } = location;
@@ -147,24 +130,10 @@ const HomeScreen = ({ navigation }) => {
     }, [isAuthenticated, location.selectedAddress, navigation, dispatch])
   );
 
-  const totalHeaderHeight = 120;
-  // Header Animations
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [120, 60],
-    extrapolate: 'clamp',
-  });
-
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
   const headerColor = activeTheme.primary;
-
-  const searchBarTranslateY = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [0, -60], // Shift search bar up as header shrinks
-    extrapolate: 'clamp',
-  });
 
   const {
     categories,
@@ -222,6 +191,7 @@ const HomeScreen = ({ navigation }) => {
       return hasStock;
     });
   };
+
   const [refreshing, setRefreshing] = useState(false);
   const [flashSaleTimer, setFlashSaleTimer] = useState('');
 
@@ -256,9 +226,7 @@ const HomeScreen = ({ navigation }) => {
   const loadData = useCallback(async (isCancelled = { current: false }) => {
     let currentStoreId = storeId;
 
-    // SELF-HEALING: If storeId is missing but we have location, try to fetch it again
     if (!currentStoreId && (location.pincode || location.coords)) {
-      console.log('🔄 [HOME_DEBUG] Store ID missing, attempting to re-fetch nearest store...');
       try {
         const params = {};
         if (location.coords) {
@@ -271,9 +239,7 @@ const HomeScreen = ({ navigation }) => {
         const store = res.data?.data?.store;
 
         if (store) {
-          console.log('✅ [HOME_DEBUG] Successfully re-assigned store:', store.name);
           currentStoreId = store.id;
-          // Sync back to Redux for consistency
           dispatch(setLocation({
             ...location,
             storeId: store.id,
@@ -286,70 +252,43 @@ const HomeScreen = ({ navigation }) => {
       }
     }
 
-    if (!currentStoreId) {
-      console.log('Skipping loadData: No storeId');
-      return;
-    }
+    if (!currentStoreId) return;
 
     try {
       dispatch(setLoading(true));
 
-      const [
-        categoriesRes,
-        bannersRes,
-        featuredRes,
-        flashRes,
-        trendingRes,
-        newLaunchRes,
-        frozenRes,
-        exclusiveRes,
-        dealsRes
-      ] = await Promise.all([
-        productService.getCategories(selectedSlot, currentStoreId),
-        productService.getBanners(),
-        productService.getProducts({ isFeatured: true, storeId: currentStoreId, deliveryType: selectedSlot }),
-        productService.getProducts({ isFlashSale: true, storeId: currentStoreId, deliveryType: selectedSlot }),
-        productService.getProducts({ isTrending: true, storeId: currentStoreId, deliveryType: selectedSlot }),
-        productService.getProducts({ isNewLaunch: true, storeId: currentStoreId, deliveryType: selectedSlot }),
-        productService.getProducts({ isFrozen: true, storeId: currentStoreId, deliveryType: selectedSlot }),
-        productService.getProducts({ isExclusive: true, storeId: currentStoreId, deliveryType: selectedSlot }),
-        productService.getProducts({ isDeal: true, storeId: currentStoreId, deliveryType: selectedSlot }),
-      ]);
+      // Use the new consolidated API
+      const res = await productService.getHomeData(currentStoreId, selectedSlot);
 
       if (isCancelled.current) return;
 
-      if (categoriesRes.success) dispatch(setCategories(categoriesRes.data));
-      if (bannersRes.success) dispatch(setBanners(bannersRes.data));
-      if (featuredRes.success) dispatch(setFeaturedProducts(featuredRes.data));
+      if (res.success) {
+        const {
+          categories,
+          banners,
+          featuredProducts,
+          flashSale,
+          frozenProducts,
+          exclusiveOffers,
+          trendingProducts,
+          newLaunch,
+          todaysDeals,
+          categorySections
+        } = res.data;
 
-      dispatch(setHomeCollections({
-        flashSale: flashRes.success ? flashRes.data : [],
-        frozenProducts: frozenRes.success ? frozenRes.data : [],
-        exclusiveOffers: exclusiveRes.success ? exclusiveRes.data : [],
-        trendingProducts: trendingRes.success ? trendingRes.data : [],
-        newLaunch: newLaunchRes.success ? newLaunchRes.data : [],
-        todaysDeals: dealsRes.success ? dealsRes.data : [],
-      }));
+        dispatch(setCategories(categories));
+        dispatch(setBanners(banners));
+        dispatch(setFeaturedProducts(featuredProducts));
+        dispatch(setCategorySections(categorySections));
 
-      // 2. Fetch products for each category to create sections
-      if (categoriesRes.success && categoriesRes.data.length > 0) {
-        const categoryData = await Promise.all(
-          categoriesRes.data.map(async (cat) => {
-            const prodRes = await productService.getProducts({
-              categoryId: cat.id,
-              storeId: currentStoreId,
-              deliveryType: selectedSlot
-            });
-            return {
-              id: cat.id,
-              title: cat.name,
-              products: prodRes.success ? prodRes.data : []
-            };
-          })
-        );
-
-        if (isCancelled.current) return;
-        dispatch(setCategorySections(categoryData.filter(c => c.products.length > 0)));
+        dispatch(setHomeCollections({
+          flashSale,
+          frozenProducts,
+          exclusiveOffers,
+          trendingProducts,
+          newLaunch,
+          todaysDeals,
+        }));
       }
 
     } catch (error) {
@@ -359,7 +298,7 @@ const HomeScreen = ({ navigation }) => {
         dispatch(setLoading(false));
       }
     }
-  }, [dispatch, storeId, location.pincode, location.coords]);
+  }, [dispatch, storeId, location.pincode, location.coords, selectedSlot]);
 
   useEffect(() => {
     const isCancelled = { current: false };
@@ -372,33 +311,37 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     const fetchStore = async () => {
       if (storeId) {
-        const res = await productService.getStoreDetail(storeId);
-        if (res.success) {
-          setStoreDetail(res.data);
-          if (res.data.latitude && res.data.longitude) {
-            if (coords) {
-              // User GPS coords available — precise distance
-              const dist = getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude);
-              setDistance(dist);
-            } else if (location.pincode) {
-              // No GPS — try to geocode the user's pincode for an approximate distance
-              try {
-                const geoRes = await fetch(
-                  `https://nominatim.openstreetmap.org/search?format=json&postalcode=${location.pincode}&country=India`,
-                  { headers: { 'User-Agent': 'DailyFreshApp' } }
-                );
-                const geoData = await geoRes.json();
-                if (geoData && geoData[0]) {
-                  const approxLat = parseFloat(geoData[0].lat);
-                  const approxLng = parseFloat(geoData[0].lon);
-                  const dist = getDistance(approxLat, approxLng, res.data.latitude, res.data.longitude);
-                  setDistance(dist);
+        try {
+          const res = await productService.getStoreDetail(storeId);
+          if (res.success) {
+            setStoreDetail(res.data);
+            if (res.data.latitude && res.data.longitude) {
+              if (coords) {
+                // User GPS coords available — precise distance
+                const dist = getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude);
+                setDistance(dist);
+              } else if (location.pincode) {
+                // No GPS — try to geocode the user's pincode for an approximate distance
+                try {
+                  const geoRes = await fetch(
+                    `https://nominatim.openstreetmap.org/search?format=json&postalcode=${location.pincode}&country=India`,
+                    { headers: { 'User-Agent': 'DailyFreshApp' } }
+                  );
+                  const geoData = await geoRes.json();
+                  if (geoData && geoData[0]) {
+                    const approxLat = parseFloat(geoData[0].lat);
+                    const approxLng = parseFloat(geoData[0].lon);
+                    const dist = getDistance(approxLat, approxLng, res.data.latitude, res.data.longitude);
+                    setDistance(dist);
+                  }
+                } catch (e) {
+                  console.warn('Distance geocoding fallback failed:', e);
                 }
-              } catch (e) {
-                console.warn('Distance geocoding fallback failed:', e);
               }
             }
           }
+        } catch (error) {
+          console.error('Failed to fetch store detail:', error);
         }
       }
     };
@@ -439,31 +382,15 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const renderHeader = () => (
-    <Animated.View style={[
+    <View style={[
       styles.headerContainer,
       {
         backgroundColor: headerColor,
-        height: headerHeight,
       }
     ]}>
-      {/* Dynamic Flow Glow Effect */}
-      <Animated.View style={[
-        styles.headerFlowGlow,
-        { transform: [{ translateX: flowTranslateX }] }
-      ]} />
-
-      <Animated.View style={[
-        styles.headerTop,
-        {
-          opacity: scrollY.interpolate({
-            inputRange: [0, 50],
-            outputRange: [1, 0],
-            extrapolate: 'clamp',
-          }),
-        }
-      ]}>
-        <TouchableOpacity
-          style={styles.locationContainer}
+      <View style={styles.headerTop}>
+        <TouchableOpacity 
+          style={styles.locationContent} 
           onPress={() => {
             if (isAuthenticated) {
               navigation.navigate('SavedAddresses', { selectMode: true });
@@ -476,20 +403,9 @@ const HomeScreen = ({ navigation }) => {
             <Icon name="map-marker" size={18} color={activeTheme.primary} />
           </View>
           <View style={styles.locationTextContainer}>
-            <View style={styles.locationTitleRow}>
-              <Text style={styles.locationTitle}>
-                {location.selectedAddress?.label || address?.split(',')[0] || 'Pick Location'}
-                {selectedSlot && (
-                  <Text style={styles.deliveryModeLabel}>
-                    {' • '}{selectedSlot === 'express' ? '⚡ Express' :
-                      selectedSlot === 'today_evening' || selectedSlot === 'afternoon' ? '📅 Today Eve' :
-                        selectedSlot === 'tmrw_morning' || selectedSlot === 'morning' ? '📅 Tom. Morn' :
-                          '📅 Tom. Eve'}
-                  </Text>
-                )}
-              </Text>
-              <Icon name="chevron-down" size={14} color={COLORS.white} />
-            </View>
+            <Text style={styles.locationTitle}>
+              {location.selectedAddress?.label || address?.split(',')[0] || 'Pick Location'}
+            </Text>
             <Text style={styles.addressText} numberOfLines={1}>
               {location.selectedAddress
                 ? `${location.selectedAddress.line1}${location.selectedAddress.line2 ? ', ' + location.selectedAddress.line2 : ''}`
@@ -498,29 +414,39 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
-        <View style={styles.headerRight}>
-
-
-          <TouchableOpacity
-            style={styles.notificationBtn}
-            onPress={() => navigation.navigate('Notifications')}
+        {selectedSlot && (
+          <TouchableOpacity 
+            style={styles.slotContainer}
+            onPress={() => navigation.navigate('DeliveryMode')}
           >
-            <Icon name="bell-outline" size={24} color={COLORS.white} />
-            {unreadCount > 0 && (
-              <View style={styles.notificationBadgeContainer}>
-                <Text style={styles.notificationBadgeText}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
+            <View style={[styles.slotBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <Text style={styles.slotBadgeText}>
+                {selectedSlot === 'express' ? '⚡ Express' :
+                  selectedSlot === 'today_evening' || selectedSlot === 'afternoon' ? '📅 Today' :
+                    selectedSlot === 'tmrw_morning' || selectedSlot === 'morning' ? '📅 Tom.' :
+                      '📅 Tom. Eve'}
+              </Text>
+              <Icon name="chevron-down" size={12} color={COLORS.white} />
+            </View>
           </TouchableOpacity>
-        </View>
-      </Animated.View>
+        )}
 
-      <Animated.View style={[
-        styles.searchBarContainer,
-        { transform: [{ translateY: searchBarTranslateY }] }
-      ]}>
+        <TouchableOpacity
+          style={styles.notificationBtn}
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <Icon name="bell-outline" size={24} color={COLORS.white} />
+          {unreadCount > 0 && (
+            <View style={styles.notificationBadgeContainer}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.searchBarContainer}>
         <TouchableOpacity
           style={styles.searchBar}
           onPress={() => navigation.navigate('Search')}
@@ -530,8 +456,8 @@ const HomeScreen = ({ navigation }) => {
           </View>
           <Text style={styles.searchText}>Search "Chicken" or "Fish"</Text>
         </TouchableOpacity>
-      </Animated.View>
-    </Animated.View>
+      </View>
+    </View>
   );
 
   const handleBannerPress = (banner) => {
@@ -663,12 +589,16 @@ const HomeScreen = ({ navigation }) => {
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.horizontalList}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
           renderItem={({ item, index }) => (
             <ProductCard
               product={item}
               onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
               horizontal={true}
-              size={index === 0 ? 'tall' : 'small'}
+              size="small"
             />
           )}
         />
@@ -693,7 +623,7 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
       <FlatList
-        data={categories}
+        data={categories.filter(cat => categorySections.some(sec => sec.id === cat.id))}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
@@ -816,7 +746,7 @@ const HomeScreen = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
         }
       >
-        <View style={{ height: 120 }} />
+        <View style={{ height: 135 }} />
         {renderBanners()}
         {renderCategories()}
         {renderProductSection('Flash Sale', filterBySlot(flashSale), flashSaleTimer, 'flash_sale')}
@@ -828,11 +758,15 @@ const HomeScreen = ({ navigation }) => {
         {renderProductSection('Fresh Catch', filterBySlot(featuredProducts), null, 'featured')}
 
         {/* Dynamic Category Sections */}
-        {categorySections.map((section) => (
-          <React.Fragment key={section.id}>
-            {renderProductSection(section.title, filterBySlot(section.products), null, 'category', { categoryId: section.id })}
-          </React.Fragment>
-        ))}
+        {categorySections.map((section) => {
+          const filteredProducts = filterBySlot(section.products);
+          if (filteredProducts.length === 0) return null;
+          return (
+            <View key={section.id}>
+              {renderProductSection(section.title, filteredProducts, null, 'category', { categoryId: section.id })}
+            </View>
+          );
+        })}
 
         <View style={styles.trustStrip}>
           <View style={styles.trustItem}>
@@ -899,7 +833,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: SPACING.m,
   },
   notificationBadgeContainer: {
     position: 'absolute',
@@ -924,10 +857,11 @@ const styles = StyleSheet.create({
     height: 60,
     justifyContent: 'center',
   },
-  locationContainer: {
+  locationContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 10,
   },
   locationIconWrapper: {
     width: 34,
@@ -946,20 +880,32 @@ const styles = StyleSheet.create({
   locationTextContainer: {
     flex: 1,
   },
-  locationTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   locationTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.white,
   },
   addressText: {
-    fontSize: 11,
+    fontSize: 10,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
     marginTop: -2,
+  },
+  slotContainer: {
+    justifyContent: 'center',
+  },
+  slotBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+    gap: 4,
+  },
+  slotBadgeText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '800',
   },
   iconCircle: {
     width: 40,

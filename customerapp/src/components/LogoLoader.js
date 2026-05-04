@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Animated, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../constants/theme';
 
-const LogoLoader = ({ size = 80, fullScreen = false }) => {
+const LogoLoader = React.memo(({ size = 80, fullScreen = false }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
@@ -59,7 +59,7 @@ const LogoLoader = ({ size = 80, fullScreen = false }) => {
       </Animated.View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

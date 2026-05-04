@@ -236,7 +236,7 @@ const AppContent = () => {
         setIsReady(true);
         const endTime = Date.now();
         const elapsedTime = endTime - startTime;
-        const minDuration = 4000; // 4 seconds
+        const minDuration = 1500; // 1.5 seconds
 
         if (elapsedTime < minDuration) {
           setTimeout(() => setLoading(false), minDuration - elapsedTime);

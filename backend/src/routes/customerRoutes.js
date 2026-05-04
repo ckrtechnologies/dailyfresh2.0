@@ -21,6 +21,7 @@ router.get('/banners', bannerController.getBanners);
 router.get('/stores/nearest', storeController.getNearestStore); // No auth — called on location pick
 
 router.get('/products', productController.listProducts);
+router.get('/home', productController.getHomeData);
 router.get('/products/:id', productController.getProductById);
 router.post('/products/decrement-stock', productController.decrementStock);
 

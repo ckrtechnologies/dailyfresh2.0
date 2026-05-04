@@ -87,6 +87,10 @@ const ProductListScreen = ({ route, navigation }) => {
         numColumns={2}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={10}
+        removeClippedSubviews={true}
         renderItem={({ item }) => (
           <View style={styles.productWrapper}>
             <ProductCard

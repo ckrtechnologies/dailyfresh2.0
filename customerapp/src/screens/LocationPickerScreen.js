@@ -157,7 +157,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
                   'Save Address',
                   'Would you like to save this location for faster checkout?',
                   [
-                    { text: 'Later', onPress: () => navigation.replace('AppTabs') },
+                    { text: 'Later', onPress: () => navigation.replace('DeliveryMode') },
                     { text: 'Save Now', onPress: () => navigation.navigate('AddAddress', { locationData }) }
                   ]
                 );

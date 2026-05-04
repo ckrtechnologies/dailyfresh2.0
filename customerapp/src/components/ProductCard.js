@@ -18,46 +18,23 @@ import { toggleFavorite, toggleFavoriteAsync } from '../store/slices/favoritesSl
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - SPACING.xl * 2 - SPACING.m) / 2;
 
-const ScooterAnimation = () => {
-  const moveAnim = React.useRef(new Animated.Value(-20)).current;
 
-  React.useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(moveAnim, {
-          toValue: 20,
-          duration: 2000,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-        Animated.timing(moveAnim, {
-          toValue: -20,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [moveAnim]);
-
-  return (
-    <Animated.View style={{ transform: [{ translateX: moveAnim }] }}>
-      <Icon name="moped" size={16} color={COLORS.secondary} />
-    </Animated.View>
-  );
-};
-
-const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) => {
+const ProductCard = React.memo(({ product, onPress, horizontal = false, size = 'small' }) => {
   const dispatch = useDispatch();
-  const { items: favorites } = useSelector((state) => state.favorites);
-  const { items: cartItems } = useSelector((state) => state.cart);
-  const { selectedSlot } = useSelector((state) => state.config);
-  const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
-  const isFavorite = favorites.some(item => item.id === product.id);
-  const cartItem = cartItems.find(item => item.id === product.id);
+  // Use more granular selectors to avoid re-renders when other parts of state change
+  const isFavorite = useSelector((state) =>
+    state.favorites.items.some(item => item.id === product.id)
+  );
+
+  const cartItem = useSelector((state) =>
+    state.cart.items.find(item => item.id === product.id)
+  );
+
+  const selectedSlot = useSelector((state) => state.config.selectedSlot);
+
   const quantity = cartItem ? cartItem.quantity : 0;
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
   const {
     name,
@@ -72,7 +49,6 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
   const discountPercentage = hasDiscount ? Math.round(((price - discount_price) / price) * 100) : 0;
 
   const handleAddToCart = () => {
-    // If product has customization options or variants, navigate to detail screen instead
     const hasCustomization = (product.cut_options?.length > 0) ||
       (product.cleaning_options?.length > 0) ||
       (product.variants?.length > 0);
@@ -89,9 +65,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
   };
 
   const handleToggleFavorite = () => {
-    // Optimistic UI update
     dispatch(toggleFavorite(product));
-    // Persistence to backend
     dispatch(toggleFavoriteAsync(product));
   };
 
@@ -134,18 +108,15 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
           />
         </TouchableOpacity>
 
-        {/* Only show floating ADD on TALL cards. SMALL cards will have it at bottom */}
         {isTall && (
           quantity > 0 ? (
             <View style={styles.quantitySelector}>
               <TouchableOpacity style={styles.qtyBtn} onPress={handleRemove}>
                 <Icon name="minus" size={18} color={activeTheme.primary} />
-
               </TouchableOpacity>
               <Text style={[styles.quantityText, { color: activeTheme.primary }]}>{quantity}</Text>
               <TouchableOpacity style={styles.qtyBtn} onPress={handleAddToCart}>
                 <Icon name="plus" size={18} color={activeTheme.primary} />
-
               </TouchableOpacity>
             </View>
           ) : (
@@ -167,18 +138,15 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
 
         <View style={styles.deliveryInfoRow}>
           <View style={styles.scooterBox}>
-            <ScooterAnimation />
+            <Icon name="moped" size={16} color={activeTheme.primary} />
           </View>
           <View style={styles.slotsContainer}>
             {(product.delivery_options || ['express']).map((slot, idx) => {
-              // Map legacy keys to new ones
-              const normalizedSlot = slot === 'morning' ? 'tmrw_morning' : 
-                                   slot === 'afternoon' ? 'today_evening' : slot;
-              
-              // Only show the badge if it matches the currently selected slot 
+              const normalizedSlot = slot === 'morning' ? 'tmrw_morning' :
+                slot === 'afternoon' ? 'today_evening' : slot;
+
               if (selectedSlot !== 'all' && normalizedSlot !== selectedSlot) return null;
 
-              // Check inventory availability
               const isExpress = normalizedSlot === 'express';
               const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
               if (!hasStock) return null;
@@ -192,7 +160,7 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
                 'all': 'Standard'
               };
               const label = labelMap[normalizedSlot] || normalizedSlot.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-              
+
               return (
                 <View key={idx} style={[styles.slotBadge, { backgroundColor: slotTheme.primary + '15' }]}>
                   <Text style={[styles.slotText, { color: slotTheme.primary }]}>
@@ -213,35 +181,38 @@ const ProductCard = ({ product, onPress, horizontal = false, size = 'small' }) =
           </View>
         )}
 
-        {/* Prominent ADD button for Small cards as requested */}
         {!isTall && (
           <View style={styles.smallCardFooter}>
             {quantity > 0 ? (
               <View style={[styles.inlineQtySelector, { backgroundColor: activeTheme.primary }]}>
                 <TouchableOpacity style={styles.inlineQtyBtn} onPress={handleRemove}>
                   <Icon name="minus" size={18} color={COLORS.white} />
-
                 </TouchableOpacity>
                 <Text style={styles.inlineQtyText}>{quantity}</Text>
                 <TouchableOpacity style={styles.inlineQtyBtn} onPress={handleAddToCart}>
                   <Icon name="plus" size={18} color={COLORS.white} />
-
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                style={[styles.smallAddBtn, { backgroundColor: activeTheme.primary }]}
-                onPress={handleAddToCart}
-              >
-                <Text style={styles.smallAddBtnText}>ADD TO CART</Text>
-              </TouchableOpacity>
+              !((selectedSlot === 'express' ? product.express_stock_qty : product.scheduled_stock_qty) > 0) ? (
+                <View style={[styles.smallAddBtn, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]}>
+                  <Text style={[styles.smallAddBtnText, { color: '#9CA3AF' }]}>OUT OF STOCK</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.smallAddBtn, { backgroundColor: activeTheme.primary }]}
+                  onPress={handleAddToCart}
+                >
+                  <Text style={styles.smallAddBtnText}>ADD TO CART</Text>
+                </TouchableOpacity>
+              )
             )}
           </View>
         )}
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -255,6 +226,7 @@ const styles = StyleSheet.create({
     width: 160,
     marginRight: SPACING.m,
     marginBottom: 0,
+    minHeight: 260, // Enforce uniform height
   },
   imageContainer: {
     width: '100%',

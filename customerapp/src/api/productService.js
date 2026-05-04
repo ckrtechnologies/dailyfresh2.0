@@ -3,6 +3,21 @@ import apiClient from './apiClient';
 
 const productService = {
   /**
+   * Get all home screen data in a single call for better performance
+   */
+  getHomeData: async (storeId, deliveryType) => {
+    try {
+      const response = await apiClient.get('/customer/home', {
+        params: { store_id: storeId, delivery_type: deliveryType }
+      });
+      return { success: true, data: response.data?.data || {} };
+    } catch (error) {
+      console.error('Error fetching home data:', error);
+      return { success: false, error };
+    }
+  },
+
+  /**
    * Get all active categories
    */
   getCategories: async (deliveryType, storeId) => {
