@@ -107,8 +107,10 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
     fetchDetail();
     fetchConfig();
+  }, [productId]); // Only fetch when ID changes
 
-    // Sync initial quantity if already in cart
+  // Separate effect for cart sync to avoid triggering fetchDetail
+  useEffect(() => {
     const existingItem = cartItems.find(i => i.id === productId && !i.variant);
     if (existingItem) {
       setQuantity(existingItem.quantity);

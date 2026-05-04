@@ -176,25 +176,56 @@ export const logInAppNotification = async (userId, title, body, type = 'info', d
  */
 export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => {
   try {
-    // 1. Fetch all online and approved riders
+    console.log(`[Notification] Initiating broadcast for order #${orderNumber} from ${storeName}`);
+    
+    // 1. Fetch all online and approved riders with their FCM tokens from profiles
+    // We use profiles!user_id to be explicit about the relationship
     const { data: riders, error } = await supabaseAdmin
       .from('riders')
-      .select('id, fcm_token, user_id')
+      .select(`
+        id, 
+        user_id,
+        profile:profiles!user_id(fcm_token, full_name)
+      `)
       .eq('is_online', true)
       .eq('approval_status', 'approved');
 
-    if (error) throw error;
-    if (!riders || riders.length === 0) {
-      console.log('[Notification] No online riders available for broadcast');
+    if (error) {
+      console.error('[Notification Error] Failed to fetch online riders:', error.message);
       return;
     }
 
-    console.log(`[Notification] Broadcasting new order #${orderNumber} to ${riders.length} riders`);
+    if (!riders || riders.length === 0) {
+      console.log('[Notification] No online riders found in database.');
+      return;
+    }
+
+    console.log(`[Notification] Found ${riders.length} online riders. Checking tokens...`);
+
+    // Filter out riders without profile or FCM token
+    const eligibleRiders = riders.filter(r => {
+      if (!r.profile) {
+        console.warn(`[Notification] Rider ${r.id} has no linked profile data.`);
+        return false;
+      }
+      if (!r.profile.fcm_token) {
+        console.warn(`[Notification] Rider ${r.profile.full_name || r.id} is online but has no FCM token.`);
+        return false;
+      }
+      return true;
+    });
+
+    if (eligibleRiders.length === 0) {
+      console.log('[Notification] No online riders have valid FCM tokens.');
+      return;
+    }
+
+    console.log(`[Notification] Broadcasting to ${eligibleRiders.length} eligible riders: ${eligibleRiders.map(r => r.profile.full_name || r.id).join(', ')}`);
 
     const title = 'New Order Available! 📦';
     const body = `Order #${orderNumber} from ${storeName} is ready for dispatch. Tap to accept.`;
 
-    const promises = riders.map(async (rider) => {
+    const promises = eligibleRiders.map(async (rider) => {
       // 1. Log to Database for History (linked to rider's user_id)
       try {
         await supabaseAdmin.from('notifications').insert([{
@@ -210,11 +241,10 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => 
           }
         }]);
       } catch (logErr) {
-        console.error(`[Notification Log Error] Rider ${rider.id}:`, logErr.message);
+        console.error(`[Notification Log Error] Rider ${rider.profile.full_name || rider.id}:`, logErr.message);
       }
 
-      if (!rider.fcm_token) return;
-
+      // 2. Send Firebase Push
       const message = {
         notification: { title, body },
         data: {
@@ -228,25 +258,46 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => 
         },
         android: {
           priority: 'high',
+          ttl: 3600 * 1000, // 1 hour
           notification: {
-            channelId: 'default',
+            channelId: 'orders',
             priority: 'high',
             sound: 'default',
             visibility: 'public',
-            vibrateTimingsMillis: [0, 500, 200, 500],
+            defaultSound: true,
+            defaultVibrateTimings: false,
+            vibrateTimingsMillis: [0, 500, 200, 500, 200, 500],
           }
         },
-        token: rider.fcm_token
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+              contentAvailable: true,
+              mutableContent: true,
+              category: 'NEW_ORDER'
+            }
+          },
+          headers: {
+            'apns-priority': '10',
+            'apns-topic': 'com.rider' 
+          }
+        },
+        token: rider.profile.fcm_token
       };
 
       try {
-        return admin.messaging().send(message);
+        const response = await admin.messaging().send(message);
+        console.log(`[Notification Success] Push sent to ${rider.profile.full_name || rider.id}: ${response}`);
+        return response;
       } catch (err) {
-        console.error(`[FCM Error] Failed to send to rider ${rider.id}:`, err.message);
+        console.error(`[FCM Error] Failed to send to rider ${rider.profile.full_name || rider.id}:`, err.message);
       }
     });
 
     await Promise.all(promises);
+    console.log(`[Notification] Broadcast completed for order #${orderNumber}`);
   } catch (error) {
     console.error(`[Broadcast Riders Error] ${error.message}`);
   }

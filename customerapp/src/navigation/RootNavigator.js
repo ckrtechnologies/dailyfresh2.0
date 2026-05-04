@@ -29,7 +29,7 @@ import LocationPickerScreen from '../screens/LocationPickerScreen';
 import LoginScreen from '../screens/LoginScreen';
 import OTPVerifyScreen from '../screens/OTPVerifyScreen';
 import RegisterScreen from '../screens/RegisterScreen';
-import HomeScreen from '../screens/HomeScreen';
+import HomeScreen from '../screens/Home';
 import CategoriesScreen from '../screens/CategoriesScreen';
 import CartScreen from '../screens/CartScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
