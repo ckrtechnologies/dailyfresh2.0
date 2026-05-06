@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 
 import { successResponse } from './utils/response.js';
 import errorHandler from './middlewares/errorHandler.js';
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpec from './config/swagger.js';
 
 // Route Imports
 import authRoutes from './routes/authRoutes.js';
@@ -45,7 +47,10 @@ app.get('/health', (req, res) => {
   return successResponse(res, { uptime: process.uptime() }, 'API is healthy');
 });
 
-// 4. API Routes
+// 4. API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// 5. API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/customer', customerRoutes);
 app.use('/api/v1/admin', adminRoutes);

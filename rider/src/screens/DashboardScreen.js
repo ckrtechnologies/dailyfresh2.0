@@ -1,0 +1,639 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  ScrollView,
+  Platform,
+  Modal,
+  Alert,
+  ActivityIndicator,
+  Vibration,
+  StatusBar,
+  useColorScheme
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Power, User, ShoppingBag, TrendingUp, MapPinned, ChevronRight, Clock, Bell, Package } from 'lucide-react-native';
+import { useSelector, useDispatch } from 'react-redux';
+import { useFocusEffect } from '@react-navigation/native';
+import { setOnline, setLoading, setError, setProfile } from '../store/riderSlice';
+import locationService from '../services/locationService';
+import notificationService from '../services/notificationService';
+import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import api from '../services/api';
+import { Config } from 'react-native-config';
+
+const API_URL = Config.API_URL || 'http://localhost:5000/api';
+
+const { width, height } = Dimensions.get('window');
+
+const DashboardScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const { isOnline, user: profile, loading } = useSelector((state) => state.rider);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [incomingOrder, setIncomingOrder] = useState(null);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [availableOrders, setAvailableOrders] = useState([]);
+  const [stats, setStats] = useState({ orders: 0 });
+  const [recentActivity, setRecentActivity] = useState([]);
+
+  // 1. Initial Setup
+  useEffect(() => {
+    const init = async () => {
+      console.log('📱 [Dashboard] Initializing components and listeners...');
+      try {
+        // Check Location Permissions
+        await request(
+          Platform.OS === 'ios'
+            ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE
+            : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
+        );
+
+        // Setup Notifications
+        await notificationService.requestUserPermission();
+        await notificationService.setupListeners((orderData) => {
+          if (!orderData) return;
+          setIncomingOrder({
+            id: orderData.order_id,
+            order_number: orderData.order_number,
+            store: orderData.store_name,
+            distance: orderData.distance || 'Nearby',
+            items: orderData.items || '...',
+            pay: '',
+          });
+          setShowOrderModal(true);
+        });
+      } catch (err) {
+        console.error('[Dashboard] Init Error:', err);
+      }
+    };
+    init();
+  }, []);
+
+  // 2. Refresh data on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData();
+    }, [])
+  );
+
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const [dashRes, profileRes, activeRes, availableRes] = await Promise.all([
+        api.get('/rider/dashboard'),
+        api.get('/rider/profile'),
+        api.get('/rider/orders/active'),
+        api.get('/rider/orders/available')
+      ]);
+
+      if (dashRes.data.success && profileRes.data.success) {
+        const dashboardData = dashRes.data.data;
+        const riderProfile = profileRes.data.data.rider;
+
+        setStats({
+          orders: dashboardData.today_orders || 0
+        });
+        setRecentActivity(dashboardData.recent_activity || []);
+        
+        if (availableRes.data.success) {
+          setAvailableOrders(availableRes.data.data.orders || []);
+        }
+
+        // Check for Active Orders
+        if (activeRes.data.success && activeRes.data.data.orders?.length > 0) {
+          setActiveOrder(activeRes.data.data.orders[0]);
+        } else {
+          setActiveOrder(null);
+        }
+
+        // Merge extra rider info (vehicle etc) into profile
+        dispatch(setProfile({ ...profile, ...riderProfile }));
+      }
+    } catch (err) {
+      console.error('Fetch Dashboard Error:', err);
+    }
+  }, [dispatch, profile]);
+
+  // 2. Control Background Service based on status
+
+  const handleToggle = async () => {
+    dispatch(setLoading(true));
+    try {
+      const nextStatus = !isOnline;
+      console.log(`🔌 [Status Toggle] Switching to: ${nextStatus ? 'ONLINE' : 'OFFLINE'}`);
+      await api.patch('/rider/status', { is_online: nextStatus });
+      dispatch(setOnline(nextStatus));
+    } catch (err) {
+      Alert.alert('Status Error', 'Failed to update your online status. Please check your internet.');
+      console.error('Toggle Error:', err);
+    } finally {
+      dispatch(setLoading(false));
+    }
+  };
+
+  const handleAccept = async () => {
+    Vibration.cancel();
+    setShowOrderModal(false);
+    try {
+      if (!incomingOrder?.id) return;
+      console.log(`📦 [Order Accept] Accepting Order ID: ${incomingOrder.id}`);
+      const res = await api.post('/rider/orders/accept', { orderId: incomingOrder.id });
+      if (res.data.success) {
+        navigation.navigate('ActiveDelivery', { order: res.data.data.order });
+      }
+    } catch (err) {
+      Alert.alert('Order Error', 'This order might have been taken by another rider.');
+      console.error('Accept Error:', err);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+
+      {/* HEADER SECTION */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>Welcome back,</Text>
+          <Text style={styles.riderName}>{profile?.full_name || 'Rider'}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <TouchableOpacity
+            style={styles.profileBtn}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Bell color="#1e293b" size={24} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.profileBtn} onPress={() => navigation.navigate('Profile')}>
+            <User color="#1e293b" size={24} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ONLINE STATUS TOGGLE */}
+        <View style={styles.statusSection}>
+          <View style={styles.statusCard}>
+            <View style={styles.statusInfo}>
+              <View style={[styles.statusIndicator, isOnline ? styles.bgOnline : styles.bgOffline]} />
+              <View>
+                <Text style={styles.statusTitle}>{isOnline ? 'Active & Searching' : 'Currently Offline'}</Text>
+                <Text style={styles.statusSub}>{isOnline ? 'Waiting for new orders nearby' : 'Go online to receive delivery requests'}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleToggle}
+              disabled={loading}
+              style={[styles.toggleBtn, isOnline ? styles.toggleBtnOn : styles.toggleBtnOff]}
+            >
+              <View style={[styles.toggleDot, isOnline ? styles.toggleDotOn : styles.toggleDotOff]} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ACTIVE DELIVERY RESUME */}
+        {activeOrder && (
+          <View style={styles.activeSection}>
+            <Text style={styles.sectionLabel}>Ongoing Delivery</Text>
+            <TouchableOpacity
+              style={styles.activeCard}
+              onPress={() => navigation.navigate('ActiveDelivery', { order: activeOrder })}
+              activeOpacity={0.8}
+            >
+              <View style={styles.activeIcon}>
+                <Clock color="#fff" size={20} />
+              </View>
+              <View style={styles.activeInfo}>
+                <Text style={styles.activeTitle}>Resume Order #{activeOrder.order_number}</Text>
+                <Text style={styles.activeSub}>{activeOrder.store?.name || 'Store'} • {activeOrder.status.replace(/_/g, ' ')}</Text>
+              </View>
+              <ChevronRight color="#94a3b8" size={20} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* AVAILABLE ORDERS SECTION */}
+        <View style={styles.availableSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>Pending for Pickup</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Orders', { status: 'ready' })}>
+              <Text style={styles.viewAllText}>See All</Text>
+            </TouchableOpacity>
+          </View>
+          {availableOrders.length > 0 ? (
+            availableOrders.map((item, idx) => (
+              <TouchableOpacity 
+                key={idx} 
+                style={styles.availableCard}
+                onPress={() => navigation.navigate('Orders', { selectedOrderId: item.original_id })}
+              >
+                <View style={styles.availableIcon}>
+                  <Package color="#3b82f6" size={18} />
+                </View>
+                <View style={styles.availableInfo}>
+                  <Text style={styles.availableTitle}>Order #{item.id}</Text>
+                  <Text style={styles.availableSub}>{item.store} • {item.store_address}</Text>
+                </View>
+                <View style={styles.availableBadge}>
+                  <Text style={styles.availableBadgeText}>AVAILABLE</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyAvailable}>
+              <Text style={styles.emptyAvailableText}>No pending orders in your area</Text>
+            </View>
+          )}
+        </View>
+
+        {/* PERFORMANCE STATS */}
+        <Text style={styles.sectionLabel}>Today's Performance</Text>
+        <View style={styles.statsGrid}>
+          <TouchableOpacity 
+            style={styles.statBoxFull}
+            onPress={() => navigation.navigate('Orders', { status: 'delivered' })}
+          >
+            <View style={styles.statIconContainer}>
+              <ShoppingBag color="#3b82f6" size={28} />
+            </View>
+            <View style={styles.statTextContainer}>
+              <Text style={styles.statVal}>{stats.orders}</Text>
+              <Text style={styles.statLabel}>Orders Completed Today</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* RECENT ACTIVITY */}
+        <Text style={styles.sectionLabel}>Recent Activity</Text>
+        {recentActivity.length > 0 ? recentActivity.map((activity, idx) => (
+          <TouchableOpacity 
+            key={idx} 
+            style={styles.activityCard}
+            onPress={() => {
+              if (activity.id) {
+                navigation.navigate('Orders', { selectedOrderId: activity.id });
+              }
+            }}
+          >
+            <View style={styles.activityIcon}>
+              <ShoppingBag color="#3b82f6" size={20} />
+            </View>
+            <View style={styles.activityInfo}>
+              <Text style={styles.activityTitle}>{activity.title}</Text>
+              <Text style={styles.activityTime}>{activity.time} • {activity.location}</Text>
+            </View>
+            <ChevronRight color="#94a3b8" size={20} />
+          </TouchableOpacity>
+        )) : (
+          <View style={styles.emptyActivity}>
+            <Text style={styles.emptyActivityText}>No activity recorded today</Text>
+          </View>
+        )}
+
+      </ScrollView>
+
+      {/* NEW ORDER MODAL */}
+      <Modal
+        visible={showOrderModal}
+        transparent
+        animationType="slide"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>NEW DELIVERY REQUEST</Text>
+              </View>
+            </View>
+
+            <Text style={styles.orderStore}>{incomingOrder?.store || 'New Store Order'}</Text>
+            <View style={styles.orderMeta}>
+              <View style={styles.metaItem}>
+                <ShoppingBag color="#64748b" size={16} />
+                <Text style={styles.metaText}>Order #{incomingOrder?.order_number}</Text>
+              </View>
+              <View style={styles.metaItem}>
+                <MapPinned color="#64748b" size={16} />
+                <Text style={styles.metaText}>{incomingOrder?.distance || 'Nearby'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.itemsBox}>
+              <Text style={styles.itemsTitle}>Items to Deliver:</Text>
+              <Text style={styles.itemsList}>{incomingOrder?.items}</Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.declineBtn}
+                onPress={() => {
+                  Vibration.cancel();
+                  setShowOrderModal(false);
+                }}
+              >
+                <Text style={styles.declineText}>Decline</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.acceptBtn}
+                onPress={handleAccept}
+              >
+                <Text style={styles.acceptText}>Accept Order</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  greeting: { color: '#64748b', fontSize: 14 },
+  riderName: { color: '#1e293b', fontSize: 20, fontWeight: 'bold' },
+  profileBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f1f7ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: { padding: 24, paddingBottom: 40 },
+  statusSection: { marginBottom: 24 },
+  statusCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  statusInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusIndicator: { width: 10, height: 10, borderRadius: 5 },
+  bgOnline: { backgroundColor: '#10b981' },
+  bgOffline: { backgroundColor: '#94a3b8' },
+  statusTitle: { color: '#1e293b', fontSize: 16, fontWeight: 'bold' },
+  statusSub: { color: '#64748b', fontSize: 12, marginTop: 2 },
+  toggleBtn: {
+    width: 54,
+    height: 30,
+    borderRadius: 15,
+    padding: 4,
+    justifyContent: 'center',
+  },
+  toggleBtnOn: { backgroundColor: '#10b981' },
+  toggleBtnOff: { backgroundColor: '#e2e8f0' },
+  toggleDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  toggleDotOn: { alignSelf: 'flex-end' },
+  toggleDotOff: { alignSelf: 'flex-start' },
+
+  sectionLabel: {
+    color: '#1e293b',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  statsGrid: { marginBottom: 32 },
+  statBoxFull: {
+    backgroundColor: '#fff',
+    padding: 24,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  statIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statTextContainer: { flex: 1 },
+  statVal: { color: '#1e293b', fontSize: 28, fontWeight: 'bold' },
+  statLabel: { color: '#64748b', fontSize: 14, marginTop: 2 },
+
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  activityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  activityInfo: { flex: 1 },
+  activityTitle: { color: '#1e293b', fontSize: 15, fontWeight: '500' },
+  activityTime: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  emptyActivity: { padding: 40, alignItems: 'center' },
+  emptyActivityText: { color: '#94a3b8', fontSize: 14 },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: '#f1f7ff',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 32,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  badge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  badgeText: { color: '#3b82f6', fontSize: 12, fontWeight: 'bold' },
+  orderStore: { color: '#1e293b', fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
+  orderMeta: { flexDirection: 'row', gap: 16, marginBottom: 24 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { color: '#64748b', fontSize: 14 },
+  divider: { height: 1, backgroundColor: '#f1f5f9', marginBottom: 24 },
+  itemsBox: { backgroundColor: '#f8fafc', padding: 20, borderRadius: 16, marginBottom: 32 },
+  itemsTitle: { color: '#64748b', fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' },
+  itemsList: { color: '#1e293b', fontSize: 16, lineHeight: 24 },
+  modalActions: { flexDirection: 'row', gap: 16 },
+  declineBtn: {
+    flex: 1,
+    height: 60,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f1f5f9',
+  },
+  declineText: { color: '#64748b', fontSize: 16, fontWeight: '600' },
+  acceptBtn: {
+    flex: 2,
+    height: 60,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+  },
+  acceptText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  // ACTIVE DELIVERY STYLES
+  activeSection: { marginTop: 24, paddingHorizontal: 0 },
+  activeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  activeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  activeInfo: { flex: 1 },
+  activeTitle: { color: '#1e293b', fontSize: 15, fontWeight: '700' },
+  activeSub: { color: '#64748b', fontSize: 13, marginTop: 2, textTransform: 'capitalize' },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginRight: 24,
+  },
+  viewAllText: {
+    fontSize: 13,
+    color: '#3b82f6',
+    fontWeight: '600',
+    marginTop: 20,
+  },
+  availableSection: {
+    marginBottom: 24,
+  },
+  availableCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  availableIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  availableInfo: {
+    flex: 1,
+  },
+  availableTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  availableSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  availableBadge: {
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  availableBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#16a34a',
+  },
+  emptyAvailable: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  emptyAvailableText: {
+    color: '#94a3b8',
+    fontSize: 14,
+  },
+});
+
+export default DashboardScreen;

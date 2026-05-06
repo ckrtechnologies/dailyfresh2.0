@@ -8,53 +8,296 @@ import * as notificationController from '../controllers/notificationController.j
 import * as bannerController from '../controllers/bannerController.js';
 import * as storeController from '../controllers/storeController.js';
 import * as favoritesController from '../controllers/favoritesController.js';
+import * as couponController from '../controllers/couponController.js';
 
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { cutoffGuard } from '../middlewares/cutoffGuard.js';
 
 const router = express.Router();
 
-// Public / Initial Routes
+/**
+ * @swagger
+ * tags:
+ *   name: Customer
+ *   description: APIs for the Customer Mobile App
+ */
+
+// --- PUBLIC ROUTES ---
+
+/**
+ * @swagger
+ * /customer/categories:
+ *   get:
+ *     summary: List all categories
+ *     tags: [Customer]
+ *     responses:
+ *       200:
+ *         description: List of categories
+ */
 router.get('/categories', categoryController.getCategories);
+
+/**
+ * @swagger
+ * /customer/categories/tree:
+ *   get:
+ *     summary: Get category tree
+ *     tags: [Customer]
+ *     responses:
+ *       200:
+ *         description: Category tree
+ */
 router.get('/categories/tree', categoryController.getCategoryTree);
+
+/**
+ * @swagger
+ * /customer/banners:
+ *   get:
+ *     summary: List banners
+ *     tags: [Customer]
+ *     responses:
+ *       200:
+ *         description: List of banners
+ */
 router.get('/banners', bannerController.getBanners);
-router.get('/stores/nearest', storeController.getNearestStore); // No auth — called on location pick
 
-router.get('/products', productController.listProducts);
+/**
+ * @swagger
+ * /customer/stores/nearest:
+ *   get:
+ *     summary: Find nearest store
+ *     tags: [Customer]
+ *     parameters:
+ *       - in: query
+ *         name: lat
+ *         required: true
+ *         schema: { type: number }
+ *       - in: query
+ *         name: lng
+ *         required: true
+ *         schema: { type: number }
+ *     responses:
+ *       200:
+ *         description: Nearest store data
+ */
+router.get('/stores/nearest', storeController.getNearestStore);
+
+/**
+ * @swagger
+ * /customer/home:
+ *   get:
+ *     summary: Get home screen data
+ *     tags: [Customer]
+ *     responses:
+ *       200:
+ *         description: Home data
+ */
 router.get('/home', productController.getHomeData);
-router.get('/products/:id', productController.getProductById);
-router.post('/products/decrement-stock', productController.decrementStock);
 
-// All customer routes require authentication and 'customer' role
+/**
+ * @swagger
+ * /customer/products:
+ *   get:
+ *     summary: List/Search products
+ *     tags: [Customer]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *       - in: query
+ *         name: category_id
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: List of products
+ */
+router.get('/products', productController.listProducts);
+
+/**
+ * @swagger
+ * /customer/products/{id}:
+ *   get:
+ *     summary: Get product details
+ *     tags: [Customer]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product details
+ */
+router.get('/products/:id', productController.getProductById);
+
+// --- AUTHENTICATED ROUTES ---
 router.use(authenticate);
 router.use(authorize(['customer']));
 
-// Notifications & Coupons
-router.get('/notifications', notificationController.getNotifications);
-router.patch('/notifications/:id/read', notificationController.markAsRead);
-import * as couponController from '../controllers/couponController.js';
-router.post('/coupons/validate', couponController.validateCoupon);
-router.get('/coupons', couponController.listCoupons);
-
-// Profile & Address
+/**
+ * @swagger
+ * /customer/profile:
+ *   get:
+ *     summary: Get customer profile
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile data
+ */
 router.get('/profile', customerController.getProfile);
+
+/**
+ * @swagger
+ * /customer/profile:
+ *   put:
+ *     summary: Update customer profile
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile updated
+ */
 router.put('/profile', customerController.updateProfile);
+
+/**
+ * @swagger
+ * /customer/addresses:
+ *   get:
+ *     summary: List saved addresses
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of addresses
+ */
 router.get('/addresses', customerController.getAddresses);
+
+/**
+ * @swagger
+ * /customer/addresses:
+ *   post:
+ *     summary: Add new address
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Address added
+ */
 router.post('/addresses', customerController.addAddress);
-router.patch('/addresses/:id', customerController.updateAddress);
-router.delete('/addresses/:id', customerController.deleteAddress);
-router.patch('/fcm-token', customerController.updateFcmToken);
+
+/**
+ * @swagger
+ * /customer/favorites:
+ *   get:
+ *     summary: Get favorites
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of favorites
+ */
 router.get('/favorites', favoritesController.getFavorites);
+
+/**
+ * @swagger
+ * /customer/favorites/toggle:
+ *   post:
+ *     summary: Toggle favorite
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Favorite toggled
+ */
 router.post('/favorites/toggle', favoritesController.toggleFavorite);
 
-// Cart & Orders
-// Cart
+/**
+ * @swagger
+ * /customer/cart:
+ *   get:
+ *     summary: Get cart
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Cart data
+ */
 router.get('/cart', cartController.getCart);
+
+/**
+ * @swagger
+ * /customer/cart/sync:
+ *   post:
+ *     summary: Sync cart
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Cart synced
+ */
 router.post('/cart/sync', cartController.syncCart);
-router.delete('/cart', cartController.clearCart);
+
+/**
+ * @swagger
+ * /customer/orders:
+ *   post:
+ *     summary: Place order
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Order placed
+ */
 router.post('/orders', cutoffGuard, orderController.placeOrder);
-router.post('/payments/verify', orderController.verifyPayment);
+
+/**
+ * @swagger
+ * /customer/orders:
+ *   get:
+ *     summary: Get my orders
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of orders
+ */
 router.get('/orders', orderController.getMyOrders);
+
+/**
+ * @swagger
+ * /customer/orders/{id}:
+ *   get:
+ *     summary: Get order details
+ *     tags: [Customer]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Order details
+ */
 router.get('/orders/:id', orderController.getOrderById);
+
+// FCM & Other
+router.patch('/fcm-token', customerController.updateFcmToken);
+router.get('/notifications', notificationController.getNotifications);
+router.patch('/notifications/:id/read', notificationController.markAsRead);
+router.post('/coupons/validate', couponController.validateCoupon);
+router.get('/coupons', couponController.listCoupons);
+router.post('/payments/verify', orderController.verifyPayment);
 
 export default router;

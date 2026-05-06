@@ -1,0 +1,171 @@
+{
+	"info": {
+		"_postman_id": "4a7b5c8d-2e1f-4a9b-8c7d-6e5f4a3b2c1d",
+		"name": "Daily Fresh - DEFINITIVE MASTER API",
+		"description": "100% Coverage of Daily Fresh Backend APIs (Auth, Customer, Rider, Store, Admin). Includes all CRUD, management, and operational endpoints.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Authentication & Global Profile",
+			"item": [
+				{ "name": "Register", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"full_name\":\"Test\",\"email\":\"test@test.com\",\"phone\":\"123\",\"password\":\"pass\",\"role\":\"customer\"}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/auth/register" } },
+				{ "name": "Login", "event": [{ "listen": "test", "script": { "exec": ["const res = pm.response.json(); if(res.data?.access_token) pm.collectionVariables.set('authToken', res.data.access_token);"], "type": "text/javascript" } }], "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"email\":\"test@test.com\",\"password\":\"pass\"}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/auth/login" } },
+				{ "name": "Update Profile", "request": { "method": "PATCH", "url": "{{baseUrl}}/auth/profile" } },
+				{ "name": "Update Password", "request": { "method": "PATCH", "url": "{{baseUrl}}/auth/password" } }
+			]
+		},
+		{
+			"name": "2. Customer APIs",
+			"item": [
+				{
+					"name": "Catalogue & Home",
+					"item": [
+						{ "name": "Get Home Data", "request": { "method": "GET", "url": "{{baseUrl}}/customer/home" } },
+						{ "name": "List Categories", "request": { "method": "GET", "url": "{{baseUrl}}/customer/categories" } },
+						{ "name": "Get Category Tree", "request": { "method": "GET", "url": "{{baseUrl}}/customer/categories/tree" } },
+						{ "name": "List Banners", "request": { "method": "GET", "url": "{{baseUrl}}/customer/banners" } },
+						{ "name": "Find Nearest Store", "request": { "method": "GET", "url": "{{baseUrl}}/customer/stores/nearest?lat=22&lng=88" } },
+						{ "name": "List Products", "request": { "method": "GET", "url": "{{baseUrl}}/customer/products" } },
+						{ "name": "Get Product By ID", "request": { "method": "GET", "url": "{{baseUrl}}/customer/products/:id" } },
+						{ "name": "Decrement Stock (Debug)", "request": { "method": "POST", "url": "{{baseUrl}}/customer/products/decrement-stock" } }
+					]
+				},
+				{
+					"name": "Cart, Orders & Payments",
+					"item": [
+						{ "name": "Get Cart", "request": { "method": "GET", "url": "{{baseUrl}}/customer/cart" } },
+						{ "name": "Sync Cart", "request": { "method": "POST", "url": "{{baseUrl}}/customer/cart/sync" } },
+						{ "name": "Clear Cart", "request": { "method": "DELETE", "url": "{{baseUrl}}/customer/cart" } },
+						{ "name": "Validate Coupon", "request": { "method": "POST", "url": "{{baseUrl}}/customer/coupons/validate" } },
+						{ "name": "List Coupons", "request": { "method": "GET", "url": "{{baseUrl}}/customer/coupons" } },
+						{ "name": "Place Order", "request": { "method": "POST", "url": "{{baseUrl}}/customer/orders" } },
+						{ "name": "Verify Payment", "request": { "method": "POST", "url": "{{baseUrl}}/customer/payments/verify" } },
+						{ "name": "My Orders History", "request": { "method": "GET", "url": "{{baseUrl}}/customer/orders" } },
+						{ "name": "Order Details", "request": { "method": "GET", "url": "{{baseUrl}}/customer/orders/:id" } }
+					]
+				},
+				{
+					"name": "Account & Engagement",
+					"item": [
+						{ "name": "Get Profile", "request": { "method": "GET", "url": "{{baseUrl}}/customer/profile" } },
+						{ "name": "Update Profile Info", "request": { "method": "PUT", "url": "{{baseUrl}}/customer/profile" } },
+						{ "name": "List Addresses", "request": { "method": "GET", "url": "{{baseUrl}}/customer/addresses" } },
+						{ "name": "Add Address", "request": { "method": "POST", "url": "{{baseUrl}}/customer/addresses" } },
+						{ "name": "Update Address", "request": { "method": "PATCH", "url": "{{baseUrl}}/customer/addresses/:id" } },
+						{ "name": "Delete Address", "request": { "method": "DELETE", "url": "{{baseUrl}}/customer/addresses/:id" } },
+						{ "name": "Get Favorites", "request": { "method": "GET", "url": "{{baseUrl}}/customer/favorites" } },
+						{ "name": "Toggle Favorite", "request": { "method": "POST", "url": "{{baseUrl}}/customer/favorites/toggle" } },
+						{ "name": "Update FCM Token", "request": { "method": "PATCH", "url": "{{baseUrl}}/customer/fcm-token" } },
+						{ "name": "List My Notifications", "request": { "method": "GET", "url": "{{baseUrl}}/customer/notifications" } },
+						{ "name": "Mark Notification Read", "request": { "method": "PATCH", "url": "{{baseUrl}}/customer/notifications/:id/read" } }
+					]
+				}
+			],
+			"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] }
+		},
+		{
+			"name": "3. Rider APIs",
+			"item": [
+				{ "name": "Rider Profile", "request": { "method": "GET", "url": "{{baseUrl}}/rider/profile" } },
+				{ "name": "Dashboard Stats", "request": { "method": "GET", "url": "{{baseUrl}}/rider/dashboard" } },
+				{ "name": "Toggle Online Status", "request": { "method": "PATCH", "url": "{{baseUrl}}/rider/status" } },
+				{ "name": "Update FCM Token", "request": { "method": "PATCH", "url": "{{baseUrl}}/rider/fcm-token" } },
+				{ "name": "Update Live Location", "request": { "method": "PATCH", "url": "{{baseUrl}}/rider/location" } },
+				{ "name": "Active Assigned Orders", "request": { "method": "GET", "url": "{{baseUrl}}/rider/orders/active" } },
+				{ "name": "Available Pool Orders", "request": { "method": "GET", "url": "{{baseUrl}}/rider/orders/available" } },
+				{ "name": "Delivery History", "request": { "method": "GET", "url": "{{baseUrl}}/rider/orders/history" } },
+				{ "name": "Order Detail View", "request": { "method": "GET", "url": "{{baseUrl}}/rider/orders/:orderId" } },
+				{ "name": "Accept Order From Pool", "request": { "method": "POST", "url": "{{baseUrl}}/rider/orders/accept" } },
+				{ "name": "Update Delivery Status", "request": { "method": "PATCH", "url": "{{baseUrl}}/rider/orders/:orderId/status" } }
+			],
+			"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] }
+		},
+		{
+			"name": "4. Store Manager APIs",
+			"item": [
+				{ "name": "Manager Dashboard", "request": { "method": "GET", "url": "{{baseUrl}}/store/dashboard" } },
+				{ "name": "Inventory List", "request": { "method": "GET", "url": "{{baseUrl}}/store/inventory" } },
+				{ "name": "Export Inventory CSV", "request": { "method": "GET", "url": "{{baseUrl}}/store/inventory/export" } },
+				{ "name": "Create Local Product", "request": { "method": "POST", "url": "{{baseUrl}}/store/inventory" } },
+				{ "name": "Update Local Product", "request": { "method": "PUT", "url": "{{baseUrl}}/store/inventory/:productId" } },
+				{ "name": "Quick Stock Update", "request": { "method": "PATCH", "url": "{{baseUrl}}/store/inventory/:productId/stock" } },
+				{ "name": "Toggle Product Status", "request": { "method": "PATCH", "url": "{{baseUrl}}/store/inventory/:productId/status" } },
+				{ "name": "Delete Local Product", "request": { "method": "DELETE", "url": "{{baseUrl}}/store/inventory/:productId" } },
+				{ "name": "Store Orders List", "request": { "method": "GET", "url": "{{baseUrl}}/store/orders" } },
+				{ "name": "Export Orders CSV", "request": { "method": "GET", "url": "{{baseUrl}}/store/orders/export" } },
+				{ "name": "Update Order Status", "request": { "method": "PATCH", "url": "{{baseUrl}}/store/orders/:orderId/status" } },
+				{ "name": "List Store Customers", "request": { "method": "GET", "url": "{{baseUrl}}/store/customers" } },
+				{ "name": "Store Profile info", "request": { "method": "GET", "url": "{{baseUrl}}/store/profile" } },
+				{ "name": "Toggle Store Status (Open/Closed)", "request": { "method": "PATCH", "url": "{{baseUrl}}/store/profile/status" } },
+				{ "name": "Update Manager FCM", "request": { "method": "PATCH", "url": "{{baseUrl}}/store/fcm-token" } },
+				{ "name": "Available Categories", "request": { "method": "GET", "url": "{{baseUrl}}/store/categories" } },
+				{ "name": "Available Sub-Categories", "request": { "method": "GET", "url": "{{baseUrl}}/store/sub-categories" } }
+			],
+			"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] }
+		},
+		{
+			"name": "5. Super Admin APIs",
+			"item": [
+				{ "name": "Global Platform Stats", "request": { "method": "GET", "url": "{{baseUrl}}/admin/stats" } },
+				{ "name": "General File Upload", "request": { "method": "POST", "url": "{{baseUrl}}/admin/upload" } },
+				{ "name": "Master Orders List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/orders" } },
+				{ "name": "Master Status Update (Ready triggers push)", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/orders/:id/status" } },
+				{ "name": "List All Stores", "request": { "method": "GET", "url": "{{baseUrl}}/admin/stores" } },
+				{ "name": "Create Store", "request": { "method": "POST", "url": "{{baseUrl}}/admin/stores" } },
+				{ "name": "Update Store", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/stores/:id" } },
+				{ "name": "Delete Store", "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/stores/:id" } },
+				{ "name": "List Riders", "request": { "method": "GET", "url": "{{baseUrl}}/admin/riders" } },
+				{ "name": "Approve Rider", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/riders/:riderId/approve" } },
+				{ "name": "Update Rider Profile/Status", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/riders/:riderId" } },
+				{ "name": "Onboard Staff (Manager/Admin)", "request": { "method": "POST", "url": "{{baseUrl}}/admin/onboard-staff" } },
+				{ "name": "List All Staff", "request": { "method": "GET", "url": "{{baseUrl}}/admin/staff" } },
+				{ "name": "Delete Staff", "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/staff/:id" } },
+				{ "name": "List All Customers", "request": { "method": "GET", "url": "{{baseUrl}}/admin/customers" } },
+				{ "name": "System Notifications List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/notifications" } },
+				{ "name": "Send Manual Push", "request": { "method": "POST", "url": "{{baseUrl}}/admin/notifications/send" } },
+				{ "name": "Get Platform Config", "request": { "method": "GET", "url": "{{baseUrl}}/admin/config" } },
+				{ "name": "Update Platform Config", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/config" } },
+				{ "name": "List/Create/Update/Delete Categories", "item": [
+					{ "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/categories" } },
+					{ "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/admin/categories" } },
+					{ "name": "Update", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/categories/:id" } },
+					{ "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/categories/:id" } }
+				]},
+				{ "name": "List/Create/Update/Delete Sub-Categories", "item": [
+					{ "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/sub-categories" } },
+					{ "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/admin/sub-categories" } },
+					{ "name": "Update", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/sub-categories/:id" } },
+					{ "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/sub-categories/:id" } }
+				]},
+				{ "name": "List/Create/Update/Delete Global Products", "item": [
+					{ "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/products" } },
+					{ "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/admin/products" } },
+					{ "name": "Update", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/products/:id" } },
+					{ "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/products/:id" } }
+				]},
+				{ "name": "Home Screen Banners CRUD", "item": [
+					{ "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/banners" } },
+					{ "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/admin/banners" } },
+					{ "name": "Update", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/banners/:id" } },
+					{ "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/banners/:id" } }
+				]},
+				{ "name": "Home Sections Config", "item": [
+					{ "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/home-sections" } },
+					{ "name": "Update", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/home-sections/:id" } }
+				]},
+				{ "name": "Coupons CRUD", "item": [
+					{ "name": "List", "request": { "method": "GET", "url": "{{baseUrl}}/admin/coupons" } },
+					{ "name": "Create", "request": { "method": "POST", "url": "{{baseUrl}}/admin/coupons" } },
+					{ "name": "Update", "request": { "method": "PATCH", "url": "{{baseUrl}}/admin/coupons/:id" } },
+					{ "name": "Delete", "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/coupons/:id" } }
+				]}
+			],
+			"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] }
+		}
+	],
+	"variable": [
+		{ "key": "baseUrl", "value": "https://api.dailyfreshkolkata.in/api/v1", "type": "string" },
+		{ "key": "authToken", "value": "", "type": "string" }
+	]
+}

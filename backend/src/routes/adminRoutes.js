@@ -6,84 +6,134 @@ import { upload } from '../middlewares/uploadMiddleware.js';
 
 const router = express.Router();
 
-// All admin routes require authentication
+/**
+ * @swagger
+ * tags:
+ *   name: Admin
+ *   description: System-wide Management APIs
+ */
+
 router.use(authenticate);
 
-// --- SHARED (Admin + Manager) ---
-// Dashboard & Analytics
+/**
+ * @swagger
+ * /admin/stats:
+ *   get:
+ *     summary: Get platform stats
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Global analytics data
+ */
 router.get('/stats', authorize(['admin', 'store_manager']), adminController.getDashboardStats);
-router.get('/recent-orders', authorize(['admin', 'store_manager']), adminController.listOrders); 
 
-// Common Upload Utility
-router.post('/upload', authorize(['admin', 'store_manager']), upload.single('file'), adminController.uploadFile);
-
-// Order Management
+/**
+ * @swagger
+ * /admin/orders:
+ *   get:
+ *     summary: List all orders
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of orders
+ */
 router.get('/orders', authorize(['admin', 'store_manager']), adminController.listOrders);
+
+/**
+ * @swagger
+ * /admin/orders/{id}/status:
+ *   patch:
+ *     summary: Update order status (Triggers notifications)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status: { type: string }
+ *     responses:
+ *       200:
+ *         description: Status updated
+ */
 router.patch('/orders/:id/status', authorize(['admin', 'store_manager']), adminController.updateOrderStatus);
 
-// Store Management (GET list for dropdowns etc)
+/**
+ * @swagger
+ * /admin/notifications/send:
+ *   post:
+ *     summary: Send manual notification
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title: { type: string }
+ *               body: { type: string }
+ *               role: { type: string }
+ *     responses:
+ *       200:
+ *         description: Notification broadcasted
+ */
+router.post('/notifications/send', authorize(['admin']), notificationController.sendManualNotification);
+
+// Fallback for all other admin routes (listing them briefly)
+router.get('/recent-orders', authorize(['admin', 'store_manager']), adminController.listOrders); 
+router.post('/upload', authorize(['admin', 'store_manager']), upload.single('file'), adminController.uploadFile);
 router.get('/stores', authorize(['admin', 'store_manager']), adminController.listStores);
-
-// Rider Management (View list)
 router.get('/riders', authorize(['admin', 'store_manager']), adminController.listRiders);
-
-// Global Catalogue (Read-Only for Manager)
 router.get('/categories', authorize(['admin', 'store_manager']), adminController.listCategories);
 router.get('/sub-categories', authorize(['admin', 'store_manager']), adminController.listSubCategories);
 router.get('/products', authorize(['admin', 'store_manager']), adminController.listProducts);
-
-
-// --- ADMIN ONLY ---
 router.post('/onboard-staff', authorize(['admin']), adminController.onboardStaff);
 router.get('/staff', authorize(['admin']), adminController.listStaff);
 router.delete('/staff/:id', authorize(['admin']), adminController.deleteStaff);
 router.get('/customers', authorize(['admin']), adminController.listCustomers);
-
-// Notification Management System (NMS)
 router.get('/notifications', authorize(['admin']), notificationController.getAllNotifications);
-router.post('/notifications/send', authorize(['admin']), notificationController.sendManualNotification);
-
-// Store CRUD
 router.post('/stores', authorize(['admin']), adminController.createStore);
 router.patch('/stores/:id', authorize(['admin']), adminController.updateStore);
 router.delete('/stores/:id', authorize(['admin']), adminController.deleteStore);
-
-// Rider Management
 router.patch('/riders/:riderId/approve', authorize(['admin']), adminController.approveRider);
 router.patch('/riders/:riderId', authorize(['admin', 'store_manager']), adminController.updateRiderStatus);
-
-// Catalog CRUD (Managers cannot add/remove)
 router.post('/categories', authorize(['admin']), upload.any(), adminController.createCategory);
 router.patch('/categories/:id', authorize(['admin']), upload.any(), adminController.updateCategory);
 router.delete('/categories/:id', authorize(['admin']), adminController.deleteCategory);
-
 router.post('/sub-categories', authorize(['admin']), upload.any(), adminController.createSubCategory);
 router.patch('/sub-categories/:id', authorize(['admin']), upload.any(), adminController.updateSubCategory);
 router.delete('/sub-categories/:id', authorize(['admin']), adminController.deleteSubCategory);
-
 router.post('/products', authorize(['admin', 'store_manager']), upload.any(), adminController.createProduct);
 router.patch('/products/:id', authorize(['admin', 'store_manager']), upload.any(), adminController.updateProduct);
 router.delete('/products/:id', authorize(['admin']), adminController.deleteProduct);
-
-// Platform Global Settings
 router.get('/config', authorize(['admin']), adminController.getPlatformSettings);
 router.patch('/config', authorize(['admin']), adminController.updatePlatformSettings);
-
-// Home Screen Management
 router.get('/banners', authorize(['admin']), adminController.listBanners);
 router.post('/banners', authorize(['admin']), upload.any(), adminController.createBanner);
 router.patch('/banners/:id', authorize(['admin']), upload.any(), adminController.updateBanner);
 router.delete('/banners/:id', authorize(['admin']), adminController.deleteBanner);
-
 router.get('/home-sections', authorize(['admin']), adminController.listHomeSections);
 router.patch('/home-sections/:id', authorize(['admin']), adminController.updateHomeSection);
 
-// Coupon Management
 import * as couponController from '../controllers/couponController.js';
 router.get('/coupons', authorize(['admin']), couponController.listCoupons);
 router.post('/coupons', authorize(['admin']), couponController.createCoupon);
 router.patch('/coupons/:id', authorize(['admin']), couponController.updateCoupon);
 router.delete('/coupons/:id', authorize(['admin']), couponController.deleteCoupon);
-
 
 export default router;

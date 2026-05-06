@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "787630903123",
+    "project_id": "dailyfresh-94430",
+    "storage_bucket": "dailyfresh-94430.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787630903123:android:c107bb8fd8d15ed4235ba6",
+        "android_client_info": {
+          "package_name": "com.customerapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCw9Y88thhEDRrMfTKrpufEWT9OqxlDU74"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787630903123:android:2b9480025523bb1b235ba6",
+        "android_client_info": {
+          "package_name": "com.rider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCw9Y88thhEDRrMfTKrpufEWT9OqxlDU74"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787630903123:android:1dc17cf5c1ed0270235ba6",
+        "android_client_info": {
+          "package_name": "com.store"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCw9Y88thhEDRrMfTKrpufEWT9OqxlDU74"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
