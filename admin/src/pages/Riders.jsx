@@ -132,23 +132,23 @@ const Riders = () => {
         </span>
       )
     },
-    {
-      header: 'Actions',
-      align: 'right',
-      render: (row) => (
-        <button
-          className="btn-icon"
-          onClick={() => {
-            setSelectedRider(row);
-            setIsNotifyModalOpen(true);
-          }}
-          title="Send Notification"
-          style={{ background: 'var(--primary-light)', color: 'var(--primary)', border: 'none' }}
-        >
-          <Plus size={16} />
-        </button>
-      )
-    }
+    // {
+    //   header: 'Actions',
+    //   align: 'right',
+    //   render: (row) => (
+    //     <button
+    //       className="btn-icon"
+    //       onClick={() => {
+    //         setSelectedRider(row);
+    //         setIsNotifyModalOpen(true);
+    //       }}
+    //       title="Send Notification"
+    //       style={{ background: 'var(--primary-light)', color: 'var(--primary)', border: 'none' }}
+    //     >
+    //       <Plus size={16} />
+    //     </button>
+    //   )
+    // }
   ];
 
   return (

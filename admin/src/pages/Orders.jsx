@@ -335,6 +335,7 @@ const Orders = () => {
                     key={rider.id}
                     onClick={() => {
                       setSelectedRider(rider);
+                      setIsRiderSelectOpen(false);
                       setIsNotifyModalOpen(true);
                     }}
                     style={{ 
