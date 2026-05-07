@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.s,
-    borderRadius: RADIUS.button,
+    borderRadius: 24,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

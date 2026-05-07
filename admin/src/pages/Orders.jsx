@@ -71,9 +71,8 @@ const Orders = () => {
   const getDeliveryTypeBadgeClass = (type) => {
     switch (type) {
       case 'express': return 'badge-express';
-      case 'today_evening': return 'badge-today-evening';
-      case 'tmrw_morning': return 'badge-tomorrow-morning';
-      case 'tmrw_evening': return 'badge-tomorrow-evening';
+      case 'tomorrow_morning': return 'badge-tomorrow-morning';
+      case 'tomorrow_evening': return 'badge-tomorrow-evening';
       default: return '';
     }
   };

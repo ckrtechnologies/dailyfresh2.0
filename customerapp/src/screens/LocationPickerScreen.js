@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert,
   PermissionsAndroid,
   ActivityIndicator,
   Dimensions,
@@ -22,6 +21,7 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { setLocation } from '../store/slices/locationSlice';
 import apiClient from '../api/apiClient';
 import { supabase } from '../api/supabase';
+import { showGlobalAlert } from '../services/alertService';
 
 const fetchNearestStore = async ({ lat, lng, pincode } = {}) => {
   try {
@@ -43,18 +43,33 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   const [pincode, setPincode] = useState('');
   const [loading, setLoading] = useState(false);
   const [isComingSoon, setIsComingSoon] = useState(false);
+  const [hasSavedAddresses, setHasSavedAddresses] = useState(false);
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth);
-  const { selectedAddress } = useSelector((state) => state.location);
+  const { selectedAddress, storeId } = useSelector((state) => state.location);
   const isMandatory = !!route.params?.mandatory;
   const params = route.params || {};
 
-  // If we already have a selected address, don't stay here
+  // If we already have a selected address or just detected location, don't stay here
   useEffect(() => {
-    if (selectedAddress) {
-      navigation.replace('DeliveryMode');
+    if (selectedAddress || (route.params?.autoRedirect && storeId)) {
+      navigation.replace('AppTabs');
     }
-  }, [selectedAddress]);
+  }, [selectedAddress, storeId]);
+
+  useEffect(() => {
+    const checkAddresses = async () => {
+      if (isAuthenticated) {
+        try {
+          const { data: { addresses } } = await apiClient.get('/customer/addresses');
+          setHasSavedAddresses(addresses && addresses.length > 0);
+        } catch (e) {
+          setHasSavedAddresses(false);
+        }
+      }
+    };
+    checkAddresses();
+  }, [isAuthenticated]);
 
   const requestLocationPermission = async () => {
     if (Platform.OS === 'ios') {
@@ -81,7 +96,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   const handleCurrentLocation = async () => {
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
-      Alert.alert('Permission Denied', 'Location permission is required to find your address.');
+      showGlobalAlert('Permission Denied', 'Location permission is required to find your address.', 'error');
       return;
     }
 
@@ -145,17 +160,19 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
             return;
           }
 
-          Alert.alert(
+          showGlobalAlert(
             'Store Found!',
             `You are being connected to our ${store.name} branch.`,
+            'success',
             [{ text: 'Continue', onPress: () => {
               if (params?.from === 'SavedAddresses' || (isAuthenticated && isMandatory)) {
                 navigation.navigate('AddAddress', { locationData });
               } else if (isAuthenticated) {
                 // Even if not mandatory, encourage saving for better UX if they just detected location
-                Alert.alert(
+                showGlobalAlert(
                   'Save Address',
                   'Would you like to save this location for faster checkout?',
+                  'info',
                   [
                     { text: 'Later', onPress: () => navigation.replace('DeliveryMode') },
                     { text: 'Save Now', onPress: () => navigation.navigate('AddAddress', { locationData }) }
@@ -168,7 +185,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
           );
         } catch (error) {
           console.error('Geocoding logic error:', error);
-          Alert.alert('Location Error', 'Failed to resolve your address. Please enter pincode.');
+          showGlobalAlert('Location Error', 'Failed to resolve your address. Please enter pincode.', 'error');
         } finally {
           setLoading(false);
         }
@@ -176,7 +193,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
       (error) => {
         setLoading(false);
         console.error('GPS Error:', error);
-        Alert.alert('GPS Error', `Unable to fetch your location: ${error.message}`);
+        showGlobalAlert('GPS Error', `Unable to fetch your location: ${error.message}`, 'error');
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
@@ -189,7 +206,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
 
   const handleCheckPincode = async () => {
     if (pincode.length !== 6) {
-      Alert.alert('Invalid Pincode', 'Please enter a valid 6-digit pincode');
+      showGlobalAlert('Invalid Pincode', 'Please enter a valid 6-digit pincode', 'warning');
       return;
     }
 
@@ -232,9 +249,10 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
 
         dispatch(setLocation(locationData));
         
-        Alert.alert(
+        showGlobalAlert(
           'Store Found!',
           `You are being connected to our ${store.name} branch for the freshest delivery.`,
+          'success',
           [{ text: 'Continue Shopping', onPress: () => {
             if (params?.from === 'SavedAddresses' || (isAuthenticated && isMandatory)) {
               navigation.navigate('AddAddress', { locationData });
@@ -247,7 +265,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
         setIsComingSoon(true);
       }
     } catch {
-      Alert.alert('Error', 'Could not check serviceability. Please try again.');
+      showGlobalAlert('Error', 'Could not check serviceability. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -282,9 +300,9 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
               <TouchableOpacity 
                 style={styles.switchUserBtn} 
                 onPress={() => {
-                  Alert.alert('Logout', 'Are you sure you want to logout and switch accounts?', [
+                  showGlobalAlert('Logout', 'Are you sure you want to logout and switch accounts?', 'warning', [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Logout', style: 'destructive', onPress: () => {
+                    { text: 'Logout', onPress: () => {
                       supabase.auth.signOut(); // This will trigger the SIGNED_OUT listener in App.js
                     }}
                   ]);
@@ -313,7 +331,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
               )}
             </TouchableOpacity>
 
-            {isAuthenticated && (
+            {isAuthenticated && hasSavedAddresses && (
               <TouchableOpacity
                 style={[styles.locationButton, { marginTop: SPACING.m, borderStyle: 'solid', backgroundColor: COLORS.white }]}
                 onPress={() => navigation.navigate('SavedAddresses', { from: 'LocationPicker' })}

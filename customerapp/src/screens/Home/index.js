@@ -10,7 +10,8 @@ import {
   Image, 
   ScrollView, 
   ActivityIndicator, 
-  RefreshControl 
+  RefreshControl,
+  StyleSheet
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -139,46 +140,6 @@ const HomeScreen = () => {
     }
   };
 
-  const renderStoreModal = () => (
-    <Modal
-      visible={isStoreModalVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setIsStoreModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Store Details</Text>
-            <TouchableOpacity onPress={() => setIsStoreModalVisible(false)}>
-              <Icon name="close" size={24} color={activeTheme.text} />
-            </TouchableOpacity>
-          </View>
-          {storeDetail ? (
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.storeDetailCard}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?q=80&w=1000&auto=format&fit=crop' }}
-                  style={styles.storeDetailImage}
-                />
-                <View style={styles.storeDetailInfo}>
-                  <Text style={styles.storeDetailName}>{storeDetail.name}</Text>
-                  <View style={styles.storeDistanceBadge}>
-                    <Icon name="map-marker" size={14} color={activeTheme.primary} />
-                    <Text style={[styles.storeDistanceBadgeText, { color: activeTheme.primary }]}>{distance} km away from you</Text>
-                  </View>
-                  <View style={styles.detailRow}><Icon name="phone" size={20} color={activeTheme.primary} /><Text style={styles.detailValue}>{storeDetail.phone || 'N/A'}</Text></View>
-                  <View style={styles.detailRow}><Icon name="email" size={20} color={activeTheme.primary} /><Text style={styles.detailValue}>{storeDetail.email || 'N/A'}</Text></View>
-                  <View style={styles.detailRow}><Icon name="map-marker-outline" size={20} color={activeTheme.primary} /><Text style={styles.detailValue}>{storeDetail.address || 'Kolkata, WB'}</Text></View>
-                </View>
-              </View>
-            </ScrollView>
-          ) : <ActivityIndicator size="large" color={COLORS.primary} style={{ margin: 50 }} />}
-        </View>
-      </View>
-    </Modal>
-  );
-
   if (loading && !refreshing) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -232,78 +193,91 @@ const HomeScreen = () => {
         maxToRenderPerBatch={4}
         windowSize={5}
       />
-      
-      {renderStoreModal()}
+
+      {/* Not Serviceable Overlay */}
+      {location.isHydrated && !location.isServiceable && (
+        <View style={styles.unserviceableOverlay}>
+          <View style={styles.unserviceableCard}>
+            <View style={[styles.iconCircle, { backgroundColor: activeTheme.primary + '15' }]}>
+              <Icon name="map-marker-radius-outline" size={48} color={activeTheme.primary} />
+            </View>
+            <Text style={styles.unserviceableTitle}>We're Coming Soon!</Text>
+            <Text style={styles.unserviceableText}>
+              Currently, we don't deliver fresh cuts to your neighborhood, but we're expanding rapidly. Stay tuned!
+            </Text>
+            <TouchableOpacity 
+              style={[styles.changeLocBtn, { backgroundColor: activeTheme.primary }]}
+              onPress={() => navigation.navigate('LocationPicker')}
+            >
+              <Text style={styles.changeLocBtnText}>Change Location</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
 
 const styles = {
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+  unserviceableOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 2000,
   },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: '80%',
+  unserviceableCard: {
+    width: '100%',
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  iconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  storeDetailCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  storeDetailImage: {
-    width: '100%',
-    height: 180,
-  },
-  storeDetailInfo: {
-    padding: 16,
-  },
-  storeDetailName: {
+  unserviceableTitle: {
     fontSize: 22,
     fontWeight: '800',
-    marginBottom: 8,
-  },
-  storeDistanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EBF5FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-    gap: 4,
-  },
-  storeDistanceBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    color: '#1F2937',
     marginBottom: 12,
+    textAlign: 'center',
   },
-  detailValue: {
-    fontSize: 14,
-    color: '#4B5563',
-    flex: 1,
+  unserviceableText: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
   },
+  changeLocBtn: {
+    width: '100%',
+    height: 54,
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  changeLocBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  }
 };
 
 export default HomeScreen;

@@ -361,7 +361,7 @@ export const getOrders = async (req, res) => {
     // 1. Fetch Orders and Customers (Direct join with profiles)
     let orderQuery = supabaseAdmin
       .from('orders')
-      .select('*, customer:profiles!user_id(full_name, phone)', { count: 'exact' })
+      .select('*, customer:profiles!user_id(full_name, phone), delivery_address:addresses(*)', { count: 'exact' })
       .eq('store_id', storeId);
 
     if (startDate) orderQuery = orderQuery.gte('created_at', startDate);
@@ -592,10 +592,15 @@ export const getNearestStore = async (req, res) => {
 
       // If found via pincode and we have user coords, calculate distance
       if (selected && lat && lng) {
+        const dist = haversine(parseFloat(lat), parseFloat(lng), parseFloat(selected.latitude), parseFloat(selected.longitude));
         selected = {
           ...selected,
-          distance_km: haversine(parseFloat(lat), parseFloat(lng), parseFloat(selected.latitude), parseFloat(selected.longitude))
+          distance_km: dist
         };
+        // Even if pincode matches, if distance is huge (> 25km), it's NOT serviceable
+        if (dist > 25) {
+          selected = null;
+        }
       }
     }
 
@@ -633,7 +638,7 @@ export const createProduct = async (req, res) => {
 
     const image_url = getImageUrl(mainFile, req.body.image_url);
     const variants = safeParseOptions(req.body.variants);
-    const delivery_options = safeParseOptions(req.body.delivery_options, ['express', 'today_evening', 'tmrw_morning', 'tmrw_evening']);
+    const delivery_options = safeParseOptions(req.body.delivery_options, ['express', 'tomorrow_morning', 'tomorrow_evening']);
 
     const productData = {
       ...req.body,

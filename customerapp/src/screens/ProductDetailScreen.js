@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Dimensions,
   Share,
-  Alert,
   StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -17,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import productService from '../api/productService';
 import { useDispatch, useSelector } from 'react-redux';
+import { showGlobalAlert } from '../services/alertService';
 import { addItem, removeItem } from '../store/slices/cartSlice';
 import { toggleFavorite, toggleFavoriteAsync } from '../store/slices/favoritesSlice';
 import favoritesService from '../api/favoritesService';
@@ -199,9 +199,8 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
       const normalizedSlot = selectedSlot.toLowerCase();
       const legacyMap = {
-        'tmrw_morning': ['morning', 'tomorrow morning'],
-        'today_evening': ['afternoon', 'today evening'],
-        'tmrw_evening': ['evening', 'tomorrow evening'],
+        'tomorrow_morning': ['morning', 'tomorrow morning'],
+        'tomorrow_evening': ['evening', 'tomorrow evening'],
         'express': ['express', 'express delivery']
       };
 
@@ -222,7 +221,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
     const options = product.delivery_options || [];
     const normalizedSlot = selectedSlot.toLowerCase();
-    const legacyMap = { 'tmrw_morning': 'morning', 'today_evening': 'afternoon', 'tmrw_evening': 'evening' };
+    const legacyMap = { 'tomorrow_morning': 'morning', 'tomorrow_evening': 'evening' };
 
     return options.some(opt => {
       const o = opt.toLowerCase();
@@ -296,19 +295,19 @@ const ProductDetailScreen = ({ route, navigation }) => {
                       style={styles.qtyBtn}
                       onPress={() => handleRemoveFromCart()}
                     >
-                      <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>−</Text>
+                      <Text style={{ fontSize: 24, color: activeTheme.primary, fontWeight: '700', lineHeight: 24 }}>−</Text>
                     </TouchableOpacity>
                     <Text style={styles.qtyText}>{getCartQuantity()}</Text>
                     <TouchableOpacity
                       style={styles.qtyBtn}
                       onPress={() => handleAddToCart(null, 1)}
                     >
-                      <Text style={{ fontSize: 24, color: COLORS.primary, fontWeight: '700', lineHeight: 24 }}>+</Text>
+                      <Text style={{ fontSize: 24, color: activeTheme.primary, fontWeight: '700', lineHeight: 24 }}>+</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
                   <TouchableOpacity
-                    style={[styles.addBtn, { paddingHorizontal: 24, height: 40 }]}
+                    style={[styles.addBtn, { paddingHorizontal: 24, height: 40, backgroundColor: activeTheme.primary }]}
                     onPress={() => handleAddToCart()}
                   >
                     <Text style={styles.addBtnText}>ADD</Text>
@@ -358,13 +357,13 @@ const ProductDetailScreen = ({ route, navigation }) => {
           {!(product.variants?.length > 0) && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Icon name="truck-delivery" size={22} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Icon name="truck-delivery" size={22} color={activeTheme.primary} style={{ marginRight: 8 }} />
                 <Text style={styles.sectionTitle}>Delivery Availability</Text>
               </View>
               <View style={styles.deliveryGrid}>
                 {(product.delivery_options || ['express']).map((opt) => {
-                  const normalizedOpt = opt === 'morning' ? 'tmrw_morning' :
-                    opt === 'afternoon' ? 'today_evening' : opt;
+                  const normalizedOpt = opt === 'morning' ? 'tomorrow_morning' :
+                    opt === 'evening' ? 'tomorrow_evening' : opt;
 
                   const isExpress = normalizedOpt === 'express';
                   const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
@@ -373,8 +372,8 @@ const ProductDetailScreen = ({ route, navigation }) => {
                   const config = (deliverySlotsConfig && deliverySlotsConfig[normalizedOpt]) || {
                     label: normalizedOpt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                     time: isExpress ? '90 Mins' : 'Scheduled',
-                    icon: isExpress ? 'lightning-bolt' : 'clock-outline',
-                    color: isExpress ? '#F59E0B' : COLORS.primary
+                    icon: isExpress ? 'lightning-bolt' : (normalizedOpt.includes('morning') ? 'weather-sunny' : 'weather-night'),
+                    color: isExpress ? '#6B21A8' : (normalizedOpt.includes('morning') ? '#7A0C0E' : '#064E3B')
                   };
 
                   const isActive = normalizedOpt === selectedSlot;
@@ -469,11 +468,10 @@ const ProductDetailScreen = ({ route, navigation }) => {
                           let icon = 'truck-delivery-outline';
                           let color = '#64748b'; // Default Slate
 
-                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#CA8A04'; }
-                          else if (slot.toLowerCase().includes('today evening')) { icon = 'weather-night'; color = '#166534'; }
-                          else if (slot.toLowerCase().includes('tomorrow evening')) { icon = 'weather-night'; color = '#1E40AF'; }
-                          else if (slot.toLowerCase().includes('afternoon')) { icon = 'weather-partly-cloudy'; color = '#3b82f6'; }
-                          else if (slot.toLowerCase().includes('express')) { icon = 'flash'; color = '#ef4444'; }
+                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#7A0C0E'; }
+                          else if (slot.toLowerCase().includes('tomorrow evening')) { icon = 'weather-night'; color = '#064E3B'; }
+                          else if (slot.toLowerCase().includes('express')) { icon = 'flash'; color = '#6B21A8'; }
+                          else return null; // Hide today evening or anything else unknown
 
                           return (
                             <View key={sIdx} style={[styles.deliveryBadge, { backgroundColor: color + '12' }]}>
@@ -496,19 +494,19 @@ const ProductDetailScreen = ({ route, navigation }) => {
                             style={styles.variantQtyBtn}
                             onPress={() => handleRemoveFromCart(variant)}
                           >
-                            <Icon name="minus" size={16} color={COLORS.primary} />
+                            <Icon name="minus" size={16} color={activeTheme.primary} />
                           </TouchableOpacity>
                           <Text style={styles.variantQtyText}>{getCartQuantity(variant)}</Text>
                           <TouchableOpacity
                             style={styles.variantQtyBtn}
                             onPress={() => handleAddToCart(variant, 1)}
                           >
-                            <Icon name="plus" size={16} color={COLORS.primary} />
+                            <Icon name="plus" size={16} color={activeTheme.primary} />
                           </TouchableOpacity>
                         </View>
                       ) : (
                         <TouchableOpacity
-                          style={styles.variantAddBtn}
+                          style={[styles.variantAddBtn, { backgroundColor: activeTheme.primary }]}
                           onPress={() => handleAddToCart(variant)}
                         >
                           <Text style={styles.variantAddText}>ADD</Text>
@@ -1243,7 +1241,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   variantAddText: {
-    color: COLORS.primary,
+    color: COLORS.white,
     fontSize: 12,
     fontWeight: '800',
   },

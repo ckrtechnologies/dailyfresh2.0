@@ -11,6 +11,7 @@ import {
   setHomeCollections
 } from '../../store/slices/productSlice';
 import { THEMES } from '../../constants/theme';
+import { setServiceability } from '../../store/slices/locationSlice';
 
 const useHomeData = () => {
   const dispatch = useDispatch();
@@ -35,7 +36,7 @@ const useHomeData = () => {
   const { storeId, address, coords } = location;
   const { isAuthenticated } = useSelector((state) => state.auth);
   const selectedSlot = useSelector((state) => state.config.selectedSlot);
-  const { unreadCount } = useSelector((state) => state.notifications || { unreadCount: 0 });
+  const unreadCount = useSelector((state) => state.notifications?.unreadCount || 0);
 
   // Local state
   const [refreshing, setRefreshing] = useState(false);
@@ -51,9 +52,8 @@ const useHomeData = () => {
     if (!selectedSlot || selectedSlot === 'all') return products;
 
     const slotMap = {
-      'tmrw_morning': ['morning', 'tomorrow morning', 'tmrw_morning'],
-      'today_evening': ['afternoon', 'today evening', 'today_evening', 'evening'],
-      'tmrw_evening': ['evening', 'tomorrow evening', 'tmrw_evening'],
+      'tomorrow_morning': ['morning', 'tomorrow morning', 'tomorrow_morning'],
+      'tomorrow_evening': ['evening', 'tomorrow evening', 'tomorrow_evening'],
       'express': ['express', 'express delivery']
     };
     const searchTerms = slotMap[selectedSlot] || [selectedSlot];
@@ -76,9 +76,8 @@ const useHomeData = () => {
         // No customizations - use product-level delivery options
         const options = p.delivery_options || ['express'];
         const normalizedOptions = options.map(o =>
-          o === 'morning' ? 'tmrw_morning' :
-            o === 'afternoon' ? 'today_evening' :
-              o === 'evening' ? 'tmrw_evening' : o
+          o === 'morning' ? 'tomorrow_morning' :
+            o === 'evening' ? 'tomorrow_evening' : o
         );
         supportsSlot = normalizedOptions.includes(selectedSlot);
       }
@@ -217,7 +216,17 @@ const useHomeData = () => {
             setStoreDetail(res.data);
             if (res.data.latitude && res.data.longitude) {
               if (coords) {
-                setDistance(getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude));
+                const dist = getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude);
+                setDistance(dist);
+                
+                // Force unserviceable if distance is too high (e.g. Noida to Kolkata)
+                if (dist > 20) {
+                  dispatch(setServiceability({
+                    isServiceable: false,
+                    storeId: null,
+                    storeName: null
+                  }));
+                }
               }
             }
           }
@@ -227,7 +236,7 @@ const useHomeData = () => {
       }
     };
     fetchStore();
-  }, [storeId, coords]);
+  }, [storeId, coords, dispatch]);
 
   const onRefresh = async () => {
     setRefreshing(true);

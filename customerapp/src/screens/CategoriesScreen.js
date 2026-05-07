@@ -10,13 +10,15 @@ import {
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - SPACING.l * 2 - SPACING.m * 2) / 3;
 
 const CategoriesScreen = ({ navigation }) => {
   const { categories } = useSelector((state) => state.products);
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
   const renderCategoryItem = ({ item }) => {
     return (
@@ -38,11 +40,11 @@ const CategoriesScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: activeTheme.primary }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="chevron-left" size={30} color={COLORS.primary} />
+          <Icon name="chevron-left" size={30} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.title}>All Categories</Text>
+        <Text style={[styles.title, { color: COLORS.white }]}>All Categories</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -102,7 +104,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: ITEM_WIDTH,
     height: ITEM_WIDTH,
-    borderRadius: RADIUS.m,
+    borderRadius: 16,
     backgroundColor: COLORS.lightGray,
     marginBottom: SPACING.s,
     overflow: 'hidden',

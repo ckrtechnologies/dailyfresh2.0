@@ -60,9 +60,7 @@ const ProductListScreen = ({ route, navigation }) => {
         <Icon name="arrow-left" size={24} color={COLORS.white} />
       </TouchableOpacity>
       <Text style={[styles.headerTitle, { color: COLORS.white }]}>{title}</Text>
-      <TouchableOpacity style={styles.filterBtn}>
-        <Icon name="tune-variant" size={20} color={COLORS.white} />
-      </TouchableOpacity>
+      <View style={{ width: 40 }} />
     </View>
   );
 
@@ -141,11 +139,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   listContent: {
-    padding: SPACING.s,
+    paddingHorizontal: 8, // Half of SPACING.m to work with wrapper padding
+    paddingTop: SPACING.m,
+    paddingBottom: 100,
   },
   productWrapper: {
-    flex: 0.5,
-    padding: SPACING.s,
+    width: '50%',
+    padding: 8, // This creates a consistent 16px gutter (8+8)
   },
   loadingContainer: {
     flex: 1,

@@ -21,9 +21,8 @@ const EXPANDED_WIDTH = SCREEN_WIDTH - 24;
 
 const SLOTS = [
   { id: 'express',          label: 'Express',     icon: 'truck-fast' },
-  { id: 'today_evening',    label: 'Today Eve',   icon: 'weather-night' },
-  { id: 'tmrw_morning', label: 'Tom. Morn',   icon: 'weather-sunny' },
-  { id: 'tmrw_evening', label: 'Tom. Eve',    icon: 'weather-night' },
+  { id: 'tomorrow_morning', label: 'Tom. Morn',   icon: 'weather-sunny' },
+  { id: 'tomorrow_evening', label: 'Tom. Eve',    icon: 'weather-night' },
 ];
 
 const FloatingDeliverySlot = () => {

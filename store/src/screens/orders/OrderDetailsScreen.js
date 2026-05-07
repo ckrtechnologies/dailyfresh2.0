@@ -127,8 +127,14 @@ export default function OrderDetailsScreen({ route, navigation }) {
           </View>
           <View style={styles.pairRow}>
             <Text style={styles.pairLabel}>Delivery Type</Text>
-            <View style={[styles.typeBadge, { backgroundColor: order.delivery_type === 'express' ? '#ffe4e1' : '#f0fdfa' }]}>
-              <Text style={[styles.typeText, { color: order.delivery_type === 'express' ? '#cd5c5c' : '#0d9488' }]}>
+            <View style={[styles.typeBadge, { 
+              backgroundColor: order.delivery_type === 'express' ? '#ffe4e1' : 
+                               order.delivery_type === 'tomorrow_morning' ? '#f0fdfa' : '#eff6ff' 
+            }]}>
+              <Text style={[styles.typeText, { 
+                color: order.delivery_type === 'express' ? '#cd5c5c' : 
+                       order.delivery_type === 'tomorrow_morning' ? '#0d9488' : '#1e40af' 
+              }]}>
                 {(order.delivery_type || 'scheduled').replace(/_/g, ' ').toUpperCase()}
               </Text>
             </View>

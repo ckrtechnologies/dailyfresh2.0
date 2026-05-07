@@ -16,6 +16,7 @@ import { COLORS, THEMES, SPACING, RADIUS } from '../constants/theme';
 import { logout } from '../store/slices/authSlice';
 import { clearCart } from '../store/slices/cartSlice';
 import { clearLocation } from '../store/slices/locationSlice';
+import { showGlobalAlert } from '../services/alertService';
 
 const AccountScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -29,22 +30,21 @@ const AccountScreen = ({ navigation }) => {
   const userInitials = userName !== 'Daily Fresh User' ? userName.charAt(0).toUpperCase() : 'U';
 
   const handleLogout = () => {
-    Alert.alert(
+    showGlobalAlert(
       'Logout',
       'Are you sure you want to logout?',
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Logout',
-          style: 'destructive',
           onPress: async () => {
             try {
               const authService = require('../api/authService').default;
               await authService.logout();
-              // The App.js auth listener will handle clearAll() and Redux reset
             } catch (error) {
               console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
+              showGlobalAlert('Error', 'Failed to logout. Please try again.', 'error');
             }
           }
         },
@@ -119,7 +119,7 @@ const AccountScreen = ({ navigation }) => {
             <View style={styles.userDetails}>
               <Text style={styles.userName}>{userName}</Text>
               <Text style={styles.userPhone}>{userPhone}</Text>
-              {user?.email && <Text style={styles.userEmail}>{user.email}</Text>}
+              {!!user?.email && <Text style={styles.userEmail}>{user.email}</Text>}
             </View>
           </View>
           <TouchableOpacity

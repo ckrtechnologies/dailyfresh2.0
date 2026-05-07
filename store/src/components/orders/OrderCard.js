@@ -40,6 +40,12 @@ const OrderCard = ({ item, index, onPress, onUpdateStatus }) => {
           <Text style={styles.infoText} numberOfLines={2}>{item.delivery_address || 'No address provided'}</Text>
         </View>
         <View style={styles.infoRow}>
+          <Icon name="clock-outline" size={16} color={COLORS.gray} />
+          <Text style={[styles.infoText, { fontWeight: '600', color: item.delivery_type === 'express' ? '#cd5c5c' : COLORS.primary }]}>
+            {(item.delivery_type || 'scheduled').replace(/_/g, ' ').toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.infoRow}>
           <Icon name="currency-inr" size={16} color={COLORS.gray} />
           <Text style={[styles.infoText, { fontWeight: 'bold', color: COLORS.dark }]}>{item.total_amount}</Text>
           <View style={styles.paymentBadge}>

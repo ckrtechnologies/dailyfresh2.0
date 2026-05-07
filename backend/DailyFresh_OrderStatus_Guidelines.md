@@ -11,9 +11,8 @@
 | Delivery Type | Enum Value | Description | Window |
 |---|---|---|---|
 | Express | `express` | ~60 min delivery, any time of day | ASAP |
-| Today Evening | `today_evening` | Same-day evening delivery | 5:00 PM – 9:00 PM |
-| Tomorrow Morning | `tmrw_morning` | Next-day morning delivery | 6:00 AM – 10:00 AM |
-| Tomorrow Evening | `tmrw_evening` | Next-day evening delivery | 5:00 PM – 9:00 PM |
+| Tomorrow Morning | `tomorrow_morning` | Next-day morning delivery | 6:00 AM – 10:00 AM |
+| Tomorrow Evening | `tomorrow_evening` | Next-day evening delivery | 5:00 PM – 9:00 PM |
 
 ---
 
@@ -24,12 +23,7 @@
 - Shown on the customer app as long as stock exists for the requested items.
 - No time-based restriction on the backend.
 
-### Today Evening
-- **Cutoff: 11:30 AM (IST) daily.**
-- Hidden from the customer app UI after 11:30 AM.
-- API must also reject new `today_evening` orders placed after cutoff — do not rely on UI alone.
-- Return `423 Locked` with message: `"Today evening slot is closed. Please choose another delivery type."`
-- A cron job runs at 11:30 AM daily to log `cutoff_passed_at` on all pending `today_evening` orders still in `placed` or `confirmed` status.
+
 
 ### Tomorrow Morning
 - Always available for next-day selection.
@@ -102,7 +96,7 @@ CREATE TABLE orders (
   rider_id            uuid REFERENCES riders(id),
 
   delivery_type       text NOT NULL CHECK (delivery_type IN (
-                        'express', 'today_evening', 'tmrw_morning', 'tmrw_evening'
+                        'express', 'tomorrow_morning', 'tomorrow_evening'
                       )),
 
   status              text NOT NULL DEFAULT 'placed' CHECK (status IN (
@@ -113,7 +107,7 @@ CREATE TABLE orders (
   scheduled_date      date NOT NULL,
   delivery_slot       text,                        -- e.g. "6:00 AM – 10:00 AM"
 
-  cutoff_passed_at    timestamptz,                 -- logged when today_evening cutoff hits
+
 
   status_updated_at   timestamptz DEFAULT now(),   -- auto-updated on status change
   status_updated_by   uuid,                        -- user/rider/admin who made the change
@@ -235,30 +229,7 @@ PATCH  /api/admin/orders/:id/assign-rider
        Assigns rider when order is in ready status.
 ```
 
-### Validation Middleware — Cutoff Check
 
-```javascript
-// middleware/cutoffGuard.js
-const CUTOFF_HOUR = 11;
-const CUTOFF_MINUTE = 30;
-
-export const cutoffGuard = (req, res, next) => {
-  const { delivery_type } = req.body;
-  if (delivery_type !== 'today_evening') return next();
-
-  const now = new Date();
-  const cutoff = new Date();
-  cutoff.setHours(CUTOFF_HOUR, CUTOFF_MINUTE, 0, 0);
-
-  if (now > cutoff) {
-    return res.status(423).json({
-      error: 'CUTOFF_PASSED',
-      message: 'Today evening slot is closed. Please choose another delivery type.',
-    });
-  }
-  next();
-};
-```
 
 ### Status Transition Guard
 
@@ -314,7 +285,7 @@ ALTER TABLE products ADD COLUMN scheduled_stock_qty int DEFAULT 0;
 ```
 
 - `express_stock_qty` — used for `express` orders (near-real-time deduction).
-- `scheduled_stock_qty` — used for `today_evening`, `tmrw_morning`, `tmrw_evening` orders (deducted at `confirmed`).
+- `scheduled_stock_qty` — used for `tomorrow_morning`, `tomorrow_evening` orders (deducted at `confirmed`).
 
 This split ensures express orders don't block out stock reserved for scheduled slots and vice versa.
 
@@ -346,7 +317,7 @@ This split ensures express orders don't block out stock reserved for scheduled s
 ### Order Table Filter Tabs
 
 ```
-All | Express | Today Evening | Tomorrow Morning | Tomorrow Evening
+All | Express | Tomorrow Morning | Tomorrow Evening
 ```
 
 Each tab filters by `delivery_type`. Combined with date picker and status filter dropdown.
@@ -391,8 +362,7 @@ Each tab filters by `delivery_type`. Combined with date picker and status filter
 
 | Scenario | Behaviour |
 |---|---|
-| User opens app after 11:30 AM | `today_evening` slot is hidden from delivery type selector |
-| User tries to select today_evening via deep link after cutoff | API returns 423, app shows error toast |
+
 | Order is `out_for_delivery` | Live tracking map appears in order detail screen |
 | Order is `delivered` | Delivery proof photo shown in order detail + review prompt |
 | Order is `cancelled` | Reason shown, refund timeline displayed if applicable |
@@ -417,8 +387,7 @@ Each tab filters by `delivery_type`. Combined with date picker and status filter
 
 | Job | Schedule | Action |
 |---|---|---|
-| `today_evening_cutoff` | Daily 11:30 AM IST | Sets `cutoff_passed_at` on pending today_evening orders; triggers admin notification of slot count |
-| `lock_scheduled_orders` | Daily 12:00 AM IST | Locks tmrw_morning and tmrw_evening orders for editing/cancellation |
+| `lock_scheduled_orders` | Daily 12:00 AM IST | Locks tomorrow_morning and tomorrow_evening orders for editing/cancellation |
 | `auto_cancel_unpaid` | Every 15 min | Cancels orders stuck in `placed` with `payment_status = pending` for > 30 mins |
 
 ---

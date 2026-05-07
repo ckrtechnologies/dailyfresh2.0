@@ -5,97 +5,122 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Animated,
   Dimensions,
+  Animated,
 } from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { hideAlert } from '../store/slices/uiSlice';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
 
-const CustomAlert = ({ 
-  visible, 
-  title, 
-  message, 
-  onClose, 
-  buttons = [], 
-  type = 'info' // info, success, error, warning
-}) => {
-  const [scale] = React.useState(new Animated.Value(0));
+const CustomAlert = ({ visible, title, message, type, buttons, onClose }) => {
+  const selectedSlot = useSelector((state) => state.config.selectedSlot);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
+
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const scaleAnim = React.useRef(new Animated.Value(0.9)).current;
 
   React.useEffect(() => {
     if (visible) {
-      Animated.spring(scale, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 7
-      }).start();
-    } else {
-      scale.setValue(0);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
   }, [visible]);
 
+  if (!visible) return null;
+
   const getIcon = () => {
     switch (type) {
-      case 'success': return { name: 'check-circle', color: '#166534' };
-      case 'error': return { name: 'alert-circle', color: '#7A0C0E' };
-      case 'warning': return { name: 'alert', color: '#CA8A04' };
-      default: return { name: 'information', color: '#166534' };
+      case 'success': return { name: 'check-circle', color: '#10B981' };
+      case 'error': return { name: 'alert-circle', color: '#EF4444' };
+      case 'warning': return { name: 'alert', color: '#F59E0B' };
+      default: return { name: 'information', color: activeTheme.primary };
     }
   };
 
-  const iconData = getIcon();
-
-  if (!visible) return null;
+  const alertIcon = getIcon();
+  
+  // Default to an "OK" button if none provided
+  const finalButtons = buttons && buttons.length > 0 
+    ? buttons 
+    : [{ text: 'OK', onPress: () => {} }];
 
   return (
     <Modal
       transparent
       visible={visible}
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <Animated.View style={[styles.alertBox, { transform: [{ scale }] }]}>
-          {/* Branded Icon Header */}
-          <View style={[styles.iconContainer, { backgroundColor: iconData.color + '15' }]}>
-            <Icon name={iconData.name} size={40} color={iconData.color} />
+      <TouchableOpacity 
+        style={styles.overlay} 
+        activeOpacity={1} 
+        onPress={onClose}
+      >
+        <Animated.View 
+          style={[
+            styles.alertContainer, 
+            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+          ]}
+          onStartShouldSetResponder={() => true}
+        >
+          <View style={styles.content}>
+            <View style={[styles.iconContainer, { backgroundColor: alertIcon.color + '15' }]}>
+              <Icon name={alertIcon.name} size={32} color={alertIcon.color} />
+            </View>
+            
+            {title ? <Text style={styles.title}>{title}</Text> : null}
+            <Text style={styles.message}>{message}</Text>
           </View>
 
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
-
-          <View style={styles.buttonContainer}>
-            {buttons.length > 0 ? (
-              buttons.map((btn, index) => (
+          <View style={[
+            styles.buttonContainer,
+            finalButtons.length === 1 && { justifyContent: 'center' }
+          ]}>
+            {finalButtons.map((btn, index) => {
+              const isPrimary = index === finalButtons.length - 1;
+              return (
                 <TouchableOpacity
                   key={index}
                   style={[
                     styles.button,
-                    index === buttons.length - 1 ? styles.primaryButton : styles.secondaryButton,
-                    btn.style === 'cancel' && styles.cancelButton,
-                    { backgroundColor: btn.backgroundColor || (index === buttons.length - 1 ? '#7A0C0E' : '#f1f5f9') }
+                    isPrimary && { backgroundColor: activeTheme.primary },
+                    index > 0 && { marginLeft: SPACING.s }
                   ]}
-                  onPress={btn.onPress}
+                  onPress={() => {
+                    onClose();
+                    if (btn.onPress) {
+                      setTimeout(() => {
+                        btn.onPress();
+                      }, 100);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.buttonText,
-                    index === buttons.length - 1 ? styles.primaryButtonText : styles.secondaryButtonText,
-                    btn.style === 'cancel' && styles.cancelButtonText
+                    isPrimary ? { color: COLORS.white } : { color: activeTheme.primary }
                   ]}>
                     {btn.text}
                   </Text>
                 </TouchableOpacity>
-              ))
-            ) : (
-              <TouchableOpacity style={styles.primaryButton} onPress={onClose}>
-                <Text style={styles.primaryButtonText}>Okay</Text>
-              </TouchableOpacity>
-            )}
+              );
+            })}
           </View>
         </Animated.View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 };
@@ -103,26 +128,31 @@ const CustomAlert = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  alertBox: {
-    width: width * 0.85,
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
     padding: SPACING.xl,
-    alignItems: 'center',
-    elevation: 10,
+  },
+  alertContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: COLORS.white,
+    borderRadius: 28,
+    padding: SPACING.xl,
+    elevation: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
-    shadowRadius: 20,
+    shadowRadius: 15,
+  },
+  content: {
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.l,
@@ -139,41 +169,22 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: SPACING.xl,
   },
   buttonContainer: {
-    width: '100%',
-    gap: 12,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   button: {
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingHorizontal: SPACING.l,
+    paddingVertical: SPACING.m,
+    borderRadius: 18,
+    minWidth: 80,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButton: {
-    backgroundColor: '#7A0C0E',
-  },
-  secondaryButton: {
-    backgroundColor: '#f1f5f9',
-  },
-  cancelButton: {
-    backgroundColor: 'transparent',
   },
   buttonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
-  primaryButtonText: {
-    color: COLORS.white,
-  },
-  secondaryButtonText: {
-    color: COLORS.dark,
-  },
-  cancelButtonText: {
-    color: COLORS.gray,
-  }
 });
 
 export default CustomAlert;

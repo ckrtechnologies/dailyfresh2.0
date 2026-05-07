@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert,
   ActivityIndicator,
   Dimensions,
   Animated,
@@ -21,6 +20,11 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import authService from '../api/authService';
 import { setCredentials, setLoading } from '../store/slices/authSlice';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Geolocation from 'react-native-geolocation-service';
+import { PermissionsAndroid } from 'react-native';
+import { setLocation } from '../store/slices/locationSlice';
+import apiClient from '../api/apiClient';
+import { showGlobalAlert } from '../services/alertService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,7 +46,7 @@ const LoginScreen = ({ navigation }) => {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      showGlobalAlert('Error', 'Please enter both email and password', 'error');
       return;
     }
 
@@ -51,6 +55,38 @@ const LoginScreen = ({ navigation }) => {
     try {
       const response = await authService.loginWithEmail(email, password);
       if (response.success) {
+        // Silently initialize location before finishing login process
+        try {
+          const hasPermission = Platform.OS === 'ios' 
+            ? (await Geolocation.requestAuthorization('whenInUse')) === 'granted'
+            : (await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION)) === PermissionsAndroid.RESULTS.GRANTED;
+
+          if (hasPermission) {
+            Geolocation.getCurrentPosition(
+              async (position) => {
+                const { latitude, longitude } = position.coords;
+                const storeRes = await apiClient.get('/customer/stores/nearest', { 
+                  params: { lat: latitude, lng: longitude } 
+                });
+                const store = storeRes.data?.data?.store;
+                
+                dispatch(setLocation({
+                  pincode: '000000', // Placeholder or fetched if needed
+                  address: 'Current Location',
+                  coords: { lat: latitude, lng: longitude },
+                  isServiceable: !!store,
+                  storeId: store?.id || null,
+                  storeName: store?.name || null
+                }));
+              },
+              () => {}, // Silent fail for location detection
+              { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
+            );
+          }
+        } catch (locErr) {
+          console.log('Location initialization skipped:', locErr);
+        }
+
         dispatch(setCredentials({
           user: response.data.user,
           token: response.data.access_token
@@ -58,7 +94,7 @@ const LoginScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error(err);
-      Alert.alert('Login Failed', err.message || 'Invalid email or password');
+      showGlobalAlert('Login Failed', err.message || 'Invalid email or password', 'error');
     } finally {
       setIsSubmitting(false);
       dispatch(setLoading(false));
@@ -67,6 +103,7 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      <StatusBar barStyle="light-content" backgroundColor="#012a21" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.content}
@@ -186,7 +223,7 @@ const styles = StyleSheet.create({
     height: height * 0.32,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#012a21', // Deep Emerald to match Splash
     borderBottomLeftRadius: 60,
     borderBottomRightRadius: 60,
     marginBottom: SPACING.l,

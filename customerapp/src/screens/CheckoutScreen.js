@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Image,
   TextInput,
   ActivityIndicator,
@@ -21,11 +20,14 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import RazorpayCheckout from 'react-native-razorpay';
 import Config from 'react-native-config';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
-import { clearCart } from '../store/slices/cartSlice';
+import { clearCart, updateCartAfterValidation } from '../store/slices/cartSlice';
 import { fetchActiveOrder } from '../store/slices/orderSlice';
 import orderService from '../api/orderService';
+import cartService from '../api/cartService';
+import productService from '../api/productService';
+import { setServiceability } from '../store/slices/locationSlice';
 import LogoLoader from '../components/LogoLoader';
-import CustomAlert from '../components/CustomAlert';
+import { showGlobalAlert } from '../services/alertService';
 
 // Removed DELIVERY_SLOTS constant as it is now managed globally
 
@@ -33,7 +35,7 @@ const CheckoutScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { items, totalAmount } = useSelector((state) => state.cart);
   const { user } = useSelector((state) => state.auth);
-  const { address, pincode, storeId, coords, selectedAddress } = useSelector((state) => state.location);
+  const { address, pincode, storeId, coords, selectedAddress, isServiceable } = useSelector((state) => state.location);
 
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
@@ -41,9 +43,8 @@ const CheckoutScreen = ({ navigation }) => {
   // Slot labels for display
   const slotLabels = {
     'express': { label: 'Express Delivery', time: 'Within 90 mins', icon: 'lightning-bolt', color: '#F59E0B' },
-    'today_evening': { label: 'Today Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#4F46E5' },
-    'tmrw_morning': { label: 'Tomorrow Morning', time: '7 AM - 11 AM', icon: 'weather-sunset-up', color: '#10B981' },
-    'tmrw_evening': { label: 'Tomorrow Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#6366F1' },
+    'tomorrow_morning': { label: 'Tomorrow Morning', time: '7 AM - 11 AM', icon: 'weather-sunset-up', color: '#10B981' },
+    'tomorrow_evening': { label: 'Tomorrow Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#6366F1' },
   };
 
   const currentSlot = slotLabels[selectedSlot] || slotLabels['express'];
@@ -56,21 +57,8 @@ const CheckoutScreen = ({ navigation }) => {
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
 
-  // Branded Alert State
-  const [alertConfig, setAlertConfig] = useState({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-    buttons: []
-  });
-
   const showAlert = (title, message, type = 'info', buttons = []) => {
-    setAlertConfig({ visible: true, title, message, type, buttons });
-  };
-
-  const hideAlert = () => {
-    setAlertConfig(prev => ({ ...prev, visible: false }));
+    showGlobalAlert(title, message, type, buttons);
   };
 
   const fetchCoupons = async () => {
@@ -105,16 +93,38 @@ const CheckoutScreen = ({ navigation }) => {
   };
 
   const handlePlaceOrder = async () => {
+    if (!isServiceable) {
+      showAlert('Service Unavailable', 'We currently don\'t deliver to this address. Please choose another location.', 'error');
+      return;
+    }
+
     if (!selectedAddress) {
       showAlert('Where to Deliver?', 'Please select a delivery address to ensure we reach you correctly.', 'warning', [
-        { text: 'Choose Address', onPress: () => { hideAlert(); navigation.navigate('SavedAddresses', { selectMode: true }); } },
-        { text: 'Later', style: 'cancel', onPress: hideAlert }
+        { text: 'Later', style: 'cancel' },
+        { text: 'Choose Address', onPress: () => { navigation.navigate('SavedAddresses', { selectMode: true }); } },
       ]);
       return;
     }
 
     setLoading(true);
     try {
+      // Final re-validation before order placement
+      const valRes = await cartService.validateCart(items, storeId);
+      if (valRes.success && valRes.data.hasChanges) {
+        setLoading(false);
+        dispatch(updateCartAfterValidation({ items: valRes.data.items }));
+        // Keep backend in sync
+        cartService.syncCart(valRes.data.items);
+        
+        let msg = "Some items in your cart have changed based on your delivery location:";
+        if (valRes.data.changes.removed.length > 0) msg += `\n- ${valRes.data.changes.removed.length} item(s) removed (unavailable).`;
+        if (valRes.data.changes.priceChanged.length > 0) msg += `\n- Prices have been updated.`;
+        if (valRes.data.changes.outOfStock.length > 0) msg += `\n- Out of stock items removed.`;
+        
+        showAlert('Cart Updated', msg, 'warning');
+        return;
+      }
+
       const orderData = {
         store_id: storeId,
         items: items.map(item => ({
@@ -173,7 +183,7 @@ const CheckoutScreen = ({ navigation }) => {
           contact: user?.phone || '',
           name: user?.full_name || ''
         },
-        theme: { color: COLORS.primary }
+        theme: { color: activeTheme.primary }
       };
 
       const paymentData = await RazorpayCheckout.open(options);
@@ -194,22 +204,8 @@ const CheckoutScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.log('Order Error:', error);
-
-      // Layman-friendly recovery for Cutoff Passed
-      if (error.message?.includes('Today evening slot is closed') || error.error === 'CUTOFF_PASSED') {
-        showAlert(
-          'Slot Closed',
-          'Oops! The evening delivery window just closed. Please pick another time for your fresh delivery.',
-          'warning',
-          [
-            { text: 'Change Delivery Time', onPress: () => { hideAlert(); navigation.navigate('DeliveryMode'); } },
-            { text: 'Cancel', style: 'cancel', onPress: hideAlert }
-          ]
-        );
-      } else {
-        const msg = typeof error === 'string' ? error : (error.description || error.message || 'Order could not be placed.');
-        if (error.code !== 0) showAlert('Order Failed', msg, 'error');
-      }
+      const msg = typeof error === 'string' ? error : (error.description || error.message || 'Order could not be placed.');
+      if (error.code !== 0) showAlert('Order Failed', msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -234,58 +230,6 @@ const CheckoutScreen = ({ navigation }) => {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* Address Selection */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Delivery Address</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}>
-                <Text style={styles.actionText}>{selectedAddress ? 'Change' : 'Add'}</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={styles.addressCard}
-              onPress={() => navigation.navigate('SavedAddresses', { selectMode: true })}
-            >
-              <Icon name="map-marker" size={24} color={COLORS.primary} />
-              <View style={styles.addressInfo}>
-                {selectedAddress ? (
-                  <>
-                    <Text style={styles.addressLabel}>{selectedAddress.label}</Text>
-                    <Text style={styles.addressText}>{selectedAddress.line1}, {selectedAddress.city}</Text>
-                  </>
-                ) : (
-                  <Text style={styles.addressPlaceholder}>Select a delivery address</Text>
-                )}
-              </View>
-              <Icon name="chevron-right" size={20} color={COLORS.gray} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Delivery Schedule Section - Commented out as per request (already selected by user)
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Delivery Schedule</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('DeliveryMode')}>
-              <Text style={styles.actionText}>Change</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.confirmationCard}>
-            <View style={[styles.iconBox, { backgroundColor: currentSlot.color + '10' }]}>
-              <Icon name={currentSlot.icon} size={24} color={currentSlot.color} />
-            </View>
-            <View style={styles.slotDetails}>
-              <Text style={styles.slotLabel}>{currentSlot.label}</Text>
-              <Text style={styles.slotSub}>{currentSlot.time}</Text>
-            </View>
-            <View style={styles.verifiedBadge}>
-              <Icon name="check-decagram" size={20} color={COLORS.success} />
-            </View>
-          </View>
-        </View>
-        */}
-
           {/* Coupon Code */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -296,7 +240,7 @@ const CheckoutScreen = ({ navigation }) => {
             </View>
             <View style={styles.couponContainer}>
               <View style={styles.couponInputWrapper}>
-                <Icon name="ticket-percent-outline" size={20} color={COLORS.primary} style={{ marginLeft: 12 }} />
+                <Icon name="ticket-percent-outline" size={20} color={activeTheme.primary} style={{ marginLeft: 12 }} />
                 <TextInput
                   style={styles.couponInput}
                   placeholder="Enter Coupon Code"
@@ -306,7 +250,7 @@ const CheckoutScreen = ({ navigation }) => {
                 />
               </View>
               <TouchableOpacity
-                style={[styles.applyBtn, (!couponCode || applyingCoupon) && styles.disabledApply]}
+                style={[styles.applyBtn, { backgroundColor: activeTheme.primary }, (!couponCode || applyingCoupon) && styles.disabledApply]}
                 onPress={handleApplyCoupon}
                 disabled={!couponCode || applyingCoupon}
               >
@@ -354,7 +298,7 @@ const CheckoutScreen = ({ navigation }) => {
               )}
               <View style={[styles.summaryRow, styles.grandTotalRow]}>
                 <Text style={styles.grandTotalLabel}>Grand Total</Text>
-                <Text style={styles.grandTotalValue}>₹{(grandTotal || 0).toFixed(2)}</Text>
+                <Text style={[styles.grandTotalValue, { color: activeTheme.primary }]}>₹{(grandTotal || 0).toFixed(2)}</Text>
               </View>
             </View>
           </View>
@@ -379,7 +323,7 @@ const CheckoutScreen = ({ navigation }) => {
 
             {loadingCoupons ? (
               <View style={styles.modalLoader}>
-                <ActivityIndicator color={COLORS.primary} size="large" />
+                <ActivityIndicator color={activeTheme.primary} size="large" />
               </View>
             ) : (availableCoupons || []).length > 0 ? (
               <FlatList
@@ -430,7 +374,7 @@ const CheckoutScreen = ({ navigation }) => {
           <Text style={styles.footerSub}>Final Amount</Text>
         </View>
         <TouchableOpacity
-          style={[styles.payBtn, (!selectedAddress || loading) && styles.disabledBtn]}
+          style={[styles.payBtn, { backgroundColor: activeTheme.primary }, (!selectedAddress || loading) && styles.disabledBtn]}
           onPress={handlePlaceOrder}
           disabled={!selectedAddress || loading}
         >
@@ -445,14 +389,6 @@ const CheckoutScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <CustomAlert
-        visible={alertConfig.visible}
-        title={alertConfig.title}
-        message={alertConfig.message}
-        type={alertConfig.type}
-        buttons={alertConfig.buttons}
-        onClose={hideAlert}
-      />
     </SafeAreaView>
   );
 };

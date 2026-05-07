@@ -7,7 +7,6 @@ import {
   TextInput,
   ScrollView,
   SafeAreaView,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +17,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { supabase } from '../api/supabase';
 import { setCredentials } from '../store/slices/authSlice';
+import { showGlobalAlert } from '../services/alertService';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, token } = useSelector((state) => state.auth);
@@ -36,7 +36,7 @@ const EditProfileScreen = ({ navigation }) => {
 
   const handleUpdate = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
+      showGlobalAlert('Error', 'Please enter your name', 'error');
       return;
     }
     setLoading(true);
@@ -57,12 +57,12 @@ const EditProfileScreen = ({ navigation }) => {
       // Update Redux state with the new user object
       dispatch(setCredentials({ user: data?.user || user, token }));
 
-      Alert.alert('Success', 'Profile updated successfully', [
+      showGlobalAlert('Success', 'Profile updated successfully', 'success', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (err) {
       console.error('Update Profile Error:', err);
-      Alert.alert('Error', err.message || 'Failed to update profile');
+      showGlobalAlert('Error', err.message || 'Failed to update profile', 'error');
     } finally {
       setLoading(false);
     }

@@ -11,12 +11,16 @@ import {
   Animated,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
+import { useSelector } from 'react-redux';
 
 const { width } = Dimensions.get('window');
 
 const OrderSuccessScreen = ({ route, navigation }) => {
   const { orderId } = route.params || {};
+  const { selectedSlot } = useSelector((state) => state.config);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
+
   const scaleAnim = new Animated.Value(0);
   const opacityAnim = new Animated.Value(0);
 
@@ -37,8 +41,8 @@ const OrderSuccessScreen = ({ route, navigation }) => {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={[styles.container, { backgroundColor: activeTheme.background }]}>
+      <StatusBar barStyle="light-content" backgroundColor={activeTheme.primary} />
       
       <View style={styles.content}>
         <Animated.View 
@@ -47,7 +51,7 @@ const OrderSuccessScreen = ({ route, navigation }) => {
             { transform: [{ scale: scaleAnim }], opacity: opacityAnim }
           ]}
         >
-          <View style={styles.circleBg}>
+          <View style={[styles.circleBg, { backgroundColor: activeTheme.primary, shadowColor: activeTheme.primary }]}>
             <Icon name="check-bold" size={60} color={COLORS.white} />
           </View>
         </Animated.View>
@@ -66,18 +70,18 @@ const OrderSuccessScreen = ({ route, navigation }) => {
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
-            style={styles.viewOrderBtn}
+            style={[styles.viewOrderBtn, { backgroundColor: activeTheme.primary }]}
             onPress={() => navigation.replace('OrderDetail', { order: { id: orderId } })}
           >
             <Text style={styles.viewOrderText}>View My Order</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={styles.continueBtn}
+            style={[styles.continueBtn, { borderColor: activeTheme.primary }]}
             onPress={() => navigation.navigate('AppTabs', { screen: 'Home' })}
           >
-            <Text style={styles.continueText}>Continue Shopping</Text>
-            <Icon name="arrow-right" size={20} color={COLORS.primary} />
+            <Text style={[styles.continueText, { color: activeTheme.primary }]}>Continue Shopping</Text>
+            <Icon name="arrow-right" size={20} color={activeTheme.primary} />
           </TouchableOpacity>
         </View>
       </View>

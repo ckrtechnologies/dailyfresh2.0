@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import { useDispatch } from 'react-redux';
 import { addItem } from '../store/slices/cartSlice';
 import LogoLoader from '../components/LogoLoader';
@@ -24,6 +24,9 @@ const OrderDetailScreen = ({ route, navigation }) => {
   console.log('[OrderDetail] Params:', JSON.stringify(route.params, null, 2));
   const [order, setOrder] = useState(initialOrder || (orderId ? { id: orderId } : null));
   const [loading, setLoading] = useState(true);
+  
+  // Theme resolution based on order delivery type
+  const activeTheme = THEMES[order?.delivery_type] || THEMES.all;
 
   useEffect(() => {
     fetchOrderDetails();
@@ -55,7 +58,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
       <Text style={styles.errorTitle}>Order Not Found</Text>
       <Text style={styles.errorSubtitle}>We couldn't find this order. It might have been moved or doesn't exist anymore.</Text>
       <TouchableOpacity 
-        style={styles.recoveryBtn}
+        style={[styles.recoveryBtn, { backgroundColor: activeTheme.primary }]}
         onPress={() => navigation.navigate('Home')}
       >
         <Text style={styles.recoveryBtnText}>Go Back Home</Text>
@@ -88,7 +91,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
       <View style={styles.stepIndicator}>
         <View style={[
           styles.stepCircle, 
-          (completed || active) && { backgroundColor: cancelled ? COLORS.error : COLORS.primary, borderColor: cancelled ? COLORS.error : COLORS.primary },
+          (completed || active) && { backgroundColor: cancelled ? COLORS.error : activeTheme.primary, borderColor: cancelled ? COLORS.error : activeTheme.primary },
         ]}>
           {completed ? (
             <Icon name={cancelled ? "close" : "check"} size={14} color={COLORS.white} />
@@ -98,13 +101,13 @@ const OrderDetailScreen = ({ route, navigation }) => {
             <View style={styles.stepDot} />
           )}
         </View>
-        {!last && <View style={[styles.stepLine, completed && { backgroundColor: cancelled ? COLORS.error : COLORS.primary }]} />}
+        {!last && <View style={[styles.stepLine, completed && { backgroundColor: cancelled ? COLORS.error : activeTheme.primary }]} />}
       </View>
       <View style={styles.stepContent}>
-        <Text style={[styles.stepTitle, active && { color: cancelled ? COLORS.error : COLORS.primary, fontWeight: '700' }]}>
+        <Text style={[styles.stepTitle, active && { color: cancelled ? COLORS.error : activeTheme.primary, fontWeight: '700' }]}>
           {title}
         </Text>
-        {date && <Text style={styles.stepDate}>{date}</Text>}
+        {!!date && <Text style={styles.stepDate}>{date}</Text>}
       </View>
     </View>
   );
@@ -159,7 +162,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={activeTheme.primary} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -169,10 +172,10 @@ const OrderDetailScreen = ({ route, navigation }) => {
         <Text style={styles.headerTitle}>Order Details</Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity style={styles.helpBtn} onPress={handleShare}>
-            <Icon name="share-variant" size={22} color={COLORS.primary} />
+            <Icon name="share-variant" size={22} color={activeTheme.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.helpBtn} onPress={() => Linking.openURL('tel:+919876543210')}>
-            <Icon name="help-circle-outline" size={22} color={COLORS.primary} />
+            <Icon name="help-circle-outline" size={22} color={activeTheme.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -184,7 +187,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
           <View style={styles.statusHeader}>
             <View>
               <Text style={styles.orderIdText}>Order #{order.order_number}</Text>
-              <Text style={styles.storeText}>{order.store?.name || 'Daily Fresh Store'}</Text>
+              <Text style={styles.storeText}>Daily Fresh Hub</Text>
               <Text style={styles.orderTimeText}>
                 {order.created_at ? (
                   <>
@@ -205,17 +208,17 @@ const OrderDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* OTP Section for Secure Delivery */}
-          {(order.status === 'ready' || order.status === 'out_for_delivery') && order.delivery_otp && (
-            <View style={styles.otpCard}>
+          {(order.status === 'ready' || order.status === 'out_for_delivery') && !!order.delivery_otp && (
+            <View style={[styles.otpCard, { backgroundColor: activeTheme.primary + '10', borderColor: activeTheme.primary + '30' }]}>
               <View style={styles.otpHeader}>
-                <Icon name="shield-check" size={20} color={COLORS.primary} />
-                <Text style={styles.otpTitle}>Delivery Verification OTP</Text>
+                <Icon name="shield-check" size={20} color={activeTheme.primary} />
+                <Text style={[styles.otpTitle, { color: activeTheme.primary }]}>Delivery Verification OTP</Text>
               </View>
-              <Text style={styles.otpSub}>Share this with the rider only at the time of delivery.</Text>
+              <Text style={[styles.otpSub, { color: activeTheme.primary + 'cc' }]}>Share this with the rider only at the time of delivery.</Text>
               <View style={styles.otpContainer}>
                 {String(order.delivery_otp || '----').split('').map((digit, i) => (
-                  <View key={i} style={styles.otpDigit}>
-                    <Text style={styles.otpDigitText}>{digit}</Text>
+                  <View key={i} style={[styles.otpDigit, { borderColor: activeTheme.primary + '30' }]}>
+                    <Text style={[styles.otpDigitText, { color: activeTheme.primary }]}>{digit}</Text>
                   </View>
                 ))}
               </View>
@@ -247,12 +250,12 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
           {/* Rider Details (Prominent version) */}
           {order.rider && (order.status === 'picked_up' || order.status === 'out_for_delivery') && (
-            <View style={styles.riderProminentCard}>
-              <View style={styles.riderAvatar}>
-                <Icon name="account" size={24} color={COLORS.primary} />
+            <View style={[styles.riderProminentCard, { backgroundColor: activeTheme.primary + '08', borderColor: activeTheme.primary + '20' }]}>
+              <View style={[styles.riderAvatar, { borderColor: activeTheme.primary + '20' }]}>
+                <Icon name="account" size={24} color={activeTheme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.riderName}>{order.rider.full_name}</Text>
+                <Text style={[styles.riderName, { color: activeTheme.primary }]}>{order.rider.full_name}</Text>
                 <Text style={styles.riderStatus}>
                   {order.status === 'delivered' ? 'Delivered your order' : 'Is delivering your order'}
                 </Text>
@@ -290,12 +293,10 @@ const OrderDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.itemName}>
                   {item.variant?.name || (item.preferences?.cut ? `${item.preferences.cut}` : item.name)}
                 </Text>
-                {item.preferences && (item.preferences.cut || item.preferences.cleaning) && (
-                  <Text style={styles.itemPref}>
+                <Text style={[styles.itemPref, { color: activeTheme.primary }]}>
                     {item.preferences.cut && item.preferences.cut !== (item.variant?.name || item.name) ? `${item.preferences.cut} Cut` : ''}
                     {item.preferences.cleaning && item.preferences.cleaning !== (item.variant?.name || item.name) ? (item.preferences.cut ? `, ${item.preferences.cleaning}` : item.preferences.cleaning) : ''}
                   </Text>
-                )}
                 <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
               </View>
               <Text style={styles.itemPrice}>₹{item.total_price}</Text>
@@ -307,8 +308,8 @@ const OrderDetailScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.m }}>
             <Text style={styles.sectionTitle}>Delivery Details</Text>
-            <View style={[styles.typeBadge, { backgroundColor: order.delivery_type === 'express' ? '#ffe4e1' : '#f0fdfa' }]}>
-              <Text style={[styles.typeText, { color: order.delivery_type === 'express' ? '#cd5c5c' : '#0d9488' }]}>
+            <View style={[styles.typeBadge, { backgroundColor: activeTheme.primary + '15' }]}>
+              <Text style={[styles.typeText, { color: activeTheme.primary }]}>
                 {(order.delivery_type || 'Scheduled').replace(/_/g, ' ').toUpperCase()}
               </Text>
             </View>
@@ -319,8 +320,8 @@ const OrderDetailScreen = ({ route, navigation }) => {
             <Icon name="map-marker-outline" size={20} color={COLORS.primary} />
             <View style={{ flex: 1 }}>
               {/* Label if available */}
-              {((Array.isArray(order.delivery_address) ? order.delivery_address[0]?.label : order.delivery_address?.label) || order.address_label || order.shipping_address?.label) && (
-                <Text style={styles.addressLabel}>
+              {!!((Array.isArray(order.delivery_address) ? order.delivery_address[0]?.label : order.delivery_address?.label) || order.address_label || order.shipping_address?.label) && (
+                <Text style={[styles.addressLabel, { color: activeTheme.primary }]}>
                   {(Array.isArray(order.delivery_address) ? order.delivery_address[0]?.label : order.delivery_address?.label) || order.address_label || order.shipping_address?.label}
                 </Text>
               )}
@@ -356,9 +357,9 @@ const OrderDetailScreen = ({ route, navigation }) => {
             <Text style={styles.billValue}>₹{order.gst_amount || 0}</Text>
           </View>
           <View style={styles.divider} />
-          <View style={styles.billRow}>
+          <View style={[styles.billRow, styles.grandTotalRow]}>
             <Text style={styles.totalLabel}>Total Amount Paid</Text>
-            <Text style={styles.totalValue}>₹{order.total_amount}</Text>
+            <Text style={[styles.totalValue, { color: activeTheme.primary }]}>₹{order.total_amount}</Text>
           </View>
           <View style={styles.paymentMethodRow}>
             <Icon name={order.payment_method === 'cod' ? 'cash' : 'credit-card-outline'} size={16} color={COLORS.gray} />
@@ -370,7 +371,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
         {/* Reorder Button */}
         <TouchableOpacity 
-          style={styles.reorderBtn}
+          style={[styles.reorderBtn, { backgroundColor: activeTheme.primary }]}
           onPress={handleReorder}
         >
           <Icon name="refresh" size={20} color={COLORS.white} />
@@ -602,8 +603,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    borderRadius: RADIUS.l,
+    borderRadius: 24, // Island style
     gap: 8,
+    marginBottom: 40,
   },
   reorderBtnText: {
     color: COLORS.white,

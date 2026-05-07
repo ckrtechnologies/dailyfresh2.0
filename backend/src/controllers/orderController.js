@@ -26,7 +26,7 @@ const haversine = (lat1, lng1, lat2, lng2) => {
  * Find the first store (ordered by proximity) that has sufficient stock
  * for ALL items in the cart.
  *
- * @param {string}   deliveryType    - express | today_evening | tmrw_morning | tmrw_evening
+ * @param {string}   deliveryType    - express | tomorrow_morning | tomorrow_evening
  * @param {string}   preferredStoreId - Store chosen at location pick
  * @param {Array}    items            - [{ product_id, quantity }]
  * @param {number}   lat              - Customer latitude
@@ -44,21 +44,31 @@ const findFulfillingStore = async (deliveryType, preferredStoreId, items, lat, l
   if (!stores?.length) return null;
 
   // Sort: preferred store first, then by distance if coords available
-  const sorted = [...stores].sort((a, b) => {
-    if (a.id === preferredStoreId) return -1;
-    if (b.id === preferredStoreId) return 1;
-    if (lat && lng && a.latitude && b.latitude) {
-      return (
-        haversine(lat, lng, parseFloat(a.latitude), parseFloat(a.longitude)) -
-        haversine(lat, lng, parseFloat(b.latitude), parseFloat(b.longitude))
-      );
-    }
-    return 0;
-  });
+  const withDistance = stores
+    .filter(s => s.latitude && s.longitude)
+    .map(s => {
+      const dist = (lat && lng) ? haversine(parseFloat(lat), parseFloat(lng), parseFloat(s.latitude), parseFloat(s.longitude)) : null;
+      return { ...s, distance: dist };
+    })
+    .filter(s => {
+      // STRICT FILTER: If we have user coords, store MUST be within its delivery radius
+      if (s.distance !== null) {
+        return s.distance <= (s.delivery_radius_km || 15);
+      }
+      // If no coords, only allow preferred store or pincode match (implicitly handled by sorting)
+      return s.id === preferredStoreId;
+    })
+    .sort((a, b) => {
+      if (a.id === preferredStoreId) return -1;
+      if (b.id === preferredStoreId) return 1;
+      return (a.distance || 0) - (b.distance || 0);
+    });
+
+  if (!withDistance.length) return null;
 
   const productIds = items.map(i => i.product_id || i.id);
 
-  for (const store of sorted) {
+  for (const store of withDistance) {
     // Fetch inventory for this store for the requested product IDs
     const { data: inventory } = await supabaseAdmin
       .from('products')
@@ -94,7 +104,7 @@ export const placeOrder = async (req, res) => {
     subtotal,
     delivery_charge,
     gst_amount,
-    delivery_type,  // express | today_evening | tmrw_morning | tmrw_evening
+    delivery_type,  // express | tomorrow_morning | tomorrow_evening
     lat,            // customer coords for fallback store ranking
     lng,
   } = req.body;

@@ -11,7 +11,7 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { navigationRef } from '../navigation/RootNavigator';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import { fetchActiveOrder, hideMiniStatus } from '../store/slices/orderSlice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -21,6 +21,8 @@ const MiniOrderStatus = () => {
   const dispatch = useDispatch();
   const { activeOrder, hidden } = useSelector((state) => state.order);
   const { user } = useSelector((state) => state.auth);
+  const selectedSlot = useSelector((state) => state.config.selectedSlot);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
   const translateX = useRef(new Animated.Value(0)).current;
 
@@ -58,14 +60,15 @@ const MiniOrderStatus = () => {
       case 'pending':
         return { label: 'Order Placed', icon: 'clock-outline', color: '#EAB308' };
       case 'accepted':
-        return { label: 'Order Accepted', icon: 'check-circle-outline', color: COLORS.primary };
+        return { label: 'Order Accepted', icon: 'check-circle-outline', color: activeTheme.primary };
       case 'preparing':
         return { label: 'Preparing Items', icon: 'food-variant', color: '#3B82F6' };
       case 'out_for_delivery':
       case 'picked_up':
         return { label: 'Out for Delivery', icon: 'truck-delivery', color: '#8B5CF6' };
       default:
-        return { label: status, icon: 'information-outline', color: COLORS.gray };
+        const capitalized = status.charAt(0).toUpperCase() + status.slice(1);
+        return { label: capitalized, icon: 'information-outline', color: activeTheme.textLight };
     }
   };
 
@@ -112,8 +115,8 @@ const MiniOrderStatus = () => {
           </View>
 
           <View style={styles.action}>
-             <Text style={styles.trackText}>TRACK</Text>
-             <Icon name="chevron-right" size={20} color={COLORS.primary} />
+             <Text style={[styles.trackText, { color: activeTheme.primary }]}>TRACK</Text>
+             <Icon name="chevron-right" size={20} color={activeTheme.primary} />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -125,21 +128,21 @@ const styles = StyleSheet.create({
   outerContainer: {
     position: 'absolute',
     bottom: 80, // Above bottom tabs
-    left: SPACING.m,
-    right: SPACING.m,
-    height: 70,
+    left: SPACING.l,
+    right: SPACING.l,
+    height: 72,
     zIndex: 1000,
   },
   container: {
     flex: 1,
     backgroundColor: COLORS.white,
-    borderRadius: RADIUS.m,
-    elevation: 8,
+    borderRadius: 24, // Matches MiniCart island design
+    elevation: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
-    shadowRadius: 10,
-    borderWidth: 1,
+    shadowRadius: 12,
+    borderWidth: 1.5,
     borderColor: '#F1F5F9',
   },
   content: {
@@ -177,16 +180,16 @@ const styles = StyleSheet.create({
   trackText: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: COLORS.primary, // Default fallback
   },
   closeBtn: {
     position: 'absolute',
     right: 0,
-    top: 0,
-    bottom: 0,
-    width: 80,
-    backgroundColor: '#EF4444',
-    borderRadius: RADIUS.m,
+    top: '5%',
+    bottom: '5%',
+    width: 70,
+    backgroundColor: '#FF4D4D',
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: -1,

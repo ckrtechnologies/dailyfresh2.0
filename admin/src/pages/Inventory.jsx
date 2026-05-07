@@ -139,7 +139,7 @@ const Inventory = () => {
       isAdmin && { header: 'Store', accessor: (row) => row.store?.name, render: (row) => <div style={{ fontSize: '11px', fontWeight: '500' }}><span className="badge badge-pending">{row.store?.name || 'Global'}</span></div> },
       { header: 'Price', accessor: 'price', align: 'right', render: (row) => <b>₹{row.price}</b> },
       { header: 'Express Stock', accessor: 'express_stock_qty', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.express_stock_qty < 10 ? 'var(--danger)' : 'inherit' }}>{row.express_stock_qty} {row.weight_unit}</span> },
-      { header: 'Sched. Stock', accessor: 'scheduled_stock_qty', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.scheduled_stock_qty < 10 ? 'var(--danger)' : 'inherit' }}>{row.scheduled_stock_qty} {row.weight_unit}</span> },
+      { header: 'Scheduled Stock', accessor: 'scheduled_stock_qty', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.scheduled_stock_qty < 10 ? 'var(--danger)' : 'inherit' }}>{row.scheduled_stock_qty} {row.weight_unit}</span> },
       { header: 'Actions', accessor: 'id', align: 'center', render: (row) => (
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
           <button onClick={() => setModal({ show: true, type: 'products', data: row })} className="btn-icon"><Pencil size={12} /></button>

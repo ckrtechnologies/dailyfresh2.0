@@ -38,9 +38,16 @@ const HomeHeader = React.memo(({
             <Icon name="map-marker" size={18 - (progress * 2)} color={activeTheme.primary} />
           </View>
           <View style={styles.locationTextContainer}>
-            <Text style={[styles.locationTitle, { fontSize: 14 - (progress * 1) }]}>
-              {location.selectedAddress?.label || address?.split(',')[0] || 'Pick Location'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.locationTitle, { fontSize: 14 - (progress * 1) }]}>
+                {location.selectedAddress?.label ? `Deliver to ${location.selectedAddress.label}` : (address ? `Deliver to ${address.split(',')[0]}` : 'Pick Location')}
+              </Text>
+              {!location.isServiceable && progress < 0.5 && (
+                <View style={styles.unserviceableBadge}>
+                  <Text style={styles.unserviceableBadgeText}>OUT OF SERVICE</Text>
+                </View>
+              )}
+            </View>
             {progress < 0.8 && (
               <Text style={[styles.addressText, { opacity: 1 - (progress * 1.2) }]} numberOfLines={1}>
                 {location.selectedAddress
@@ -59,13 +66,10 @@ const HomeHeader = React.memo(({
             <View style={[styles.slotBadge, { 
               backgroundColor: 'rgba(255,255,255,0.2)',
               paddingVertical: 5 - (progress * 2),
-              paddingHorizontal: 10 - (progress * 2)
+              paddingHorizontal: 12 - (progress * 2)
             }]}>
               <Text style={[styles.slotBadgeText, { fontSize: 11 - (progress * 1) }]}>
-                {selectedSlot === 'express' ? '⚡ Express' :
-                  selectedSlot === 'today_evening' || selectedSlot === 'afternoon' ? '📅 Today' :
-                    selectedSlot === 'tmrw_morning' || selectedSlot === 'morning' ? '📅 Tom.' :
-                      '📅 Tom. Eve'}
+                {selectedSlot === 'express' ? '⚡ Express' : selectedSlot === 'tomorrow_morning' ? '📅 Tomorrow Morning' : selectedSlot === 'tomorrow_evening' ? '📅 Tomorrow Evening' : '📅 Standard'}
               </Text>
               <Icon name="chevron-down" size={12 - (progress * 2)} color={COLORS.white} />
             </View>
@@ -103,10 +107,10 @@ const styles = StyleSheet.create({
     height: 50,
   },
   locationContent: {
-    flex: 1,
+    flex: 1.2,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 4,
   },
   locationIconWrapper: {
     width: 34,
@@ -115,7 +119,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.s,
+    marginRight: 6,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -138,7 +142,8 @@ const styles = StyleSheet.create({
   },
   slotContainer: {
     justifyContent: 'center',
-    marginHorizontal: 8,
+    marginLeft: 4,
+    marginRight: 4,
   },
   slotBadge: {
     flexDirection: 'row',
@@ -146,7 +151,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 15,
-    gap: 4,
   },
   slotBadgeText: {
     color: COLORS.white,
@@ -179,6 +183,18 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 9,
     fontWeight: 'bold',
+  },
+  unserviceableBadge: {
+    backgroundColor: '#FF4B6E',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  unserviceableBadgeText: {
+    color: COLORS.white,
+    fontSize: 8,
+    fontWeight: '900',
   },
 });
 

@@ -23,9 +23,8 @@ const DeliveryModeScreen = ({ navigation }) => {
   };
 
   const scheduledSlots = [
-    { id: 'today_evening', title: 'Today Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#4F46E5' },
-    { id: 'tmrw_morning', title: 'Tomorrow Morning', time: '7 AM - 11 AM', icon: 'weather-sunset-up', color: '#10B981' },
-    { id: 'tmrw_evening', title: 'Tomorrow Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#6366F1' },
+    { id: 'tomorrow_morning', title: 'Tomorrow Morning', time: '7 AM - 11 AM', icon: 'weather-sunset-up', color: '#10B981' },
+    { id: 'tomorrow_evening', title: 'Tomorrow Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#6366F1' },
   ];
 
   return (

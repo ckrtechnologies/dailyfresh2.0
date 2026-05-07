@@ -10,18 +10,9 @@ export const navigationRef = createNavigationContainerRef();
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, THEMES } from '../constants/theme';
+// Components & Config
 import MiniCart from '../components/MiniCart';
-
-
-// Basic Icon Mapping
-const ICON_MAP = {
-  Home: { active: 'home-variant', inactive: 'home-variant-outline' },
-  Favorites: { active: 'heart-multiple', inactive: 'heart-multiple-outline' },
-  Categories: { active: 'view-grid', inactive: 'view-grid-outline' },
-  Cart: { active: 'cart', inactive: 'cart-outline' },
-  Account: { active: 'account-circle', inactive: 'account-circle-outline' }
-};
-
+import MiniOrderStatus from '../components/MiniOrderStatus';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -35,6 +26,7 @@ import CartScreen from '../screens/CartScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import AccountScreen from '../screens/AccountScreen';
 import ProductListingScreen from '../screens/ProductListingScreen';
+import ProductListScreen from '../screens/ProductListScreen';
 import ProductDetailScreen from '../screens/ProductDetailScreen';
 import OrdersScreen from '../screens/OrdersScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
@@ -48,12 +40,20 @@ import OrderSuccessScreen from '../screens/OrderSuccessScreen';
 import SearchScreen from '../screens/SearchScreen';
 import AddAddressScreen from '../screens/AddAddressScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
-import MiniOrderStatus from '../components/MiniOrderStatus';
-import ProductListScreen from '../screens/ProductListScreen';
 import DeliveryModeScreen from '../screens/DeliveryModeScreen';
 
+// Navigation Config
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
+
+// Basic Icon Mapping
+const ICON_MAP = {
+  Home: { active: 'home-variant', inactive: 'home-variant-outline' },
+  Favorites: { active: 'heart-multiple', inactive: 'heart-multiple-outline' },
+  Categories: { active: 'view-grid', inactive: 'view-grid-outline' },
+  Cart: { active: 'cart', inactive: 'cart-outline' },
+  Account: { active: 'account-circle', inactive: 'account-circle-outline' }
+};
 
 const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>

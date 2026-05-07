@@ -236,7 +236,7 @@ const AppContent = () => {
         setIsReady(true);
         const endTime = Date.now();
         const elapsedTime = endTime - startTime;
-        const minDuration = 1500; // 1.5 seconds
+        const minDuration = 6000; // 6 seconds for the epic 2-part reveal
 
         if (elapsedTime < minDuration) {
           setTimeout(() => setLoading(false), minDuration - elapsedTime);

@@ -52,7 +52,7 @@ export default function InventoryListScreen() {
     is_featured: false,
     is_trending: false,
     is_flash_sale: false,
-    delivery_options: ['express', 'today_evening', 'tmrw_morning', 'tmrw_evening'],
+    delivery_options: ['express', 'tomorrow_morning', 'tomorrow_evening'],
     variants: [],
     image_url: ''
   };
@@ -172,7 +172,7 @@ export default function InventoryListScreen() {
       is_featured: !!item.is_featured,
       is_trending: !!item.is_trending,
       is_flash_sale: !!item.is_flash_sale,
-      delivery_options: item.delivery_options || ['express', 'today_evening', 'tmrw_morning', 'tmrw_evening'],
+      delivery_options: item.delivery_options || ['express', 'tomorrow_morning', 'tomorrow_evening'],
       variants: item.variants || [],
       image_url: item.image_url || ''
     });
@@ -422,7 +422,7 @@ export default function InventoryListScreen() {
 
       <Text style={styles.inputLabel}>Delivery Options</Text>
       <View style={styles.checkboxContainer}>
-        {['express', 'today_evening', 'tmrw_morning', 'tmrw_evening'].map(opt => (
+        {['express', 'tomorrow_morning', 'tomorrow_evening'].map(opt => (
           <TouchableOpacity key={opt} style={[styles.checkbox, formData.delivery_options.includes(opt) && styles.checkboxActive]} onPress={() => toggleDeliveryOption(opt)}>
             <Icon name={formData.delivery_options.includes(opt) ? "checkbox-marked" : "checkbox-blank-outline"} size={20} color={formData.delivery_options.includes(opt) ? COLORS.white : COLORS.gray} />
             <Text style={[styles.checkboxText, formData.delivery_options.includes(opt) && styles.checkboxTextActive]}>{opt.replace(/_/g, ' ').toUpperCase()}</Text>
@@ -481,7 +481,7 @@ export default function InventoryListScreen() {
 
             <Text style={styles.variantLabel}>Delivery Slots</Text>
             <View style={styles.variantChipContainer}>
-              {['Tomorrow Morning', 'Tomorrow Evening', 'Today Evening', 'Express'].map(slot => {
+              {['Tomorrow Morning', 'Tomorrow Evening', 'Express'].map(slot => {
                 const currentSlots = Array.isArray(variant.delivery_info)
                   ? variant.delivery_info
                   : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : []);

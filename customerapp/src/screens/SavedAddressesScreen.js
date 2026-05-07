@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,23 +7,26 @@ import {
   FlatList,
   StatusBar,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import addressService from '../api/addressService';
 import { useDispatch } from 'react-redux';
 import { setSelectedAddress } from '../store/slices/locationSlice';
+import { showGlobalAlert } from '../services/alertService';
 
 const SavedAddressesScreen = ({ route, navigation }) => {
   const dispatch = useDispatch();
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchAddresses();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchAddresses();
+    }, [])
+  );
 
   const fetchAddresses = async () => {
     try {
@@ -34,16 +37,17 @@ const SavedAddressesScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error('Fetch addresses error:', error);
-      Alert.alert('Error', 'Failed to load saved addresses');
+      showGlobalAlert('Error', 'Failed to load saved addresses', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    Alert.alert(
+    showGlobalAlert(
       'Delete Address',
       'Are you sure you want to remove this address?',
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -56,11 +60,11 @@ const SavedAddressesScreen = ({ route, navigation }) => {
             if (res.success) {
               await fetchAddresses();
             } else {
-              Alert.alert('Error', res.error || 'Failed to delete address');
+              showGlobalAlert('Error', res.error || 'Failed to delete address', 'error');
             }
           } catch (error) {
             console.error('Delete address error:', error);
-            Alert.alert('Error', 'Failed to delete address. Please try again.');
+            showGlobalAlert('Error', 'Failed to delete address. Please try again.', 'error');
           } finally {
             setLoading(false);
           }
@@ -86,7 +90,7 @@ const SavedAddressesScreen = ({ route, navigation }) => {
       const store = storeRes.data?.data?.store;
 
       if (!store) {
-        Alert.alert('Not Serviceable', 'Sorry, we do not currently deliver to this address.');
+        showGlobalAlert('Not Serviceable', 'Sorry, we do not currently deliver to this address.', 'warning');
         return;
       }
 
@@ -98,11 +102,17 @@ const SavedAddressesScreen = ({ route, navigation }) => {
       };
 
       dispatch(setSelectedAddress(addressWithStore));
-      // User must choose delivery mode (slot) after address selection
-      navigation.navigate('DeliveryMode');
+      
+      // If we came from Cart or Checkout, go back. 
+      // Otherwise (like from Splash/Login flow), go to DeliveryMode as intended.
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('DeliveryMode');
+      }
     } catch (error) {
       console.error('Error resolving store for address:', error);
-      Alert.alert('Error', 'Failed to select address. Please try again.');
+      showGlobalAlert('Error', 'Failed to select address. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -129,13 +139,14 @@ const SavedAddressesScreen = ({ route, navigation }) => {
           )}
         </View>
         <TouchableOpacity onPress={() => {
-          Alert.alert(
+          showGlobalAlert(
             'Address Options',
             'What would you like to do?',
+            'info',
             [
+              { text: 'Cancel', style: 'cancel' },
               { text: 'Edit', onPress: () => navigation.navigate('AddAddress', { editAddress: item }) },
               { text: 'Delete', onPress: () => handleDelete(item.id), style: 'destructive' },
-              { text: 'Cancel', style: 'cancel' }
             ]
           );
         }}>

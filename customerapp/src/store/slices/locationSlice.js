@@ -44,7 +44,7 @@ const locationSlice = createSlice({
         state.coords = action.payload.latitude ? { lat: action.payload.latitude, lng: action.payload.longitude } : null;
         state.storeId = action.payload.store_id || null;
         state.storeName = action.payload.store_name || null;
-        state.isServiceable = true;
+        state.isServiceable = !!action.payload.store_id;
         
         storage.setItem('selected_address', action.payload);
         if (action.payload.pincode) storage.setItem('pincode', action.payload.pincode);
@@ -89,8 +89,19 @@ const locationSlice = createSlice({
       state.isServiceable = !!action.payload.storeId;
       state.isHydrated = true;
     },
+    setServiceability: (state, action) => {
+      state.isServiceable = action.payload.isServiceable;
+      if (action.payload.storeId !== undefined) {
+        state.storeId = action.payload.storeId;
+      }
+      if (action.payload.storeName !== undefined) {
+        state.storeName = action.payload.storeName;
+      }
+      storage.setItem('store_id', state.storeId);
+      storage.setItem('store_name', state.storeName);
+    },
   },
 });
 
-export const { setLocation, setSelectedAddress, clearLocation, hydrateLocation } = locationSlice.actions;
+export const { setLocation, setSelectedAddress, clearLocation, hydrateLocation, setServiceability } = locationSlice.actions;
 export default locationSlice.reducer;

@@ -1,79 +1,119 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Dimensions, StatusBar, Text } from 'react-native';
-import { COLORS } from '../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
 const SplashScreen = () => {
   // --- Animated values ---
-  const screenOpacity = useRef(new Animated.Value(1)).current;
+  const colorAnim = useRef(new Animated.Value(0)).current;
   
-  const textScale = useRef(new Animated.Value(0.8)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
+  // Phase Texts (Discreet)
+  const p1Opacity = useRef(new Animated.Value(0)).current;
+  const p2Opacity = useRef(new Animated.Value(0)).current;
+  const p3Opacity = useRef(new Animated.Value(0)).current;
   
+  // Logo Phase
+  const rayOpacity = useRef(new Animated.Value(0)).current;
+  const rayScale = useRef(new Animated.Value(0.2)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.5)).current;
   const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const taglineTranslateY = useRef(new Animated.Value(10)).current;
 
   useEffect(() => {
-    // 1. Initial spring animation for the brand name
-    Animated.parallel([
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.spring(textScale, {
-        toValue: 1,
-        tension: 40,
-        friction: 7,
-        useNativeDriver: true,
-      }),
+    // 1. CINEMATIC SEQUENCE START (6 Seconds Total)
+    Animated.sequence([
+      // --- PART 1: THE TEXT PHASES (3 Seconds) ---
+      
+      // Phase 1: Morning (0s - 1s)
+      Animated.parallel([
+        Animated.timing(colorAnim, { toValue: 0.25, duration: 800, useNativeDriver: false }),
+        Animated.sequence([
+          Animated.timing(p1Opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(p1Opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ]),
+      ]),
+
+      // Phase 2: Evening (1s - 2s)
+      Animated.parallel([
+        Animated.timing(colorAnim, { toValue: 0.5, duration: 800, useNativeDriver: false }),
+        Animated.sequence([
+          Animated.timing(p2Opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(p2Opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ]),
+      ]),
+
+      // Phase 3: Express (2s - 3s)
+      Animated.parallel([
+        Animated.timing(colorAnim, { toValue: 0.75, duration: 800, useNativeDriver: false }),
+        Animated.sequence([
+          Animated.timing(p3Opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(p3Opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ]),
+      ]),
+
+      // --- PART 2: THE GRAND REVEAL (Utilizing 3 Full Seconds) ---
+      
+      // Step A: Ray of Light Forms First (3.0s - 4.0s)
+      Animated.parallel([
+        Animated.timing(colorAnim, { toValue: 1, duration: 1000, useNativeDriver: false }),
+        Animated.timing(rayOpacity, { toValue: 0.6, duration: 800, useNativeDriver: true }),
+        Animated.spring(rayScale, { toValue: 1.5, tension: 10, friction: 6, useNativeDriver: true }),
+      ]),
+
+      // Step B: Logo Reveal (4.0s - 5.0s)
+      Animated.parallel([
+        Animated.timing(logoOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.spring(logoScale, { toValue: 1, tension: 20, friction: 5, useNativeDriver: true }),
+      ]),
+
+      // Step C: Tagline & Final Settle (5.0s - 6.0s)
+      Animated.timing(taglineOpacity, { toValue: 0.8, duration: 800, useNativeDriver: true }),
     ]).start();
 
-    // 2. Fade in tagline shortly after
-    Animated.sequence([
-      Animated.delay(600),
-      Animated.parallel([
-        Animated.timing(taglineOpacity, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(taglineTranslateY, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
   }, []);
 
+  const backgroundColor = colorAnim.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: ['#012a21', '#7A0C0E', '#064E3B', '#6B21A8', '#012a21'], // Deep Emerald -> Maroon -> Green -> Purple -> Deep Emerald
+  });
+
   return (
-    <Animated.View style={[styles.container, { opacity: screenOpacity }]}>
+    <Animated.View style={[styles.container, { backgroundColor }]}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+      
+      {/* Central Ray of Light (Forms First in Reveal Phase) */}
+      <Animated.View style={[styles.ray, { 
+        transform: [{ scale: rayScale }],
+        opacity: rayOpacity
+      }]} />
 
       <View style={styles.content}>
-        <Animated.View style={{ opacity: textOpacity, transform: [{ scale: textScale }] }}>
-          <Text style={styles.brandName}>Daily Fresh</Text>
+        {/* PHASE TEXTS (Sequential & Discreet) */}
+        <Animated.Text style={[styles.phaseText, { opacity: p1Opacity }]}>Morning</Animated.Text>
+        <Animated.Text style={[styles.phaseText, { opacity: p2Opacity }]}>Evening</Animated.Text>
+        <Animated.Text style={[styles.phaseText, { opacity: p3Opacity }]}>Express</Animated.Text>
+
+        {/* THE MAIN LOGO */}
+        <Animated.View style={[styles.logoWrapper, { 
+          opacity: logoOpacity, 
+          transform: [{ scale: logoScale }] 
+        }]}>
+          <Text style={styles.brandName}>DAILY</Text>
+          <View style={styles.freshContainer}>
+            <Text style={styles.freshText}>FRESH</Text>
+          </View>
         </Animated.View>
 
-        <View style={styles.dividerLine} />
-
-        <Animated.View 
-          style={{ 
-            opacity: taglineOpacity, 
-            transform: [{ translateY: taglineTranslateY }] 
-          }}
-        >
-          <Text style={styles.tagline}>Quality You Can Trust</Text>
+        {/* TAGLINE */}
+        <Animated.View style={[styles.taglineRow, { opacity: taglineOpacity }]}>
+          <View style={styles.line} />
+          <Text style={styles.taglineText}>PREMIUM QUALITY DELIVERED</Text>
+          <View style={styles.line} />
         </Animated.View>
       </View>
 
-      {/* Footer Decoration */}
-      <View style={styles.footer}>
-        <View style={styles.footerLine} />
-        <Text style={styles.footerText}>ESTD. 2024</Text>
-        <View style={styles.footerLine} />
+      <View style={styles.bottomBranding}>
+        <Text style={styles.estText}>ESTD. 2024</Text>
       </View>
     </Animated.View>
   );
@@ -82,58 +122,89 @@ const SplashScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#7A0C0E', // Midnight Maroon
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  ray: {
+    position: 'absolute',
+    width: width * 0.7,
+    height: width * 0.7,
+    borderRadius: width * 0.35,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 100,
+    elevation: 30,
   },
   content: {
     alignItems: 'center',
-    paddingHorizontal: 40,
+    justifyContent: 'center',
+    width: '100%',
   },
-  brandName: {
-    fontSize: 52,
+  phaseText: {
+    position: 'absolute',
+    fontSize: 56,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 4,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
-  },
-  dividerLine: {
-    width: 80,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
-    marginVertical: 24,
-  },
-  tagline: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
     letterSpacing: 6,
     textTransform: 'uppercase',
     textAlign: 'center',
-    opacity: 0.9,
   },
-  footer: {
-    position: 'absolute',
-    bottom: 60,
+  logoWrapper: {
+    alignItems: 'center',
+  },
+  brandName: {
+    fontSize: 84,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 14,
+    lineHeight: 84,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 15,
+  },
+  freshContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 25,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 8,
+  },
+  freshText: {
+    fontSize: 42,
+    fontWeight: '900',
+    color: '#000000',
+    letterSpacing: 16,
+  },
+  taglineRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 40,
     gap: 15,
   },
-  footerLine: {
-    width: 40,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  footerText: {
-    color: 'rgba(255,255,255,0.4)',
+  taglineText: {
     fontSize: 10,
+    color: '#FFFFFF',
     fontWeight: '700',
-    letterSpacing: 2,
+    letterSpacing: 5,
+    opacity: 0.9,
+  },
+  line: {
+    width: 30,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  bottomBranding: {
+    position: 'absolute',
+    bottom: 60,
+  },
+  estText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '700',
+    letterSpacing: 4,
   },
 });
 

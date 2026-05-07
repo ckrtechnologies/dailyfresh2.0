@@ -4,6 +4,7 @@ import { Platform, Alert, Linking } from 'react-native';
 import apiClient from '../api/apiClient';
 import { fetchActiveOrder } from '../store/slices/orderSlice';
 import { navigationRef } from '../navigation/RootNavigator';
+import { showGlobalAlert } from '../services/alertService';
 
 class NotificationService {
   async requestUserPermission() {
@@ -57,17 +58,17 @@ class NotificationService {
   }
 
   showMandatoryPermissionAlert() {
-    Alert.alert(
+    showGlobalAlert(
       'Notifications Required 🔔',
       'Daily Fresh needs notification permission to send you order updates and delivery status. Please enable it in settings.',
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Open Settings',
           onPress: () => notifee.openNotificationSettings()
         },
-      ],
-      { cancelable: false }
+      ]
     );
   }
 

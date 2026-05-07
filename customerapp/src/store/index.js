@@ -7,6 +7,7 @@ import favoritesReducer from './slices/favoritesSlice';
 import orderReducer from './slices/orderSlice';
 
 import configReducer from './slices/configSlice';
+import uiReducer from './slices/uiSlice';
 
 export const store = configureStore({
   reducer: {
@@ -17,6 +18,7 @@ export const store = configureStore({
     favorites: favoritesReducer,
     order: orderReducer,
     config: configReducer,
+    ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

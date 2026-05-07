@@ -26,12 +26,12 @@ const FavoritesScreen = ({ navigation }) => {
   }, [dispatch]);
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.card}
       onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
     >
       <Image source={{ uri: item.image_url }} style={styles.image} />
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.favoriteBtn}
         onPress={() => {
           dispatch(toggleFavorite(item));
@@ -40,13 +40,13 @@ const FavoritesScreen = ({ navigation }) => {
       >
         <Icon name="heart" size={20} color={COLORS.primary} />
       </TouchableOpacity>
-      
+
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.weight}>{item.weight}</Text>
         <View style={styles.priceRow}>
           <Text style={styles.price}>₹{item.price}</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.addBtn}
             onPress={() => dispatch(addItem(item))}
           >
@@ -65,7 +65,7 @@ const FavoritesScreen = ({ navigation }) => {
         <Text style={styles.emptySubtitle}>
           Save your favorite fresh products here to find them easily later.
         </Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.shopBtn}
           onPress={() => navigation.navigate('Home')}
         >

@@ -13,6 +13,9 @@ const authService = {
         options: {
           redirectTo: 'dailyfresh://login-callback',
           skipBrowserRedirect: true, // We will handle opening the URL manually
+          queryParams: {
+            prompt: 'select_account',
+          },
         },
       });
 

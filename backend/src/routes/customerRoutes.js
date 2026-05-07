@@ -11,7 +11,6 @@ import * as favoritesController from '../controllers/favoritesController.js';
 import * as couponController from '../controllers/couponController.js';
 
 import { authenticate, authorize } from '../middlewares/auth.js';
-import { cutoffGuard } from '../middlewares/cutoffGuard.js';
 
 const router = express.Router();
 
@@ -188,6 +187,8 @@ router.get('/addresses', customerController.getAddresses);
  *         description: Address added
  */
 router.post('/addresses', customerController.addAddress);
+router.patch('/addresses/:id', customerController.updateAddress);
+router.delete('/addresses/:id', customerController.deleteAddress);
 
 /**
  * @swagger
@@ -244,6 +245,7 @@ router.get('/cart', cartController.getCart);
  *         description: Cart synced
  */
 router.post('/cart/sync', cartController.syncCart);
+router.post('/cart/validate', cartController.validateCart);
 
 /**
  * @swagger
@@ -257,7 +259,7 @@ router.post('/cart/sync', cartController.syncCart);
  *       200:
  *         description: Order placed
  */
-router.post('/orders', cutoffGuard, orderController.placeOrder);
+router.post('/orders', orderController.placeOrder);
 
 /**
  * @swagger

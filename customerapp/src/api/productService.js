@@ -123,6 +123,19 @@ const productService = {
   },
 
   /**
+   * Find nearest store based on lat/lng or pincode
+   */
+  findNearestStore: async (params) => {
+    try {
+      const response = await apiClient.get('/customer/stores/nearest', { params });
+      return { success: true, data: response.data?.data?.store || null };
+    } catch (error) {
+      console.error('Error finding nearest store:', error);
+      return { success: false, error };
+    }
+  },
+
+  /**
    * Get application settings (GST, Delivery Fees, etc.)
    */
   getSettings: async () => {

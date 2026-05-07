@@ -39,6 +39,19 @@ const cartService = {
       console.error('Error clearing cart:', error);
       return { success: false };
     }
+  },
+
+  /**
+   * Validate cart items against a new store (Cross-store validation)
+   */
+  validateCart: async (items, storeId) => {
+    try {
+      const response = await apiClient.post('/customer/cart/validate', { items, storeId });
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error validating cart:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to validate cart' };
+    }
   }
 };  
 

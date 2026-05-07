@@ -380,7 +380,7 @@ export const listOrders = async (req, res) => {
   try {
     let query = supabaseAdmin
       .from('orders')
-      .select('*, customer:profiles!user_id(full_name, email), rider:profiles!rider_id(full_name, phone), store:stores(name)', { count: 'exact' })
+      .select('*, customer:profiles!user_id(full_name, email, phone), rider:profiles!rider_id(full_name, phone), store:stores(name), delivery_address:addresses(*)', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (startDate) query = query.gte('created_at', startDate);
@@ -418,14 +418,29 @@ export const listOrders = async (req, res) => {
       }
     }
 
-    const { data, count, error } = await query;
+    const { data: orders, count, error } = await query;
     if (error) throw error;
+    if (!orders || orders.length === 0) return successResponse(res, { orders: [], pagination: { total: 0, page: Number(page), pageSize: Number(pageSize) } });
+
+    // 2. Fetch Order Items separately to avoid complex join depth issues
+    const orderIds = orders.map(o => o.id);
+    const { data: allItems } = await supabaseAdmin
+      .from('order_items')
+      .select('*, product:products(image_url)')
+      .in('order_id', orderIds);
+
+    // 3. Manual stitching
+    const ordersWithItems = orders.map(order => ({
+      ...order,
+      items: allItems ? allItems.filter(item => item.order_id === order.id) : []
+    }));
 
     return successResponse(res, {
-      orders: data,
+      orders: ordersWithItems,
       pagination: { total: count, page: Number(page), pageSize: Number(pageSize) }
     });
   } catch (error) {
+    console.error('[AdminOrders Error]', error);
     return errorResponse(res, 'Failed to fetch orders', 500, error);
   }
 };

@@ -12,7 +12,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Swipeable } from 'react-native-gesture-handler';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import { clearCart } from '../store/slices/cartSlice';
 import { navigationRef } from '../navigation/RootNavigator';
 
@@ -22,6 +22,8 @@ const MiniCart = () => {
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const { totalCount, totalAmount } = useSelector((state) => state.cart);
+  const selectedSlot = useSelector((state) => state.config.selectedSlot);
+  const activeTheme = THEMES[selectedSlot] || THEMES.all;
   const [currentRouteName, setCurrentRouteName] = useState('');
 
   useEffect(() => {
@@ -100,12 +102,12 @@ const MiniCart = () => {
                 )}
               </View>
               <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+                <View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: activeTheme.primary }]} />
               </View>
             </View>
             
             <TouchableOpacity 
-              style={styles.btn}
+              style={[styles.btn, { backgroundColor: activeTheme.primary }]}
               onPress={() => {
                 if (navigationRef.isReady()) {
                   navigationRef.navigate('Main', {
@@ -135,22 +137,22 @@ const MiniCart = () => {
 const styles = StyleSheet.create({
   outerContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
+    left: 12,
+    right: 12,
     zIndex: 9999,
   },
   container: {
     backgroundColor: COLORS.white,
-    paddingHorizontal: SPACING.m,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   content: {
     flexDirection: 'row',
@@ -221,11 +223,14 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   deleteAction: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#FF4D4D',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
-    height: '100%',
+    width: 70,
+    height: '90%',
+    alignSelf: 'center',
+    borderRadius: 24,
+    marginLeft: 8,
   },
   deleteText: {
     color: COLORS.white,

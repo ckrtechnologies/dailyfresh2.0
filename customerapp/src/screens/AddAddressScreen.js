@@ -8,7 +8,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +16,7 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import addressService from '../api/addressService';
 import { useDispatch } from 'react-redux';
 import { setSelectedAddress } from '../store/slices/locationSlice';
+import { showGlobalAlert } from '../services/alertService';
 
 const AddAddressScreen = ({ route, navigation }) => {
   const dispatch = useDispatch();
@@ -39,12 +39,12 @@ const AddAddressScreen = ({ route, navigation }) => {
 
   const handleSave = async () => {
     if (!formData.full_name || !formData.phone || !formData.line1 || !formData.pincode) {
-      Alert.alert('Missing Info', 'Please fill all required fields marked with *');
+      showGlobalAlert('Missing Info', 'Please fill all required fields marked with *', 'warning');
       return;
     }
 
     if (formData.pincode.length !== 6) {
-      Alert.alert('Invalid Pincode', 'Please enter a valid 6-digit pincode');
+      showGlobalAlert('Invalid Pincode', 'Please enter a valid 6-digit pincode', 'warning');
       return;
     }
 
@@ -77,7 +77,7 @@ const AddAddressScreen = ({ route, navigation }) => {
       const store = storeRes.data?.data?.store;
 
       if (!store) {
-        Alert.alert('Not Serviceable', 'Sorry, we do not currently deliver to this pincode.');
+        showGlobalAlert('Not Serviceable', 'Sorry, we do not currently deliver to this pincode.', 'warning');
         setLoading(false);
         return;
       }
@@ -92,7 +92,7 @@ const AddAddressScreen = ({ route, navigation }) => {
       }
 
       if (res.success) {
-        Alert.alert('Success', editAddress ? 'Address updated' : 'Address saved successfully');
+        showGlobalAlert('Success', editAddress ? 'Address updated' : 'Address saved successfully', 'success');
         
         // Auto-select this address after saving
         const savedAddress = res.data.address;
@@ -108,7 +108,7 @@ const AddAddressScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error('Save address error:', error);
-      Alert.alert('Error', 'Failed to save address. Please try again.');
+      showGlobalAlert('Error', 'Failed to save address. Please try again.', 'error');
     } finally {
       setLoading(false);
     }

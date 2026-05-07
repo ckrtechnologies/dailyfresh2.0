@@ -115,7 +115,7 @@ const OrdersScreen = ({ navigation }) => {
               <Icon name="storefront-outline" size={20} color={COLORS.primary} />
             </View>
             <View>
-              <Text style={styles.storeName}>{item.store?.name || 'Daily Fresh'}</Text>
+              <Text style={styles.storeName}>Daily Fresh Hub</Text>
               <Text style={styles.orderDate}>
                 {format(new Date(item.created_at), 'dd MMM yyyy')} • {format(new Date(item.created_at), 'hh:mm a')}
               </Text>

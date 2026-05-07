@@ -22,6 +22,43 @@ const CARD_WIDTH = (width - SPACING.xl * 2 - SPACING.m) / 2;
 const ProductCard = React.memo(({ product, onPress, horizontal = false, size = 'small' }) => {
   const dispatch = useDispatch();
 
+  const shimmerAnim = React.useRef(new Animated.Value(0)).current;
+  const bounceAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 1500,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -4,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(1500)
+      ])
+    ).start();
+  }, [shimmerAnim, bounceAnim]);
+
+  const shimmerTranslateX = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-40, 140],
+  });
+
   // Use more granular selectors to avoid re-renders when other parts of state change
   const isFavorite = useSelector((state) =>
     state.favorites.items.some(item => item.id === product.id)
@@ -32,6 +69,7 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
   );
 
   const selectedSlot = useSelector((state) => state.config.selectedSlot);
+  const location = useSelector((state) => state.location);
 
   const quantity = cartItem ? cartItem.quantity : 0;
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
@@ -109,7 +147,11 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
         </TouchableOpacity>
 
         {isTall && (
-          quantity > 0 ? (
+          !location.isServiceable ? (
+            <View style={[styles.floatingAddButton, { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' }]}>
+              <Text style={[styles.addButtonText, { color: '#9CA3AF', fontSize: 10 }]}>UNAVAILABLE</Text>
+            </View>
+          ) : quantity > 0 ? (
             <View style={styles.quantitySelector}>
               <TouchableOpacity style={styles.qtyBtn} onPress={handleRemove}>
                 <Icon name="minus" size={18} color={activeTheme.primary} />
@@ -136,40 +178,63 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
           {name}
         </Text>
 
-        <View style={styles.deliveryInfoRow}>
-          <View style={styles.scooterBox}>
+        <View style={styles.deliveryOptionsContainer}>
+          <Animated.View style={[styles.scooterBox, { transform: [{ translateY: bounceAnim }] }]}>
             <Icon name="moped" size={16} color={activeTheme.primary} />
-          </View>
-          <View style={styles.slotsContainer}>
-            {(product.delivery_options || ['express']).map((slot, idx) => {
-              const normalizedSlot = slot === 'morning' ? 'tmrw_morning' :
-                slot === 'afternoon' ? 'today_evening' : slot;
+          </Animated.View>
+          {['express', 'tomorrow_morning', 'tomorrow_evening'].map((slot, idx) => {
+            const deliveryOptions = product.delivery_options || [];
+            if (!deliveryOptions.includes(slot)) return null;
 
-              if (selectedSlot !== 'all' && normalizedSlot !== selectedSlot) return null;
+            const isExpress = slot === 'express';
+            const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
+            if (!hasStock) return null;
 
-              const isExpress = normalizedSlot === 'express';
-              const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
-              if (!hasStock) return null;
+            const isSelected = slot === selectedSlot;
+            const slotTheme = THEMES[slot] || THEMES.all;
+            const iconMap = {
+              'express': 'flash',
+              'tomorrow_morning': 'weather-sunny',
+              'tomorrow_evening': 'weather-night'
+            };
+            const textMap = {
+              'express': 'Express',
+              'tomorrow_morning': 'Tomorrow Morning',
+              'tomorrow_evening': 'Tomorrow Evening'
+            };
 
-              const slotTheme = THEMES[normalizedSlot] || THEMES.all;
-              const labelMap = {
-                'express': 'Express',
-                'today_evening': 'Today Eve',
-                'tmrw_morning': 'Tom. Morn',
-                'tmrw_evening': 'Tom. Eve',
-                'all': 'Standard'
-              };
-              const label = labelMap[normalizedSlot] || normalizedSlot.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
-              return (
-                <View key={idx} style={[styles.slotBadge, { backgroundColor: slotTheme.primary + '15' }]}>
-                  <Text style={[styles.slotText, { color: slotTheme.primary }]}>
-                    {label}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
+            return (
+              <View 
+                key={slot} 
+                style={[
+                  styles.deliveryBadge, 
+                  { 
+                    backgroundColor: slotTheme.primary, 
+                    borderColor: slotTheme.primary,
+                    overflow: 'hidden',
+                  }
+                ]}
+              >
+                <Icon 
+                  name={iconMap[slot]} 
+                  size={12} 
+                  color={COLORS.white} 
+                />
+                <Text style={[styles.deliveryBadgeText, { color: COLORS.white }]}>
+                  {textMap[slot]}
+                </Text>
+                
+                <Animated.View
+                  style={[
+                    styles.glitter,
+                    {
+                      transform: [{ skewX: '-20deg' }, { translateX: shimmerTranslateX }]
+                    }
+                  ]}
+                />
+              </View>
+            );
+          })}
         </View>
 
         {!(product.variants?.length > 0) && (
@@ -183,7 +248,11 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
 
         {!isTall && (
           <View style={styles.smallCardFooter}>
-            {quantity > 0 ? (
+            {!location.isServiceable ? (
+              <View style={[styles.smallAddBtn, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]}>
+                <Text style={[styles.smallAddBtnText, { color: '#9CA3AF' }]}>SERVICE UNAVAILABLE</Text>
+              </View>
+            ) : quantity > 0 ? (
               <View style={[styles.inlineQtySelector, { backgroundColor: activeTheme.primary }]}>
                 <TouchableOpacity style={styles.inlineQtyBtn} onPress={handleRemove}>
                   <Icon name="minus" size={18} color={COLORS.white} />
@@ -216,17 +285,17 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
 
 const styles = StyleSheet.create({
   container: {
-    width: CARD_WIDTH,
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.card,
     marginBottom: SPACING.m,
     overflow: 'hidden',
+    width: '100%',
   },
   horizontalContainer: {
     width: 160,
     marginRight: SPACING.m,
     marginBottom: 0,
-    minHeight: 260, // Enforce uniform height
+    minHeight: 260,
   },
   imageContainer: {
     width: '100%',
@@ -246,7 +315,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF4B6E',
     paddingHorizontal: 6,
     paddingVertical: 4,
-    borderBottomRightRadius: 8,
+    borderBottomRightRadius: 16,
+    borderTopLeftRadius: RADIUS.card,
   },
   discountText: {
     color: COLORS.white,
@@ -317,6 +387,7 @@ const styles = StyleSheet.create({
   info: {
     paddingVertical: SPACING.s,
     paddingHorizontal: 8,
+    minHeight: 140, // Increased slightly for wrapped badges
   },
   weight: {
     fontSize: 11,
@@ -330,36 +401,39 @@ const styles = StyleSheet.create({
     height: 36,
     lineHeight: 18,
   },
-  deliveryInfoRow: {
+  deliveryOptionsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    overflow: 'hidden',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 6,
+    marginBottom: 4,
   },
   scooterBox: {
-    width: 40,
-    height: 20,
+    width: 24,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  slotsContainer: {
+  deliveryBadge: {
     flexDirection: 'row',
-    gap: 2,
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    gap: 4,
   },
-  slotBadge: {
-    backgroundColor: COLORS.primary + '20',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
+  deliveryBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
   },
-  slotText: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+  glitter: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   priceRow: {
     flexDirection: 'row',
@@ -378,10 +452,10 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   tallCard: {
-    width: 200,
+    // No fixed width, allow flex/container to decide
   },
   smallCard: {
-    width: 160,
+    // No fixed width, allow flex/container to decide
   },
   tallImageContainer: {
     height: 180,
@@ -392,7 +466,7 @@ const styles = StyleSheet.create({
   smallAddBtn: {
     backgroundColor: COLORS.primary,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 20,
     alignItems: 'center',
   },
   smallAddBtnText: {
@@ -404,7 +478,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 6,
+    borderRadius: 20,
     paddingHorizontal: 4,
     paddingVertical: 2,
   },

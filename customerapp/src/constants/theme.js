@@ -1,41 +1,5 @@
 export const THEMES = {
-  tmrw_morning: {
-    primary: '#CA8A04',     // Rich Golden Yellow
-    secondary: '#D4A373',   // Sandy Gold
-    background: '#FEFCE8',  // Very Light Yellow
-    card: '#FFFFFF',
-    text: '#422006',        // Dark Wood
-    textLight: '#713F12',   // Brown-700
-    accent: '#A16207',      // Dark Gold
-    border: '#FEF08A',
-    badge: '#FEF9C3',
-    statusBar: 'light-content',
-  },
-  today_evening: {
-    primary: '#166534',     // Forest Green
-    secondary: '#15803D',   // Emerald
-    background: '#F0FDF4',  // Light Green Tint
-    card: '#FFFFFF',
-    text: '#064E3B',        // Deepest Green
-    textLight: '#14532D',   // Dark Green
-    accent: '#22C55E',      // Bright Green
-    border: '#DCFCE7',
-    badge: '#F0FDF4',
-    statusBar: 'light-content',
-  },
-  tmrw_evening: {
-    primary: '#1E40AF',     // Royal Blue
-    secondary: '#3B82F6',   // Blue-500
-    background: '#EFF6FF',  // Light Blue Tint
-    card: '#FFFFFF',
-    text: '#1E3A8A',        // Deepest Blue
-    textLight: '#1E40AF',   // Dark Blue
-    accent: '#60A5FA',      // Bright Blue
-    border: '#DBEAFE',
-    badge: '#EFF6FF',
-    statusBar: 'light-content',
-  },
-  all: { 
+  tomorrow_morning: {
     primary: '#7A0C0E',     // Midnight Maroon
     secondary: '#991B1B',   // Red-800
     background: '#FFF5F5',  // Very Light Red
@@ -46,6 +10,30 @@ export const THEMES = {
     border: '#FEE2E2',
     badge: '#FEF2F2',
     statusBar: 'light-content',
+  },
+  tomorrow_evening: {
+    primary: '#064E3B',     // Dark Forest Green
+    secondary: '#065F46',   // Deep Teal/Green
+    background: '#ECFDF5',  // Keep Light Green Tint
+    card: '#FFFFFF',
+    text: '#064E3B',        // Deepest Green
+    textLight: '#059669',   // Dark Green
+    accent: '#10B981',      // Emerald Accent
+    border: '#D1FAE5',
+    badge: '#ECFDF5',
+    statusBar: 'light-content',
+  },
+  all: { 
+    primary: '#1F2937',     // Gray-800 (Default)
+    secondary: '#4B5563',   // Gray-600
+    background: '#F9FAFB',  // Gray-50
+    card: '#FFFFFF',
+    text: '#111827',
+    textLight: '#6B7280',
+    accent: '#3B82F6',
+    border: '#E5E7EB',
+    badge: '#F3F4F6',
+    statusBar: 'dark-content',
   },
   express: {
     primary: '#6B21A8',     // Royal Purple
