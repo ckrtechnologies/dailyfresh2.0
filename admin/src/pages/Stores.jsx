@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Store, UserPlus } from 'lucide-react';
 import apiClient from '../services/api';
 import DataTable from '../components/common/DataTable';
+import { useFilters } from '../context/FilterContext';
 import { StoreForm, StaffForm } from '../components/modals/EntityForms';
 
 const Stores = () => {
+  const { searchQuery, setSearchQuery } = useFilters();
   const queryClient = useQueryClient();
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
   const [modal, setModal] = useState({ show: false, data: null });
@@ -13,9 +15,11 @@ const Stores = () => {
 
   // 1. Fetch Stores
   const { data: storeResp, isLoading: storeLoading } = useQuery({
-    queryKey: ['stores', pagination],
+    queryKey: ['stores', pagination, searchQuery],
     queryFn: async () => {
-      const resp = await apiClient.get('/admin/stores', { params: pagination });
+      const resp = await apiClient.get('/admin/stores', { 
+        params: { ...pagination, search: searchQuery || undefined } 
+      });
       return resp.data.data;
     }
   });
@@ -116,6 +120,8 @@ const Stores = () => {
         data={storeResp?.stores || []}
         loading={storeLoading}
         pagination={{ total: storeResp?.stores?.length, page: 1, pageSize: 50 }}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       {modal.show && (

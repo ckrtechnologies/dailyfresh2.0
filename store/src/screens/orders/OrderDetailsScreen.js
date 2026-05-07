@@ -126,19 +126,23 @@ export default function OrderDetailsScreen({ route, navigation }) {
             </Text>
           </View>
           <View style={styles.pairRow}>
-            <Text style={styles.pairLabel}>Delivery Type</Text>
+            <Text style={styles.pairLabel}>Delivery Mode</Text>
             <View style={[styles.typeBadge, { 
-              backgroundColor: order.delivery_type === 'express' ? '#ffe4e1' : 
-                               order.delivery_type === 'tomorrow_morning' ? '#f0fdfa' : '#eff6ff' 
+              backgroundColor: order.delivery_type === 'express' ? '#ffe4e1' : '#f0fdfa' 
             }]}>
               <Text style={[styles.typeText, { 
-                color: order.delivery_type === 'express' ? '#cd5c5c' : 
-                       order.delivery_type === 'tomorrow_morning' ? '#0d9488' : '#1e40af' 
+                color: order.delivery_type === 'express' ? '#cd5c5c' : '#0d9488' 
               }]}>
-                {(order.delivery_type || 'scheduled').replace(/_/g, ' ').toUpperCase()}
+                {order.delivery_type === 'express' ? '⚡ EXPRESS' : '📅 SCHEDULED'}
               </Text>
             </View>
           </View>
+          {order.delivery_slot_label && (
+            <View style={styles.pairRow}>
+              <Text style={styles.pairLabel}>Time Window</Text>
+              <Text style={[styles.pairValue, { color: COLORS.primary }]}>{order.delivery_slot_label}</Text>
+            </View>
+          )}
           <View style={styles.pairRow}>
             <Text style={styles.pairLabel}>Status</Text>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
@@ -166,7 +170,11 @@ export default function OrderDetailsScreen({ route, navigation }) {
           </View>
           <View style={[styles.pairRow, { alignItems: 'flex-start' }]}>
             <Text style={styles.pairLabel}>Delivery Address</Text>
-            <Text style={[styles.pairValue, { flex: 1, textAlign: 'right' }]}>{order.shipping_address || order.delivery_address || 'No address provided'}</Text>
+            <Text style={[styles.pairValue, { flex: 1, textAlign: 'right' }]}>
+              {typeof order.delivery_address === 'object' && order.delivery_address
+                ? `${order.delivery_address.line1}, ${order.delivery_address.city}, ${order.delivery_address.pincode}`
+                : (order.shipping_address || order.delivery_address || 'No address provided')}
+            </Text>
           </View>
           {order.latitude && order.longitude && (
             <View style={styles.pairRow}>

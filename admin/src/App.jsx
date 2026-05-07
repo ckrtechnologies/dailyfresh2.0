@@ -14,6 +14,8 @@ import Inventory from './pages/Inventory.jsx';
 import HomeManagement from './pages/HomeManagement.jsx';
 import Coupons from './pages/Coupons.jsx';
 import Settings from './pages/Settings.jsx';
+import RiderLogs from './pages/RiderLogs.jsx';
+import DeliverySlots from './pages/DeliverySlots.jsx';
 import MainLayout from './components/layout/MainLayout.jsx';
 
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -57,6 +59,8 @@ function AppRoutes() {
         <Route path="orders" element={<Orders />} />
         <Route path="stores" element={<ProtectedRoute roles={['admin']}><Stores /></ProtectedRoute>} />
         <Route path="riders" element={<ProtectedRoute roles={['admin']}><Riders /></ProtectedRoute>} />
+        <Route path="rider-logs" element={<ProtectedRoute roles={['admin']}><RiderLogs /></ProtectedRoute>} />
+        <Route path="delivery-slots" element={<ProtectedRoute roles={['admin']}><DeliverySlots /></ProtectedRoute>} />
         <Route path="customers" element={<ProtectedRoute roles={['admin']}><Customers /></ProtectedRoute>} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="home-manager" element={<ProtectedRoute roles={['admin']}><HomeManagement /></ProtectedRoute>} />

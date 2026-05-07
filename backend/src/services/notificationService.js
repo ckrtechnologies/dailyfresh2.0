@@ -54,15 +54,19 @@ export const sendToUser = async (userId, title, body, data = {}) => {
         ...fcmData,
         title: String(title),
         body: String(body),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
       android: {
         priority: 'high',
+        ttl: 3600 * 1000, // 1 hour
         notification: {
-          channelId: (data.type?.includes('order') || data.type?.includes('confirmed')) ? 'orders' : 'default',
+          channelId: 'orders',
           priority: 'high',
           sound: 'ding',
-          imageUrl: avatarUrl
+          imageUrl: avatarUrl,
+          sticky: false,
+          visibility: 'public',
+          notificationPriority: 'high',
         }
       },
       apns: {
@@ -70,11 +74,13 @@ export const sendToUser = async (userId, title, body, data = {}) => {
           aps: {
             sound: 'ding.wav',
             badge: 1,
-            contentAvailable: true
+            contentAvailable: true,
+            mutableContent: true,
           }
         },
         headers: {
-          'apns-priority': '10'
+          'apns-priority': '10',
+          'apns-push-type': 'alert',
         }
       },
       token: profile.fcm_token
@@ -246,28 +252,27 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => 
 
       // 2. Send Firebase Push
       const message = {
-        notification: { title, body },
+        token: rider.profile.fcm_token,
+        notification: {
+          title,
+          body,
+        },
         data: {
           type: 'NEW_ORDER_AVAILABLE',
           order_id: String(orderId),
           order_number: String(orderNumber),
           store_name: String(storeName),
-          title: String(title),
-          body: String(body),
-          timestamp: new Date().toISOString()
         },
         android: {
           priority: 'high',
-          ttl: 3600 * 1000, // 1 hour
+          ttl: 3600 * 1000,
           notification: {
             channelId: 'orders',
             priority: 'high',
             sound: 'default',
-            visibility: 'public',
             defaultSound: true,
-            defaultVibrateTimings: false,
-            vibrateTimingsMillis: [0, 500, 200, 500, 200, 500],
-          }
+            notificationPriority: 'high',
+          },
         },
         apns: {
           payload: {
@@ -276,15 +281,13 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => 
               badge: 1,
               contentAvailable: true,
               mutableContent: true,
-              category: 'NEW_ORDER'
             }
           },
           headers: {
             'apns-priority': '10',
-            'apns-topic': 'com.rider' 
+            'apns-topic': 'com.rider'
           }
-        },
-        token: rider.profile.fcm_token
+        }
       };
 
       try {

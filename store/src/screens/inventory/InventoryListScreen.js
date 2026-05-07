@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, Alert, Image, TextInput, Switch, Modal, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, Image, TextInput, Switch, Modal, ScrollView, Dimensions } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { storeApi } from '../../services/api';
 import { COLORS, SPACING, RADIUS } from '../../theme/theme';
 import Toast from 'react-native-toast-message';
+import { alertService } from '../../utils/alertService';
 
 import InventoryItem from '../../components/inventory/InventoryItem';
 
@@ -81,9 +82,11 @@ export default function InventoryListScreen() {
     }
   };
 
+  const { activeStoreId } = useSelector(state => state.auth);
+
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [activeStoreId]);
 
   const fetchClassification = async () => {
     try {
@@ -181,20 +184,26 @@ export default function InventoryListScreen() {
   };
 
   const handleDelete = (productId) => {
-    Alert.alert('Delete Product', 'Are you sure you want to delete this product?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            await storeApi.deleteProduct(productId);
-            Toast.show({ type: 'success', text1: 'Product deleted' });
-            fetchInventory();
-          } catch (error) {
-            Toast.show({ type: 'error', text1: 'Delete failed' });
+    alertService.show({
+      title: 'Delete Product',
+      message: 'Are you sure you want to delete this product?',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              await storeApi.deleteProduct(productId);
+              Toast.show({ type: 'success', text1: 'Product deleted' });
+              fetchInventory();
+            } catch (error) {
+              Toast.show({ type: 'error', text1: 'Delete failed' });
+            }
           }
         }
-      }
-    ]);
+      ]
+    });
   };
 
   const pickVariantImage = (index) => {
@@ -325,7 +334,7 @@ export default function InventoryListScreen() {
       }
     } catch (error) {
       console.log('ImagePicker Error:', error);
-      Alert.alert(
+      alertService.info(
         'Feature Restricted',
         'To enable gallery uploads, please install the image picker library:\n\nnpm install react-native-image-picker'
       );
@@ -425,7 +434,9 @@ export default function InventoryListScreen() {
         {['express', 'tomorrow_morning', 'tomorrow_evening'].map(opt => (
           <TouchableOpacity key={opt} style={[styles.checkbox, formData.delivery_options.includes(opt) && styles.checkboxActive]} onPress={() => toggleDeliveryOption(opt)}>
             <Icon name={formData.delivery_options.includes(opt) ? "checkbox-marked" : "checkbox-blank-outline"} size={20} color={formData.delivery_options.includes(opt) ? COLORS.white : COLORS.gray} />
-            <Text style={[styles.checkboxText, formData.delivery_options.includes(opt) && styles.checkboxTextActive]}>{opt.replace(/_/g, ' ').toUpperCase()}</Text>
+            <Text style={[styles.checkboxText, formData.delivery_options.includes(opt) && styles.checkboxTextActive]}>
+              {opt === 'express' ? 'EXPRESS DELIVERY' : opt.replace(/_/g, ' ').toUpperCase()}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -481,7 +492,7 @@ export default function InventoryListScreen() {
 
             <Text style={styles.variantLabel}>Delivery Slots</Text>
             <View style={styles.variantChipContainer}>
-              {['Tomorrow Morning', 'Tomorrow Evening', 'Express'].map(slot => {
+              {['Tomorrow Morning', 'Tomorrow Evening', 'Express Delivery'].map(slot => {
                 const currentSlots = Array.isArray(variant.delivery_info)
                   ? variant.delivery_info
                   : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : []);
@@ -495,6 +506,9 @@ export default function InventoryListScreen() {
                       const nextSlots = isActive
                         ? currentSlots.filter(s => s !== slot)
                         : [...currentSlots, slot];
+                      
+                      // Map the display name back to the value expected by backend if necessary
+                      const value = slot === 'Express Delivery' ? 'Express' : slot;
                       updateVariant(idx, 'delivery_info', nextSlots);
                     }}
                   >

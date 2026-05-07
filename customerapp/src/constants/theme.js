@@ -11,6 +11,18 @@ export const THEMES = {
     badge: '#FEF2F2',
     statusBar: 'light-content',
   },
+  tomorrow: {
+    primary: '#7A0C0E',     // Midnight Maroon
+    secondary: '#991B1B',   // Red-800
+    background: '#FFF5F5',  // Very Light Red
+    card: '#FFFFFF',
+    text: '#450A0A',        // Deepest Maroon
+    textLight: '#7F1D1D',   // Dark Red
+    accent: '#B91C1C',      // Alert Red
+    border: '#FEE2E2',
+    badge: '#FEF2F2',
+    statusBar: 'light-content',
+  },
   tomorrow_evening: {
     primary: '#064E3B',     // Dark Forest Green
     secondary: '#065F46',   // Deep Teal/Green

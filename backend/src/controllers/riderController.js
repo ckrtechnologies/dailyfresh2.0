@@ -381,3 +381,72 @@ export const getAvailableOrders = async (req, res) => {
     return errorResponse(res, 'Internal server error', 500, error);
   }
 };
+
+/**
+ * Log Daily Distance Manually
+ */
+export const logDistance = async (req, res) => {
+  const { start_reading, end_reading, notes } = req.body;
+  try {
+    const { data: rider } = await supabaseAdmin
+      .from('riders')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (!rider) return errorResponse(res, 'Rider profile not found', 404);
+
+    const today = new Date().toISOString().split('T')[0];
+    const distance = Number(end_reading) - Number(start_reading);
+
+    if (distance < 0) {
+      return errorResponse(res, 'End reading cannot be less than start reading', 400);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('rider_distance_logs')
+      .upsert({
+        rider_id: rider.id,
+        log_date: today,
+        start_reading: Number(start_reading),
+        end_reading: Number(end_reading),
+        distance_km: distance,
+        notes: notes || null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'rider_id, log_date' })
+      .select()
+      .single();
+
+    if (error) return errorResponse(res, 'Failed to log distance', 400, error);
+    return successResponse(res, { log: data }, 'Distance logged successfully');
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};
+
+/**
+ * Get Distance Log History
+ */
+export const getDistanceHistory = async (req, res) => {
+  try {
+    const { data: rider } = await supabaseAdmin
+      .from('riders')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (!rider) return errorResponse(res, 'Rider profile not found', 404);
+
+    const { data, error } = await supabaseAdmin
+      .from('rider_distance_logs')
+      .select('*')
+      .eq('rider_id', rider.id)
+      .order('log_date', { ascending: false })
+      .limit(30);
+
+    if (error) return errorResponse(res, 'Failed to fetch distance history', 400, error);
+    return successResponse(res, { logs: data });
+  } catch (error) {
+    return errorResponse(res, 'Internal server error', 500, error);
+  }
+};

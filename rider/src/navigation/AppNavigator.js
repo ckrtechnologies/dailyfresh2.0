@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { LayoutDashboard, ShoppingBag, User } from 'lucide-react-native';
+import { LayoutDashboard, ShoppingBag, User, Route } from 'lucide-react-native';
 import { useSelector } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
@@ -13,6 +13,7 @@ import ActiveDeliveryScreen from '../screens/ActiveDeliveryScreen';
 import LoginScreen from '../screens/LoginScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SplashScreen from '../screens/SplashScreen';
+import DistanceHistoryScreen from '../screens/DistanceHistoryScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -23,6 +24,7 @@ const DashboardStack = () => {
       <Stack.Screen name="DashboardMain" component={DashboardScreen} />
       <Stack.Screen name="ActiveDelivery" component={ActiveDeliveryScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="DistanceHistory" component={DistanceHistoryScreen} />
     </Stack.Navigator>
   );
 };
@@ -69,6 +71,14 @@ const AppNavigator = () => {
         component={OrdersScreen} 
         options={{
           tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen 
+        name="Travel" 
+        component={DistanceHistoryScreen} 
+        options={{
+          tabBarIcon: ({ color, size }) => <Route color={color} size={size} />,
+          title: 'Travel'
         }}
       />
       <Tab.Screen 

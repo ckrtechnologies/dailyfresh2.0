@@ -51,13 +51,34 @@ const OrdersScreen = ({ route }) => {
   const fetchOrderHistory = useCallback(async (page = 1) => {
     setFetching(true);
     try {
-      // If status is 'ready', fetch from available pool, otherwise history
-      const endpoint = statusFilter === 'ready' ? '/rider/orders/available' : '/rider/orders/history';
-      const res = await api.get(endpoint, {
-        params: { startDate, endDate, status: statusFilter, page, pageSize: 20 }
-      });
-      if (res.data && res.data.success) {
-        dispatch(setHistory(res.data.data));
+      if (statusFilter === 'all') {
+        const [historyRes, availableRes] = await Promise.all([
+          api.get('/rider/orders/history', { params: { startDate, endDate, status: 'all', page, pageSize: 20 } }),
+          api.get('/rider/orders/available')
+        ]);
+
+        let combined = [];
+        if (historyRes.data.success) combined = [...historyRes.data.data.orders];
+        if (availableRes.data.success) {
+          // Add 'Pool' label or similar to available orders if needed, but here we just merge
+          combined = [...availableRes.data.data.orders, ...combined];
+        }
+        
+        // Sort by date/time descending
+        combined.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
+
+        dispatch(setHistory({ 
+          orders: combined, 
+          pagination: historyRes.data.data.pagination 
+        }));
+      } else {
+        const endpoint = statusFilter === 'ready' ? '/rider/orders/available' : '/rider/orders/history';
+        const res = await api.get(endpoint, {
+          params: { startDate, endDate, status: statusFilter, page, pageSize: 20 }
+        });
+        if (res.data && res.data.success) {
+          dispatch(setHistory(res.data.data));
+        }
       }
     } catch (err) {
       console.error('Fetch History Error:', err);
@@ -191,6 +212,19 @@ const OrdersScreen = ({ route }) => {
           </View>
         </View>
 
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+          <View style={[styles.typeBadge, { backgroundColor: item.delivery_type === 'express' ? '#fee2e2' : '#f0fdf4' }]}>
+            <Text style={[styles.typeText, { color: item.delivery_type === 'express' ? '#ef4444' : '#22c55e' }]}>
+              {item.delivery_type === 'express' ? '⚡ EXPRESS' : '📅 SCHEDULED'}
+            </Text>
+          </View>
+          {item.delivery_slot_label && (
+            <View style={[styles.slotBadge, { backgroundColor: '#f1f5f9' }]}>
+              <Text style={styles.slotText}>{item.delivery_slot_label}</Text>
+            </View>
+          )}
+        </View>
+
         <View style={styles.divider} />
 
         <View style={styles.orderMeta}>
@@ -318,6 +352,27 @@ const OrdersScreen = ({ route }) => {
                     {selectedOrder.status.replace(/_/g, ' ').toUpperCase()}
                   </Text>
                   <Text style={styles.orderNumberText}>#{selectedOrder.order_number}</Text>
+                </View>
+
+                {/* DELIVERY INFO */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Delivery Schedule</Text>
+                  <View style={styles.infoBox}>
+                    <View style={styles.infoLine}>
+                      <Clock color="#64748b" size={16} />
+                      <Text style={[styles.infoVal, { fontWeight: '700', color: selectedOrder.delivery_type === 'express' ? '#ef4444' : '#22c55e' }]}>
+                        {selectedOrder.delivery_type === 'express' ? '⚡ EXPRESS DELIVERY' : '📅 SCHEDULED DELIVERY'}
+                      </Text>
+                    </View>
+                    {selectedOrder.delivery_slot_label && (
+                      <View style={styles.infoLine}>
+                        <Calendar color="#64748b" size={16} />
+                        <Text style={[styles.infoVal, { fontSize: 16, fontWeight: '800', color: '#3b82f6' }]}>
+                          {selectedOrder.delivery_slot_label}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
 
                 {/* CUSTOMER SECTION */}
@@ -547,6 +602,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   statusText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  typeText: { fontSize: 10, fontWeight: '800' },
+  slotBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  slotText: { fontSize: 10, fontWeight: '700', color: '#64748b' },
   divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
   orderMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   metaItem: { flexDirection: 'row', alignItems: 'center' },

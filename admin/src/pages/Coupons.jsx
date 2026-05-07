@@ -9,7 +9,7 @@ import { useFilters } from '../context/FilterContext';
 
 const Coupons = () => {
   const queryClient = useQueryClient();
-  const { searchQuery } = useFilters();
+  const { searchQuery, setSearchQuery } = useFilters();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
@@ -183,6 +183,8 @@ const Coupons = () => {
         loading={isLoading}
         pagination={response?.pagination || pagination}
         onPageChange={(p) => setPagination(prev => ({ ...prev, page: p }))}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       {/* Create/Edit Modal */}

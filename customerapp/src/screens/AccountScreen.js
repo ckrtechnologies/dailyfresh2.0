@@ -69,6 +69,8 @@ const AccountScreen = ({ navigation }) => {
     { icon: 'share-all', label: 'Invite Friends', action: handleShareApp },
     { icon: 'bell-badge', label: 'Notifications', screen: 'Notifications' },
     { icon: 'headphones', label: 'Help & Support', screen: 'Support' },
+    { icon: 'shield-lock-outline', label: 'Privacy Policy', screen: 'PrivacyPolicy' },
+    { icon: 'file-refresh-outline', label: 'Return & Refund Policy', screen: 'ReturnPolicy' },
     { icon: 'information-variant', label: 'About Us', screen: 'About' },
   ];
 

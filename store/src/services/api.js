@@ -21,10 +21,14 @@ api.interceptors.request.use(
     console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
 
     const state = store.getState();
-    const token = state.auth.token;
+    const { token, activeStoreId } = state.auth;
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    if (activeStoreId) {
+      config.headers['x-store-id'] = activeStoreId;
     }
     return config;
   },
@@ -53,6 +57,7 @@ api.interceptors.response.use(
 );
 
 export const storeApi = {
+  getMyStores: () => api.get('/store/me/stores'),
   getDashboard: (params) => api.get('/store/dashboard', { params }),
   getInventory: (params) => api.get('/store/inventory', { params }),
   updateStock: (productId, quantity) => api.patch(`/store/inventory/${productId}/stock`, { quantity }),

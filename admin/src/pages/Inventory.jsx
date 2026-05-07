@@ -9,7 +9,7 @@ import { CategoryForm, ProductForm, SubCategoryForm } from '../components/modals
 
 const Inventory = () => {
   const { user, isAdmin, isStoreManager } = useAuth();
-  const { globalStoreId, searchQuery } = useFilters();
+  const { globalStoreId, searchQuery, setSearchQuery } = useFilters();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('products');
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
@@ -29,18 +29,22 @@ const Inventory = () => {
   });
 
   const { data: subCatResp } = useQuery({
-    queryKey: ['admin-subcategories'],
+    queryKey: ['admin-subcategories', searchQuery],
     queryFn: async () => {
-      const resp = await apiClient.get('/admin/sub-categories');
+      const resp = await apiClient.get('/admin/sub-categories', {
+        params: { search: searchQuery || undefined }
+      });
       return resp.data.data.sub_categories;
     },
     enabled: isAdmin || (activeTab === 'products' && modal.show)
   });
 
   const { data: catResp } = useQuery({
-    queryKey: ['admin-categories'],
+    queryKey: ['admin-categories', searchQuery],
     queryFn: async () => {
-      const resp = await apiClient.get('/admin/categories');
+      const resp = await apiClient.get('/admin/categories', {
+        params: { search: searchQuery || undefined }
+      });
       return resp.data.data.categories;
     },
     enabled: isAdmin || (activeTab === 'products' && modal.show)
@@ -234,6 +238,8 @@ const Inventory = () => {
         loading={prodLoading} 
         pagination={activeTab === 'products' ? (prodResp?.pagination || pagination) : { total: 0, page: 1, pageSize: 50 }}
         onPageChange={(p) => setPagination(prev => ({ ...prev, page: p }))}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       {modal.show && modal.type === 'products' && (

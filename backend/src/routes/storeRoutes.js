@@ -9,6 +9,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(authorize(['store_manager']));
 
+router.get('/me/stores', storeController.getMyStores);
 router.get('/dashboard', storeController.getDashboard);
 router.get('/inventory', storeController.getInventory);
 router.patch('/inventory/:productId/stock', storeController.updateStock);

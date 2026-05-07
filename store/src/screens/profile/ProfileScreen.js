@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
@@ -8,6 +8,7 @@ import { COLORS, SPACING, RADIUS } from '../../theme/theme';
 import { storeApi } from '../../services/api';
 import Toast from 'react-native-toast-message';
 import { supabase } from '../../services/supabase';
+import { alertService } from '../../utils/alertService';
 
 export default function ProfileScreen() {
   const dispatch = useAppDispatch();
@@ -44,10 +45,11 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to log out?',
-      [
+    alertService.show({
+      title: 'Logout',
+      message: 'Are you sure you want to log out?',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Logout',
@@ -55,10 +57,9 @@ export default function ProfileScreen() {
             await supabase.auth.signOut();
             dispatch(logout());
           },
-          style: 'destructive'
         },
       ]
-    );
+    });
   };
 
   if (loading) {

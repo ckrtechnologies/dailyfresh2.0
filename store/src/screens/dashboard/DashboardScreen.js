@@ -11,10 +11,12 @@ import { useAppSelector } from '../../store/hooks';
 import StatCard from '../../components/dashboard/StatCard';
 import DateRangeFilter from '../../components/common/DateRangeFilter';
 import { getDateRangeParams } from '../../utils/dateUtils';
+import StoreSelector from '../../components/common/StoreSelector';
 
 export default function DashboardScreen({ navigation }) {
   const dispatch = useAppDispatch();
   const { globalFilter } = useAppSelector(state => state.app);
+  const { activeStoreId } = useAppSelector(state => state.auth);
   const { dateRange, customRange } = globalFilter;
 
   const [revenue, setRevenue] = useState(0);
@@ -76,7 +78,7 @@ export default function DashboardScreen({ navigation }) {
 
   useEffect(() => {
     fetchDashboard();
-  }, [dateRange, customRange]);
+  }, [dateRange, customRange, activeStoreId]);
 
   const handleRangeChange = (range) => {
     dispatch(setGlobalFilter({ dateRange: range }));
@@ -131,6 +133,8 @@ export default function DashboardScreen({ navigation }) {
             onCustomRangeChange={handleCustomRangeChange}
           />
         </View>
+
+        <StoreSelector />
 
         <View style={styles.grid}>
           <StatCard

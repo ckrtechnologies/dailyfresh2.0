@@ -92,6 +92,23 @@ router.get('/stores/nearest', storeController.getNearestStore);
  */
 router.get('/home', productController.getHomeData);
 
+// Delivery time-window slots — public, no auth needed
+router.get('/delivery-slots', async (req, res) => {
+  const { supabaseAdmin } = await import('../config/supabase.js');
+  const { successResponse, errorResponse } = await import('../utils/response.js');
+  const { data, error } = await supabaseAdmin
+    .from('delivery_slots')
+    .select('id, type, slot_name, start_time, end_time, display_order')
+    .eq('is_active', true)
+    .order('type', { ascending: true })
+    .order('display_order', { ascending: true });
+  if (error) return errorResponse(res, 'Failed to fetch delivery slots', 500, error);
+  return successResponse(res, {
+    tomorrow_morning: data.filter(s => s.type === 'tomorrow_morning'),
+    tomorrow_evening: data.filter(s => s.type === 'tomorrow_evening'),
+  });
+});
+
 /**
  * @swagger
  * /customer/products:

@@ -22,8 +22,12 @@ export const listProducts = async (req, res) => {
       .gt(stockColumn, 0);
 
     if (delivery_type) {
-      // For JSONB columns, we need to pass a JSON string of the array we're checking for
-      query = query.contains('delivery_options', JSON.stringify([delivery_type]));
+      if (delivery_type === 'tomorrow') {
+        // JSONB containment check using OR
+        query = query.or('delivery_options.cs.["tomorrow_morning"],delivery_options.cs.["tomorrow_evening"]');
+      } else {
+        query = query.contains('delivery_options', JSON.stringify([delivery_type]));
+      }
     }
 
     if (search) {
@@ -184,7 +188,11 @@ export const getHomeData = async (req, res) => {
         .eq('store_id', store_id);
 
       if (delivery_type) {
-        q = q.contains('delivery_options', JSON.stringify([delivery_type]));
+        if (delivery_type === 'tomorrow') {
+          q = q.or('delivery_options.cs.["tomorrow_morning"],delivery_options.cs.["tomorrow_evening"]');
+        } else {
+          q = q.contains('delivery_options', JSON.stringify([delivery_type]));
+        }
       }
       return q;
     };

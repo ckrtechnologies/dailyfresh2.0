@@ -23,8 +23,7 @@ const DeliveryModeScreen = ({ navigation }) => {
   };
 
   const scheduledSlots = [
-    { id: 'tomorrow_morning', title: 'Tomorrow Morning', time: '7 AM - 11 AM', icon: 'weather-sunset-up', color: '#10B981' },
-    { id: 'tomorrow_evening', title: 'Tomorrow Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#6366F1' },
+    { id: 'tomorrow', title: 'Tomorrow Delivery', time: 'Select Time at Checkout', icon: 'calendar-clock', color: '#10B981' },
   ];
 
   return (
@@ -73,18 +72,22 @@ const DeliveryModeScreen = ({ navigation }) => {
             {scheduledSlots.map((slot) => (
               <TouchableOpacity 
                 key={slot.id}
-                style={styles.slotCard}
+                style={[styles.modeCard, { borderLeftColor: slot.color, marginTop: 0 }]}
                 onPress={() => handleSelectMode(slot.id)}
-                activeOpacity={0.8}
+                activeOpacity={0.9}
               >
-                <View style={[styles.slotIcon, { backgroundColor: slot.color + '15' }]}>
-                  <Icon name={slot.icon} size={24} color={slot.color} />
+                <View style={[styles.iconContainer, { backgroundColor: slot.color + '15' }]}>
+                  <Icon name={slot.icon} size={32} color={slot.color} />
                 </View>
-                <View style={styles.slotInfo}>
-                  <Text style={styles.slotTitle}>{slot.title}</Text>
-                  <Text style={styles.slotTime}>{slot.time}</Text>
+                <View style={styles.cardContent}>
+                  <View style={styles.modeHeader}>
+                    <Text style={styles.modeTitle}>{slot.title}</Text>
+                  </View>
+                  <Text style={styles.modeDescription}>
+                    {slot.time}
+                  </Text>
                 </View>
-                <Icon name="calendar-check" size={20} color={COLORS.gray} />
+                <Icon name="chevron-right" size={24} color={COLORS.gray} />
               </TouchableOpacity>
             ))}
           </View>

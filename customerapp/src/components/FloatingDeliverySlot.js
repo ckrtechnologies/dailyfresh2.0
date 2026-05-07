@@ -15,14 +15,13 @@ import { setSelectedSlot } from '../store/slices/configSlice';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Collapsed pill width — enough for icon + full label + padding
-const COLLAPSED_WIDTH = 110;
+const COLLAPSED_WIDTH = 100;
 // Expanded width — uses most of the screen, leaving a small margin on left
 const EXPANDED_WIDTH = SCREEN_WIDTH - 24;
 
 const SLOTS = [
-  { id: 'express',          label: 'Express',     icon: 'truck-fast' },
-  { id: 'tomorrow_morning', label: 'Tom. Morn',   icon: 'weather-sunny' },
-  { id: 'tomorrow_evening', label: 'Tom. Eve',    icon: 'weather-night' },
+  { id: 'express',  label: 'Express',  icon: 'lightning-bolt' },
+  { id: 'tomorrow', label: 'Tomorrow', icon: 'calendar-clock' },
 ];
 
 const FloatingDeliverySlot = () => {

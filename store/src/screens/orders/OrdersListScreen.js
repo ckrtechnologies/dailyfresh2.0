@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { storeApi } from '../../services/api';
 import { COLORS, SPACING, RADIUS } from '../../theme/theme';
 import Toast from 'react-native-toast-message';
+import { alertService } from '../../utils/alertService';
 
 import OrderCard from '../../components/orders/OrderCard';
 import DateRangeFilter from '../../components/common/DateRangeFilter';
@@ -54,9 +55,11 @@ export default function OrdersListScreen({ navigation }) {
     }
   };
 
+  const { activeStoreId } = useAppSelector(state => state.auth);
+
   useEffect(() => {
     fetchOrders(1);
-  }, [dateRange, customRange, activeTab]);
+  }, [dateRange, customRange, activeTab, activeStoreId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -99,11 +102,12 @@ export default function OrdersListScreen({ navigation }) {
       return;
     }
 
-    Alert.alert(
-      'Update Status',
-      `Current Status: ${currentStatus.toUpperCase()}\nSelect next action:`,
+    alertService.show({
+      title: 'Update Status',
+      message: `Current Status: ${currentStatus.toUpperCase()}\nSelect next action:`,
+      type: 'info',
       buttons
-    );
+    });
   };
 
   const updateStatus = async (orderId, newStatus) => {

@@ -157,4 +157,8 @@ router.get('/orders/active', riderController.getActiveOrders);
 router.get('/orders/history', riderController.getOrderHistory);
 router.get('/orders/:orderId', riderController.getOrderDetails);
 
+// Distance Logging
+router.post('/distance-logs', riderController.logDistance);
+router.get('/distance-logs', riderController.getDistanceHistory);
+
 export default router;

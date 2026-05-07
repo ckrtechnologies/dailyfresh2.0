@@ -37,13 +37,24 @@ const OrderCard = ({ item, index, onPress, onUpdateStatus }) => {
         </View>
         <View style={styles.infoRow}>
           <Icon name="map-marker-outline" size={16} color={COLORS.gray} />
-          <Text style={styles.infoText} numberOfLines={2}>{item.delivery_address || 'No address provided'}</Text>
+          <Text style={styles.infoText} numberOfLines={2}>
+            {typeof item.delivery_address === 'object' && item.delivery_address 
+              ? `${item.delivery_address.line1}, ${item.delivery_address.city}` 
+              : (item.delivery_address || 'No address provided')}
+          </Text>
         </View>
         <View style={styles.infoRow}>
           <Icon name="clock-outline" size={16} color={COLORS.gray} />
-          <Text style={[styles.infoText, { fontWeight: '600', color: item.delivery_type === 'express' ? '#cd5c5c' : COLORS.primary }]}>
-            {(item.delivery_type || 'scheduled').replace(/_/g, ' ').toUpperCase()}
-          </Text>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.infoText, { fontWeight: '700', color: item.delivery_type === 'express' ? '#cd5c5c' : '#0d9488' }]}>
+              {item.delivery_type === 'express' ? '⚡ EXPRESS' : '📅 SCHEDULED'}
+            </Text>
+            {item.delivery_slot_label && (
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.dark }}>
+                ({item.delivery_slot_label})
+              </Text>
+            )}
+          </View>
         </View>
         <View style={styles.infoRow}>
           <Icon name="currency-inr" size={16} color={COLORS.gray} />

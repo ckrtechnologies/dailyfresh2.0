@@ -21,28 +21,34 @@ class NotificationService {
 
     async getToken() {
         try {
+            if (Platform.OS === 'ios') {
+                console.log('[NotificationService] Registering device for remote messages (iOS)...');
+                await messaging().registerDeviceForRemoteMessages();
+            }
+            
             const fcmToken = await messaging().getToken();
             if (fcmToken) {
-                console.log('[NotificationService] FCM Token:', fcmToken);
+                console.log('[NotificationService] Obtained FCM Token:', fcmToken);
                 await api.patch('/rider/fcm-token', { fcm_token: fcmToken });
+                console.log('[NotificationService] FCM Token registered with backend successfully.');
+            } else {
+                console.warn('[NotificationService] Failed to obtain FCM Token - token is null/undefined');
             }
         } catch (error) {
-            console.error('[NotificationService] Error getting token:', error);
+            console.error('[NotificationService] Error in getToken/registration:', error);
         }
     }
 
     async setupListeners(onNewOrder) {
-        messaging().onMessage(async remoteMessage => {
+        // Foreground Message
+        this.messageListener = messaging().onMessage(async remoteMessage => {
             console.log('[NotificationService] Foreground Message:', remoteMessage);
-            
-            // Generic vibration for all messages
             Vibration.vibrate(500);
 
             if (remoteMessage.data?.type === 'NEW_ORDER_AVAILABLE') {
                 Vibration.vibrate([0, 500, 200, 500], true);
                 onNewOrder(remoteMessage.data);
             } else if (remoteMessage.notification) {
-                // Show a simple alert for general notifications in foreground
                 Alert.alert(
                     remoteMessage.notification.title || 'Notification',
                     remoteMessage.notification.body || ''
@@ -50,15 +56,22 @@ class NotificationService {
             }
         });
 
-        // Background/Killed Message
-        messaging().setBackgroundMessageHandler(async remoteMessage => {
-            console.log('[NotificationService] Background Message:', remoteMessage);
-        });
-
         // App opened from notification
         messaging().onNotificationOpenedApp(remoteMessage => {
             console.log('[NotificationService] App opened from notification:', remoteMessage);
         });
+
+        // Check if app was opened from killed state by notification
+        const initialNotification = await messaging().getInitialNotification();
+        if (initialNotification) {
+            console.log('[NotificationService] App opened from quit state:', initialNotification);
+        }
+    }
+
+    removeListeners() {
+        if (this.messageListener) {
+            this.messageListener();
+        }
     }
 }
 

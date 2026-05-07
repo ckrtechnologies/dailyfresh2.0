@@ -7,15 +7,46 @@ import { validateTransition } from '../utils/statusTransitions.js';
 /**
  * Helper to get the store ID assigned to the logged-in manager
  */
-const getAssignedStoreId = async (managerId) => {
-  const { data, error } = await supabaseAdmin
+/**
+ * Resolves the store ID for a manager.
+ * Priority: 
+ * 1. x-store-id header (validated against ownership)
+ * 2. First store found in DB for this manager
+ */
+const resolveStoreId = async (req) => {
+  const managerId = req.user.id;
+  const headerStoreId = req.headers['x-store-id'];
+
+  const { data: stores, error } = await supabaseAdmin
     .from('stores')
     .select('id')
-    .eq('manager_user_id', managerId)
-    .single();
+    .eq('manager_user_id', managerId);
 
-  if (error || !data) return null;
-  return data.id;
+  if (error || !stores || stores.length === 0) return null;
+
+  // If a specific store is requested via header, check if it's one of theirs
+  if (headerStoreId) {
+    const matched = stores.find(s => s.id === headerStoreId);
+    if (matched) return matched.id;
+  }
+
+  // Default to the first store
+  return stores[0].id;
+};
+
+export const getMyStores = async (req, res) => {
+  try {
+    const { data: stores, error } = await supabaseAdmin
+      .from('stores')
+      .select('*')
+      .eq('manager_user_id', req.user.id);
+
+    if (error) throw error;
+    return successResponse(res, { stores });
+  } catch (error) {
+    console.error('[getMyStores] Error:', error);
+    return errorResponse(res, error.message);
+  }
 };
 
 const getImageUrl = (file, bodyUrl) => {
@@ -108,7 +139,7 @@ const syncProductVariants = async (productId, variants, files = []) => {
  */
 export const getDashboard = async (req, res) => {
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     if (!storeId) return errorResponse(res, 'No store assigned to this manager', 404);
 
     const { startDate, endDate } = req.query;
@@ -213,7 +244,7 @@ export const getDashboard = async (req, res) => {
  */
 export const getInventory = async (req, res) => {
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     console.log(`[Inventory] Fetching for manager ${req.user.id}, storeId: ${storeId}`);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
@@ -239,7 +270,7 @@ export const updateStock = async (req, res) => {
   const { quantity } = req.body;
 
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
 
     const { data: product } = await supabaseAdmin
       .from('products')
@@ -276,7 +307,7 @@ export const updateProductStatus = async (req, res) => {
   const { is_active } = req.body;
 
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
 
     const { data: product } = await supabaseAdmin
       .from('products')
@@ -307,7 +338,7 @@ export const updateProductStatus = async (req, res) => {
  */
 export const getStoreProfile = async (req, res) => {
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
     const { data, error } = await supabaseAdmin
@@ -330,7 +361,7 @@ export const updateStoreStatus = async (req, res) => {
   const { is_active } = req.body;
 
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
     const { data, error } = await supabaseAdmin
@@ -352,7 +383,7 @@ export const updateStoreStatus = async (req, res) => {
  */
 export const getOrders = async (req, res) => {
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
 
     const { startDate, endDate, search, page = 1, pageSize = 50 } = req.query;
     const from = (parseInt(page) - 1) * parseInt(pageSize);
@@ -407,7 +438,7 @@ export const getOrders = async (req, res) => {
  */
 export const getCustomers = async (req, res) => {
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
     const { startDate, endDate } = req.query;
@@ -454,7 +485,7 @@ export const updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status } = req.body;
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     const { data: order } = await supabaseAdmin
       .from('orders')
       .select('store_id, user_id, order_number')
@@ -517,8 +548,21 @@ export const updateOrderStatus = async (req, res) => {
         status: status,
         orderId: orderId
       });
+
+      // --- NEW: NOTIFY RIDERS WHEN READY ---
+      if (status === 'ready') {
+        const { data: storeInfo } = await supabaseAdmin
+          .from('stores')
+          .select('name')
+          .eq('id', storeId)
+          .single();
+        
+        if (order.order_number && storeInfo?.name) {
+          notificationService.notifyAvailableRiders(orderId, order.order_number, storeInfo.name);
+        }
+      }
     } catch (notifErr) {
-      console.error('[Notification Error] Failed to notify customer:', notifErr.message);
+      console.error('[Notification Error] Failed to notify customer/riders:', notifErr.message);
     }
 
     return successResponse(res, { order: data }, 'Order status updated');
@@ -628,7 +672,7 @@ export const createProduct = async (req, res) => {
     const mainFile = req.files?.find(f => f.fieldname === 'image');
     if (mainFile) console.log('[Main File]', mainFile.originalname);
 
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     if (!storeId) return errorResponse(res, 'No store assigned', 404);
 
     const { name } = req.body;
@@ -686,7 +730,7 @@ export const updateProduct = async (req, res) => {
 
     const mainFile = req.files?.find(f => f.fieldname === 'image');
 
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
 
     const { data: product } = await supabaseAdmin.from('products').select('store_id').eq('id', productId).single();
     if (!product || product.store_id !== storeId) {
@@ -745,7 +789,7 @@ export const updateProduct = async (req, res) => {
  */
 export const exportInventoryCSV = async (req, res) => {
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     const { startDate, endDate } = req.query;
 
     let query = supabaseAdmin
@@ -778,7 +822,7 @@ export const exportInventoryCSV = async (req, res) => {
  */
 export const exportOrdersCSV = async (req, res) => {
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
     const { startDate, endDate } = req.query;
 
     let query = supabaseAdmin
@@ -812,7 +856,7 @@ export const exportOrdersCSV = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   const { productId } = req.params;
   try {
-    const storeId = await getAssignedStoreId(req.user.id);
+    const storeId = await resolveStoreId(req);
 
     const { data: product } = await supabaseAdmin.from('products').select('store_id').eq('id', productId).single();
     if (!product || product.store_id !== storeId) {

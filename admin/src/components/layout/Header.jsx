@@ -7,16 +7,23 @@ import apiClient from '../../services/api';
 
 const Header = () => {
   const { user, isAdmin } = useAuth();
-  const { globalStoreId, setGlobalStoreId, dateRange, setDateRange, setSearchQuery } = useFilters();
-  const [localSearch, setLocalSearch] = useState('');
+  const { globalStoreId, setGlobalStoreId, dateRange, setDateRange, searchQuery, setSearchQuery } = useFilters();
+  const [localSearch, setLocalSearch] = useState(searchQuery);
+
+  // Sync localSearch if searchQuery changes from outside (e.g. DataTable)
+  useEffect(() => {
+    setLocalSearch(searchQuery);
+  }, [searchQuery]);
 
   // Debounced search update
   useEffect(() => {
     const timer = setTimeout(() => {
-      setSearchQuery(localSearch);
+      if (localSearch !== searchQuery) {
+        setSearchQuery(localSearch);
+      }
     }, 500);
     return () => clearTimeout(timer);
-  }, [localSearch, setSearchQuery]);
+  }, [localSearch, searchQuery, setSearchQuery]);
 
   // Fetch stores for the global selector
   const { data: storeResp } = useQuery({

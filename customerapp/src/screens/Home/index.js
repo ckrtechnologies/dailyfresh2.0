@@ -1,9 +1,8 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   View, 
   FlatList, 
   StatusBar, 
-  Animated, 
   Modal, 
   Text, 
   TouchableOpacity, 
@@ -55,30 +54,22 @@ const HomeScreen = () => {
     navigation
   } = useHomeData();
 
-  const [isStoreModalVisible, setIsStoreModalVisible] = useState(false);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const scrollY = useRef(new Animated.Value(0)).current;
+  // Plain JS scroll progress (0 → 1 over first 80px of scroll).
+  // Using plain state instead of Animated.Value avoids all _children freeze /
+  // native-driver conflicts that arise when passing interpolations through props.
+  const [scrollProgress, setScrollProgress] = useState(0);
 
-  const onScroll = useMemo(() => Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    { 
-      useNativeDriver: true,
-      listener: (event) => {
-        setScrollOffset(event.nativeEvent.contentOffset.y);
-      }
-    }
-  ), [scrollY]);
+  const onScroll = useCallback((event) => {
+    const y = event.nativeEvent.contentOffset.y;
+    setScrollProgress(Math.min(Math.max(y / 80, 0), 1));
+  }, []);
 
-  // Header background logic
-  // Starts solid to avoid "light" look, then stays solid. 
-  // If user wants fade-to-solid, we use Math.min(scrollOffset / 50, 1)
-  // But user said it's "light" at top and "corrects" later, meaning they want it SOLID.
+  // Plain numbers — HomeHeader already does plain math on these props.
+  const headerOpacity = 1 - scrollProgress;
+  const headerHeight  = Math.max(50 * (1 - scrollProgress), 0);
+  const progress      = scrollProgress;
+
   const headerColorValue = activeTheme.primary; 
-
-  // Shrink calculations (0 to 80px scroll range)
-  const progress = Math.min(scrollOffset / 80, 1);
-  const headerHeight = 50 * (1 - progress); // Shrinks from 50 to 0
-  const headerOpacity = 1 - progress;
   const searchMarginTop = 0;
 
   // FlatList sections
@@ -112,7 +103,7 @@ const HomeScreen = () => {
     return list.filter(s => s.type !== 'products' || (s.data && s.data.length > 0));
   }, [filteredFlashSale, filteredDeals, filteredFrozen, filteredExclusive, filteredTrending, filteredNewLaunch, filteredFeatured, dynamicSections, flashSaleTimer]);
 
-  const renderSection = ({ item }) => {
+  const renderSection = React.useCallback(({ item }) => {
     switch (item.type) {
       case 'banners':
         return <BannerSlider banners={banners} onBannerPress={(b) => navigation.navigate('ProductList', { title: b.title, type: 'banner', bannerId: b.id })} />;
@@ -138,7 +129,7 @@ const HomeScreen = () => {
       default:
         return null;
     }
-  };
+  }, [banners, filteredCategories, activeTheme, navigation]);
 
   if (loading && !refreshing) {
     return (
@@ -177,7 +168,7 @@ const HomeScreen = () => {
         />
       </View>
 
-      <Animated.FlatList
+      <FlatList
         data={sections}
         renderItem={renderSection}
         keyExtractor={item => item.id}

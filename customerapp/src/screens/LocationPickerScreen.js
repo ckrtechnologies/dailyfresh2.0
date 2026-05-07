@@ -167,19 +167,8 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
             [{ text: 'Continue', onPress: () => {
               if (params?.from === 'SavedAddresses' || (isAuthenticated && isMandatory)) {
                 navigation.navigate('AddAddress', { locationData });
-              } else if (isAuthenticated) {
-                // Even if not mandatory, encourage saving for better UX if they just detected location
-                showGlobalAlert(
-                  'Save Address',
-                  'Would you like to save this location for faster checkout?',
-                  'info',
-                  [
-                    { text: 'Later', onPress: () => navigation.replace('DeliveryMode') },
-                    { text: 'Save Now', onPress: () => navigation.navigate('AddAddress', { locationData }) }
-                  ]
-                );
               } else {
-                navigation.replace('DeliveryMode');
+                navigation.replace('AppTabs');
               }
             }}]
           );
@@ -257,7 +246,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
             if (params?.from === 'SavedAddresses' || (isAuthenticated && isMandatory)) {
               navigation.navigate('AddAddress', { locationData });
             } else {
-              navigation.replace('DeliveryMode');
+              navigation.replace('AppTabs');
             }
           }}]
         );

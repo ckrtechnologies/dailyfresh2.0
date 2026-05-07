@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -25,9 +25,27 @@ const DataTable = ({
   loading = false,
   emptyMessage = "No records found",
   searchPlaceholder = "Search...",
-  title
+  title,
+  searchValue = "",
+  onSearchChange
 }) => {
   const { total = 0, page = 1, pageSize = 50 } = pagination || {};
+  const [localSearch, setLocalSearch] = useState(searchValue);
+
+  // Sync with external value
+  useEffect(() => {
+    setLocalSearch(searchValue);
+  }, [searchValue]);
+
+  // Debounce external update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== searchValue) {
+        onSearchChange && onSearchChange(localSearch);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localSearch, searchValue, onSearchChange]);
 
   // Export CSV
   const exportCSV = () => {
@@ -84,6 +102,8 @@ const DataTable = ({
           <input 
             type="text" 
             placeholder={searchPlaceholder}
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
             style={{ 
               width: '100%', 
               padding: '6px 10px 6px 32px', 

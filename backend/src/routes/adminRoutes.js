@@ -99,6 +99,7 @@ router.get('/recent-orders', authorize(['admin', 'store_manager']), adminControl
 router.post('/upload', authorize(['admin', 'store_manager']), upload.single('file'), adminController.uploadFile);
 router.get('/stores', authorize(['admin', 'store_manager']), adminController.listStores);
 router.get('/riders', authorize(['admin', 'store_manager']), adminController.listRiders);
+router.get('/rider-logs', authorize(['admin', 'store_manager']), adminController.listRiderDistanceLogs);
 router.get('/categories', authorize(['admin', 'store_manager']), adminController.listCategories);
 router.get('/sub-categories', authorize(['admin', 'store_manager']), adminController.listSubCategories);
 router.get('/products', authorize(['admin', 'store_manager']), adminController.listProducts);
@@ -135,5 +136,11 @@ router.get('/coupons', authorize(['admin']), couponController.listCoupons);
 router.post('/coupons', authorize(['admin']), couponController.createCoupon);
 router.patch('/coupons/:id', authorize(['admin']), couponController.updateCoupon);
 router.delete('/coupons/:id', authorize(['admin']), couponController.deleteCoupon);
+
+// Delivery Slots
+router.get('/delivery-slots',       authorize(['admin', 'store_manager']), adminController.listDeliverySlots);
+router.post('/delivery-slots',      authorize(['admin']), adminController.createDeliverySlot);
+router.patch('/delivery-slots/:id', authorize(['admin']), adminController.updateDeliverySlot);
+router.delete('/delivery-slots/:id',authorize(['admin']), adminController.deleteDeliverySlot);
 
 export default router;

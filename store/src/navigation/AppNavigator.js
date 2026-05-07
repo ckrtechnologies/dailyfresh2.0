@@ -12,6 +12,8 @@ import AuthNavigator from './AuthNavigator';
 import TabNavigator from './TabNavigator';
 import SplashScreen from '../screens/SplashScreen';
 import { COLORS } from '../theme/theme';
+import { storeApi } from '../services/api';
+import { setStores } from '../store/slices/authSlice';
 
 const Stack = createNativeStackNavigator();
 
@@ -72,6 +74,16 @@ export default function AppNavigator() {
             user: session.user,
             token: session.access_token
           }));
+
+          // Fetch stores for this manager
+          try {
+            const storesRes = await storeApi.getMyStores();
+            if (storesRes.data?.success) {
+              dispatch(setStores(storesRes.data.data.stores));
+            }
+          } catch (se) {
+            console.error('Failed to fetch manager stores', se);
+          }
         }
       } catch (e) {
         console.error('Session check error', e);

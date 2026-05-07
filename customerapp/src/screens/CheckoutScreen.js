@@ -28,6 +28,7 @@ import productService from '../api/productService';
 import { setServiceability } from '../store/slices/locationSlice';
 import LogoLoader from '../components/LogoLoader';
 import { showGlobalAlert } from '../services/alertService';
+import SubSlotPicker from '../components/SubSlotPicker';
 
 // Removed DELIVERY_SLOTS constant as it is now managed globally
 
@@ -43,8 +44,7 @@ const CheckoutScreen = ({ navigation }) => {
   // Slot labels for display
   const slotLabels = {
     'express': { label: 'Express Delivery', time: 'Within 90 mins', icon: 'lightning-bolt', color: '#F59E0B' },
-    'tomorrow_morning': { label: 'Tomorrow Morning', time: '7 AM - 11 AM', icon: 'weather-sunset-up', color: '#10B981' },
-    'tomorrow_evening': { label: 'Tomorrow Evening', time: '5 PM - 9 PM', icon: 'weather-night', color: '#6366F1' },
+    'tomorrow': { label: 'Tomorrow Delivery', time: 'Select Time Window', icon: 'calendar-clock', color: '#10B981' },
   };
 
   const currentSlot = slotLabels[selectedSlot] || slotLabels['express'];
@@ -56,6 +56,8 @@ const CheckoutScreen = ({ navigation }) => {
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [showSubSlotPicker, setShowSubSlotPicker] = useState(false);
+  const [selectedSubSlot, setSelectedSubSlot] = useState(null);
 
   const showAlert = (title, message, type = 'info', buttons = []) => {
     showGlobalAlert(title, message, type, buttons);
@@ -103,6 +105,11 @@ const CheckoutScreen = ({ navigation }) => {
         { text: 'Later', style: 'cancel' },
         { text: 'Choose Address', onPress: () => { navigation.navigate('SavedAddresses', { selectMode: true }); } },
       ]);
+      return;
+    }
+
+    if (selectedSlot === 'tomorrow' && !selectedSubSlot) {
+      setShowSubSlotPicker(true);
       return;
     }
 
@@ -154,8 +161,9 @@ const CheckoutScreen = ({ navigation }) => {
           city: selectedAddress.city,
           pincode: selectedAddress.pincode
         },
-        delivery_slot: currentSlot.label,
+        delivery_slot: selectedSlot === 'tomorrow' ? (selectedSubSlot?.slot_name || 'Tomorrow') : currentSlot.label,
         delivery_type: selectedSlot,
+        delivery_slot_id: selectedSubSlot?.id || null,
         lat: selectedAddress.latitude || coords?.lat,
         lng: selectedAddress.longitude || coords?.lng,
         payment_method: 'razorpay'
@@ -274,6 +282,35 @@ const CheckoutScreen = ({ navigation }) => {
             )}
           </View>
 
+          {/* Delivery Window Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Delivery Window</Text>
+            <TouchableOpacity 
+              style={[
+                styles.confirmationCard, 
+                { borderLeftColor: currentSlot.color, borderLeftWidth: 4 }
+              ]}
+              onPress={() => selectedSlot === 'tomorrow' && setShowSubSlotPicker(true)}
+              activeOpacity={selectedSlot === 'tomorrow' ? 0.7 : 1}
+            >
+              <View style={[styles.iconBox, { backgroundColor: currentSlot.color + '15' }]}>
+                <Icon name={currentSlot.icon} size={28} color={currentSlot.color} />
+              </View>
+              <View style={styles.slotDetails}>
+                <Text style={styles.slotLabel}>{currentSlot.label}</Text>
+                <Text style={styles.slotSub}>
+                  {selectedSlot === 'tomorrow' 
+                    ? (selectedSubSlot ? selectedSubSlot.slot_name : 'Tap to select time window')
+                    : currentSlot.time
+                  }
+                </Text>
+              </View>
+              {selectedSlot === 'tomorrow' && (
+                <Icon name="chevron-right" size={24} color={COLORS.gray} />
+              )}
+            </TouchableOpacity>
+          </View>
+
           {/* Order Summary */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Bill Summary</Text>
@@ -388,6 +425,15 @@ const CheckoutScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </View>
+
+      <SubSlotPicker
+        visible={showSubSlotPicker}
+        onClose={() => setShowSubSlotPicker(false)}
+        onSelect={(slot) => {
+          setSelectedSubSlot(slot);
+          setShowSubSlotPicker(false);
+        }}
+      />
 
     </SafeAreaView>
   );

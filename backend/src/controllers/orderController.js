@@ -26,7 +26,7 @@ const haversine = (lat1, lng1, lat2, lng2) => {
  * Find the first store (ordered by proximity) that has sufficient stock
  * for ALL items in the cart.
  *
- * @param {string}   deliveryType    - express | tomorrow_morning | tomorrow_evening
+ * @param {string}   deliveryType    - express | tomorrow
  * @param {string}   preferredStoreId - Store chosen at location pick
  * @param {Array}    items            - [{ product_id, quantity }]
  * @param {number}   lat              - Customer latitude
@@ -104,8 +104,9 @@ export const placeOrder = async (req, res) => {
     subtotal,
     delivery_charge,
     gst_amount,
-    delivery_type,  // express | tomorrow_morning | tomorrow_evening
-    lat,            // customer coords for fallback store ranking
+    delivery_type,      // express | tomorrow_morning | tomorrow_evening
+    delivery_slot_id,   // uuid from delivery_slots table (sub-slot time window)
+    lat,                // customer coords for fallback store ranking
     lng,
   } = req.body;
 
@@ -176,6 +177,26 @@ export const placeOrder = async (req, res) => {
       }
     }
 
+    // 2.7 Resolve delivery sub-slot label and type
+    let delivery_slot_label = null;
+    let final_delivery_type = delivery_type;
+
+    if (delivery_slot_id) {
+      const { data: slotRow } = await supabaseAdmin
+        .from('delivery_slots')
+        .select('slot_name, type')
+        .eq('id', delivery_slot_id)
+        .single();
+      
+      if (slotRow) {
+        delivery_slot_label = slotRow.slot_name;
+        // If the incoming type is 'tomorrow', resolve it to the specific 'tomorrow_morning' or 'tomorrow_evening'
+        if (delivery_type === 'tomorrow') {
+          final_delivery_type = slotRow.type;
+        }
+      }
+    }
+
     // 3. Create Order in DB
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -195,8 +216,10 @@ export const placeOrder = async (req, res) => {
         payment_method: payment_method === 'razorpay' ? 'upi' : payment_method,
         payment_status: 'unpaid',
         status: 'placed',
-        delivery_type: delivery_type || 'express',
+        delivery_type: final_delivery_type || 'express',
         delivery_slot,
+        delivery_slot_id: delivery_slot_id || null,
+        delivery_slot_label,
         razorpay_order_id,
       }])
       .select()

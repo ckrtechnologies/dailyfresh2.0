@@ -41,6 +41,8 @@ import SearchScreen from '../screens/SearchScreen';
 import AddAddressScreen from '../screens/AddAddressScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import DeliveryModeScreen from '../screens/DeliveryModeScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import ReturnPolicyScreen from '../screens/ReturnPolicyScreen';
 
 // Navigation Config
 const Stack = createStackNavigator();
@@ -152,6 +154,8 @@ const MainStack = () => {
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="AddAddress" component={AddAddressScreen} />
       <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="ReturnPolicy" component={ReturnPolicyScreen} />
     </Stack.Navigator>
   );
 };

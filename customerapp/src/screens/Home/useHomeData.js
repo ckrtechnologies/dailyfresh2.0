@@ -52,8 +52,7 @@ const useHomeData = () => {
     if (!selectedSlot || selectedSlot === 'all') return products;
 
     const slotMap = {
-      'tomorrow_morning': ['morning', 'tomorrow morning', 'tomorrow_morning'],
-      'tomorrow_evening': ['evening', 'tomorrow evening', 'tomorrow_evening'],
+      'tomorrow': ['morning', 'evening', 'tomorrow morning', 'tomorrow evening', 'tomorrow_morning', 'tomorrow_evening', 'tomorrow'],
       'express': ['express', 'express delivery']
     };
     const searchTerms = slotMap[selectedSlot] || [selectedSlot];
@@ -63,8 +62,6 @@ const useHomeData = () => {
       let supportsSlot = false;
 
       if (hasVariants) {
-        // If product has customizations, treat each as a filter criteria
-        // If ANY customization matches the slot, the product is shown
         supportsSlot = p.variants.some(v => {
           const vInfo = Array.isArray(v.delivery_info)
             ? v.delivery_info
@@ -73,18 +70,21 @@ const useHomeData = () => {
           return vInfo.some(info => searchTerms.includes(info.toLowerCase()));
         });
       } else {
-        // No customizations - use product-level delivery options
         const options = p.delivery_options || ['express'];
         const normalizedOptions = options.map(o =>
           o === 'morning' ? 'tomorrow_morning' :
             o === 'evening' ? 'tomorrow_evening' : o
         );
-        supportsSlot = normalizedOptions.includes(selectedSlot);
+        
+        if (selectedSlot === 'tomorrow') {
+          supportsSlot = normalizedOptions.includes('tomorrow_morning') || normalizedOptions.includes('tomorrow_evening');
+        } else {
+          supportsSlot = normalizedOptions.includes(selectedSlot);
+        }
       }
 
       if (!supportsSlot) return false;
 
-      // Check stock availability based on slot type
       const isExpress = selectedSlot === 'express';
       return isExpress ? (p.express_stock_qty > 0) : (p.scheduled_stock_qty > 0);
     });

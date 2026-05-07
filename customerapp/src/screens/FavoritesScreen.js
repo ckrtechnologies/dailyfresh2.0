@@ -15,6 +15,8 @@ import { toggleFavorite, toggleFavoriteAsync, setFavorites, fetchFavoritesAsync 
 import { addItem } from '../store/slices/cartSlice';
 import favoritesService from '../api/favoritesService';
 
+import ProductCard from '../components/ProductCard';
+
 const { width } = Dimensions.get('window');
 
 const FavoritesScreen = ({ navigation }) => {
@@ -26,35 +28,12 @@ const FavoritesScreen = ({ navigation }) => {
   }, [dispatch]);
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-    >
-      <Image source={{ uri: item.image_url }} style={styles.image} />
-      <TouchableOpacity
-        style={styles.favoriteBtn}
-        onPress={() => {
-          dispatch(toggleFavorite(item));
-          dispatch(toggleFavoriteAsync(item));
-        }}
-      >
-        <Icon name="heart" size={20} color={COLORS.primary} />
-      </TouchableOpacity>
-
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.weight}>{item.weight}</Text>
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>₹{item.price}</Text>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => dispatch(addItem(item))}
-          >
-            <Text style={styles.addText}>ADD</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
+    <View style={styles.productWrapper}>
+      <ProductCard
+        product={item}
+        onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+      />
+    </View>
   );
 
   if (items.length === 0) {
@@ -115,76 +94,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   list: {
-    padding: SPACING.m,
+    padding: 8,
   },
   columnWrapper: {
     justifyContent: 'space-between',
   },
-  card: {
-    width: (width - SPACING.m * 3) / 2,
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.card,
-    marginBottom: SPACING.m,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  image: {
-    width: '100%',
-    height: 120,
-    backgroundColor: '#F3F4F6',
-  },
-  favoriteBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: COLORS.white,
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 2,
-  },
-  info: {
-    padding: SPACING.s,
-  },
-  name: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.dark,
-  },
-  weight: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 2,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: SPACING.s,
-  },
-  price: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  addBtn: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: RADIUS.s,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  addText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: '700',
+  productWrapper: {
+    width: '50%',
+    padding: 8,
   },
   emptyContainer: {
     flex: 1,

@@ -198,18 +198,20 @@ const ProductDetailScreen = ({ route, navigation }) => {
         : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim().toLowerCase()) : []);
 
       const normalizedSlot = selectedSlot.toLowerCase();
-      const legacyMap = {
-        'tomorrow_morning': ['morning', 'tomorrow morning'],
-        'tomorrow_evening': ['evening', 'tomorrow evening'],
-        'express': ['express', 'express delivery']
-      };
+      
+      if (normalizedSlot === 'express') {
+        return info.some(slot => slot.toLowerCase().includes('express'));
+      }
+      
+      if (normalizedSlot === 'tomorrow') {
+        return info.some(slot => 
+          slot.toLowerCase().includes('morning') || 
+          slot.toLowerCase().includes('evening') ||
+          slot.toLowerCase().includes('tomorrow')
+        );
+      }
 
-      const allowedMatches = [normalizedSlot, ...(legacyMap[normalizedSlot] || [])];
-
-      return info.some(slot => {
-        const s = slot.toLowerCase();
-        return allowedMatches.includes(s);
-      }) || info.length === 0;
+      return true;
     });
   };
 
@@ -221,12 +223,16 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
     const options = product.delivery_options || [];
     const normalizedSlot = selectedSlot.toLowerCase();
-    const legacyMap = { 'tomorrow_morning': 'morning', 'tomorrow_evening': 'evening' };
 
-    return options.some(opt => {
-      const o = opt.toLowerCase();
-      return o === normalizedSlot || o === legacyMap[normalizedSlot];
-    });
+    if (normalizedSlot === 'express') {
+      return options.includes('express');
+    }
+
+    if (normalizedSlot === 'tomorrow') {
+      return options.includes('tomorrow_morning') || options.includes('tomorrow_evening');
+    }
+
+    return true;
   };
 
   const isAvailable = isProductSlotAvailable();
@@ -361,51 +367,40 @@ const ProductDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.sectionTitle}>Delivery Availability</Text>
               </View>
               <View style={styles.deliveryGrid}>
-                {(product.delivery_options || ['express']).map((opt) => {
-                  const normalizedOpt = opt === 'morning' ? 'tomorrow_morning' :
-                    opt === 'evening' ? 'tomorrow_evening' : opt;
-
-                  const isExpress = normalizedOpt === 'express';
-                  const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
-                  if (!hasStock) return null;
-
-                  const config = (deliverySlotsConfig && deliverySlotsConfig[normalizedOpt]) || {
-                    label: normalizedOpt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    time: isExpress ? '90 Mins' : 'Scheduled',
-                    icon: isExpress ? 'lightning-bolt' : (normalizedOpt.includes('morning') ? 'weather-sunny' : 'weather-night'),
-                    color: isExpress ? '#6B21A8' : (normalizedOpt.includes('morning') ? '#7A0C0E' : '#064E3B')
-                  };
-
-                  const isActive = normalizedOpt === selectedSlot;
-
-                  return (
-                    <View
-                      key={opt}
-                      style={[
-                        styles.deliveryCard,
-                        {
-                          backgroundColor: isActive ? config.color : COLORS.white,
-                          borderColor: isActive ? config.color : '#e2e8f0',
-                        }
-                      ]}
-                    >
-                      <View style={[styles.deliveryIconContainer, { backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : config.color + '10' }]}>
-                        <Icon name={config.icon} size={24} color={isActive ? COLORS.white : config.color} />
-                      </View>
-                      <Text style={[styles.deliveryLabel, { color: isActive ? COLORS.white : COLORS.dark }]} numberOfLines={1}>
-                        {config.label}
-                      </Text>
-                      <Text style={[styles.deliveryTime, { color: isActive ? 'rgba(255,255,255,0.8)' : COLORS.gray }]}>
-                        {config.time}
-                      </Text>
-                      {isActive && (
-                        <View style={styles.activeBadge}>
-                          <Icon name="check" size={12} color={config.color} />
-                        </View>
-                      )}
+                {/* Express Badge */}
+                {(product.delivery_options || []).includes('express') && product.express_stock_qty > 0 && (
+                  <View style={[
+                    styles.deliveryCard, 
+                    { 
+                      backgroundColor: selectedSlot === 'express' ? '#F59E0B' : COLORS.white,
+                      borderColor: selectedSlot === 'express' ? '#F59E0B' : '#e2e8f0',
+                    }
+                  ]}>
+                    <View style={[styles.deliveryIconContainer, { backgroundColor: selectedSlot === 'express' ? 'rgba(255,255,255,0.2)' : '#FFFBEB' }]}>
+                      <Icon name="lightning-bolt" size={24} color={selectedSlot === 'express' ? COLORS.white : '#F59E0B'} />
                     </View>
-                  );
-                })}
+                    <Text style={[styles.deliveryLabel, { color: selectedSlot === 'express' ? COLORS.white : COLORS.dark }]}>Express</Text>
+                    <Text style={[styles.deliveryTime, { color: selectedSlot === 'express' ? 'rgba(255,255,255,0.8)' : COLORS.gray }]}>90 Mins</Text>
+                  </View>
+                )}
+
+                {/* Tomorrow Badge */}
+                {((product.delivery_options || []).includes('tomorrow_morning') || (product.delivery_options || []).includes('tomorrow_evening')) && 
+                 product.scheduled_stock_qty > 0 && (
+                  <View style={[
+                    styles.deliveryCard,
+                    {
+                      backgroundColor: selectedSlot === 'tomorrow' ? '#10B981' : COLORS.white,
+                      borderColor: selectedSlot === 'tomorrow' ? '#10B981' : '#e2e8f0',
+                    }
+                  ]}>
+                    <View style={[styles.deliveryIconContainer, { backgroundColor: selectedSlot === 'tomorrow' ? 'rgba(255,255,255,0.2)' : '#ECFDF5' }]}>
+                      <Icon name="calendar-clock" size={24} color={selectedSlot === 'tomorrow' ? COLORS.white : '#10B981'} />
+                    </View>
+                    <Text style={[styles.deliveryLabel, { color: selectedSlot === 'tomorrow' ? COLORS.white : COLORS.dark }]}>Tomorrow</Text>
+                    <Text style={[styles.deliveryTime, { color: selectedSlot === 'tomorrow' ? 'rgba(255,255,255,0.8)' : COLORS.gray }]}>Scheduled</Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -464,19 +459,24 @@ const ProductDetailScreen = ({ route, navigation }) => {
                       </View>
 
                       <View style={styles.deliverySlotsContainer}>
-                        {(Array.isArray(variant.delivery_info) ? variant.delivery_info : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : ['Tomorrow Morning'])).map((slot, sIdx) => {
+                        {(Array.isArray(variant.delivery_info) ? variant.delivery_info : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : ['Tomorrow'])).map((slot, sIdx) => {
+                          const s = slot.toLowerCase();
+                          let label = slot;
                           let icon = 'truck-delivery-outline';
-                          let color = '#64748b'; // Default Slate
+                          let color = '#64748b';
 
-                          if (slot.toLowerCase().includes('morning')) { icon = 'weather-sunny'; color = '#7A0C0E'; }
-                          else if (slot.toLowerCase().includes('tomorrow evening')) { icon = 'weather-night'; color = '#064E3B'; }
-                          else if (slot.toLowerCase().includes('express')) { icon = 'flash'; color = '#6B21A8'; }
-                          else return null; // Hide today evening or anything else unknown
+                          if (s.includes('express')) {
+                            label = 'Express'; icon = 'flash'; color = '#F59E0B';
+                          } else if (s.includes('morning') || s.includes('evening') || s.includes('tomorrow')) {
+                            label = 'Tomorrow'; icon = 'calendar-clock'; color = '#10B981';
+                          } else {
+                            return null;
+                          }
 
                           return (
                             <View key={sIdx} style={[styles.deliveryBadge, { backgroundColor: color + '12' }]}>
                               <Icon name={icon} size={12} color={color} />
-                              <Text style={[styles.deliveryBadgeText, { color }]}>{slot}</Text>
+                              <Text style={[styles.deliveryBadgeText, { color }]}>{label}</Text>
                             </View>
                           );
                         })}

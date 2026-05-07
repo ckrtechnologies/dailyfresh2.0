@@ -335,7 +335,7 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
   const { user } = useAuth();
 
   const [formData, setFormData] = useState(initialData || {
-    name: '', slug: '', price: 0, discount_price: '', 
+    name: '', slug: '', price: 0, discount_price: '',
     express_stock_qty: 0, scheduled_stock_qty: 0,
     weight_unit: 'kg',
     store_id: isManager ? user?.store_id : (stores[0]?.id || ''),
@@ -359,9 +359,9 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
     <FormWrapper
       title={`${initialData ? 'Edit' : 'Add'} Product`}
       onClose={onClose}
-      onSubmit={(e) => { 
-        e.preventDefault(); 
-        
+      onSubmit={(e) => {
+        e.preventDefault();
+
         // Sync main product delivery_options with variant slots
         const variantSlots = new Set(formData.delivery_options || []);
         const slotMap = {
@@ -371,10 +371,10 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
         };
 
         (formData.variants || []).forEach(v => {
-          const info = Array.isArray(v.delivery_info) 
-            ? v.delivery_info 
+          const info = Array.isArray(v.delivery_info)
+            ? v.delivery_info
             : (v.delivery_info ? v.delivery_info.split(',').map(s => s.trim()) : []);
-          
+
           info.forEach(slot => {
             if (slotMap[slot]) {
               variantSlots.add(slotMap[slot]);
@@ -386,8 +386,8 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
           ...formData,
           delivery_options: Array.from(variantSlots)
         };
-        
-        onSave(syncedData); 
+
+        onSave(syncedData);
       }}
       loading={loading}
       tabs={tabs}
@@ -543,15 +543,15 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                             newVariants[index].name = e.target.value;
                             setFormData({ ...formData, variants: newVariants });
                           }}
-                          style={{ 
-                            border: '1px solid transparent', 
+                          style={{
+                            border: '1px solid transparent',
                             borderBottom: '1px solid var(--border)',
-                            background: 'white', 
+                            background: 'white',
                             padding: '6px 0',
-                            fontSize: '15px', 
-                            fontWeight: '700', 
-                            color: 'var(--text-main)', 
-                            width: '100%', 
+                            fontSize: '15px',
+                            fontWeight: '700',
+                            color: 'var(--text-main)',
+                            width: '100%',
                             outline: 'none',
                             transition: 'all 0.2s'
                           }}
@@ -572,7 +572,7 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  
+
                   <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '16px' }}>
                     {/* Left Col: Imagery & Metadata */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -630,11 +630,11 @@ export const ProductForm = ({ initialData, onSave, onClose, loading, stores = []
                         <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Delivery Slots</label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {['Express Delivery', 'Tomorrow Morning', 'Tomorrow Evening'].map(slot => {
-                            const current = Array.isArray(variant.delivery_info) 
-                              ? variant.delivery_info 
+                            const current = Array.isArray(variant.delivery_info)
+                              ? variant.delivery_info
                               : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : []);
                             const isActive = current.includes(slot);
-                            
+
                             return (
                               <label key={slot} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
                                 <input
@@ -1022,3 +1022,32 @@ export const HomeSectionForm = ({ initialData, onSave, onClose, loading }) => {
     </FormWrapper>
   );
 };
+
+export const NotificationForm = ({ targetName, onClose, onSend, loading, initialData }) => {
+  const [formData, setFormData] = useState(initialData || { title: '', body: '', data: {} });
+
+  return (
+    <FormWrapper
+      title={`Notify ${targetName}`}
+      onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); onSend(formData); }}
+      loading={loading}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
+        <Input label="Notification Title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required placeholder="e.g. Action Required" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Message Body</label>
+          <textarea
+            value={formData.body}
+            onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+            className="form-control"
+            style={{ resize: 'none', minHeight: '120px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px', outline: 'none' }}
+            required
+            placeholder="Type your message here..."
+          />
+        </div>
+      </div>
+    </FormWrapper>
+  );
+};
+

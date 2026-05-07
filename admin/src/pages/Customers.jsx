@@ -7,7 +7,7 @@ import { useFilters } from '../context/FilterContext';
 import { StaffForm } from '../components/modals/EntityForms';
 
 const Customers = () => {
-  const { searchQuery } = useFilters();
+  const { searchQuery, setSearchQuery } = useFilters();
   const queryClient = useQueryClient();
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -90,6 +90,8 @@ const Customers = () => {
         pagination={response?.pagination || pagination}
         onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
         onPageSizeChange={(pageSize) => setPagination({ page: 1, pageSize })}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       {isModalOpen && (

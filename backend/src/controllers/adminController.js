@@ -277,6 +277,51 @@ export const listRiders = async (req, res) => {
 };
 
 /**
+ * List All Rider Distance Logs (Admin)
+ */
+export const listRiderDistanceLogs = async (req, res) => {
+  const { page = 1, pageSize = 50, rider_id, startDate, endDate, search } = req.query;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  try {
+    let query = supabaseAdmin
+      .from('rider_distance_logs')
+      .select('*, rider:riders(*, user:profiles(full_name, phone))', { count: 'exact' })
+      .order('log_date', { ascending: false });
+
+    if (rider_id) query = query.eq('rider_id', rider_id);
+    if (startDate) query = query.gte('log_date', startDate);
+    if (endDate) query = query.lte('log_date', endDate);
+
+    if (search) {
+      // Find matching riders via user profiles
+      const { data: matchedRiders } = await supabaseAdmin
+        .from('riders')
+        .select('id, user:profiles(full_name, phone)')
+        .or(`user.full_name.ilike.%${search}%,user.phone.ilike.%${search}%`);
+      
+      if (matchedRiders && matchedRiders.length > 0) {
+        query = query.in('rider_id', matchedRiders.map(r => r.id));
+      } else {
+        // If no riders match, return empty
+        return successResponse(res, { logs: [], pagination: { total: 0, page: Number(page), pageSize: Number(pageSize) } });
+      }
+    }
+
+    const { data, count, error } = await query.range(from, to);
+
+    if (error) throw error;
+    return successResponse(res, { 
+      logs: data, 
+      pagination: { total: count, page: Number(page), pageSize: Number(pageSize) } 
+    });
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch distance logs', 500, error);
+  }
+};
+
+/**
  * --- DASHBOARD & ANALYTICS ---
  */
 
@@ -618,12 +663,18 @@ export const listStaff = async (req, res) => {
 
 // Lists
 export const listCategories = async (req, res) => {
+  const { search } = req.query;
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('categories')
       .select('*')
       .order('display_order', { ascending: true });
 
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,slug.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     return successResponse(res, { categories: data });
   } catch (error) {
@@ -632,12 +683,18 @@ export const listCategories = async (req, res) => {
 };
 
 export const listSubCategories = async (req, res) => {
+  const { search } = req.query;
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('sub_categories')
       .select('*, category:categories(name)')
       .order('display_order', { ascending: true });
 
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,slug.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     return successResponse(res, { sub_categories: data });
   } catch (error) {
@@ -658,7 +715,11 @@ export const listProducts = async (req, res) => {
       .select('*, store:stores(name), sub_category:sub_categories(name, category:categories(name)), variants:product_variants(*)', { count: 'exact' });
 
     if (storeIdToFetch) query = query.eq('store_id', storeIdToFetch);
-    if (search) query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,sku.ilike.%${search}%`);
+
+    if (search && search.trim()) {
+      const s = `%${search.trim()}%`;
+      query = query.or(`name.ilike.${s},sku.ilike.${s},description.ilike.${s}`);
+    }
 
     const { data, count, error } = await query.range(from, to);
     if (error) throw error;
@@ -1316,3 +1377,69 @@ export const updateHomeSection = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────
+// Delivery Slots  (uses the existing public.delivery_slots table)
+// ─────────────────────────────────────────────────────────────
+
+export const listDeliverySlots = async (req, res) => {
+  const { type } = req.query;
+  let query = supabaseAdmin
+    .from('delivery_slots')
+    .select('*')
+    .order('type', { ascending: true })
+    .order('display_order', { ascending: true });
+  if (type) query = query.eq('type', type);
+  const { data, error } = await query;
+  if (error) return errorResponse(res, 'Failed to fetch delivery slots', 500, error);
+  return successResponse(res, { slots: data });
+};
+
+export const createDeliverySlot = async (req, res) => {
+  const { type, slot_name, start_time, end_time, display_order, is_active } = req.body;
+  if (!type || !slot_name)
+    return errorResponse(res, 'type and slot_name are required', 400);
+  if (!['tomorrow_morning', 'tomorrow_evening'].includes(type))
+    return errorResponse(res, 'type must be tomorrow_morning or tomorrow_evening', 400);
+
+  const { data, error } = await supabaseAdmin
+    .from('delivery_slots')
+    .insert({
+      type,
+      slot_name,
+      start_time: start_time || null,
+      end_time: end_time || null,
+      display_order: display_order ?? 0,
+      is_active: is_active ?? true,
+    })
+    .select()
+    .single();
+  if (error) return errorResponse(res, 'Failed to create delivery slot', 500, error);
+  return successResponse(res, { slot: data });
+};
+
+export const updateDeliverySlot = async (req, res) => {
+  const { id } = req.params;
+  const { slot_name, start_time, end_time, display_order, is_active } = req.body;
+  const updates = {};
+  if (slot_name     !== undefined) updates.slot_name     = slot_name;
+  if (start_time    !== undefined) updates.start_time    = start_time;
+  if (end_time      !== undefined) updates.end_time      = end_time;
+  if (display_order !== undefined) updates.display_order = display_order;
+  if (is_active     !== undefined) updates.is_active     = is_active;
+
+  const { data, error } = await supabaseAdmin
+    .from('delivery_slots')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) return errorResponse(res, 'Failed to update delivery slot', 500, error);
+  return successResponse(res, { slot: data });
+};
+
+export const deleteDeliverySlot = async (req, res) => {
+  const { id } = req.params;
+  const { error } = await supabaseAdmin.from('delivery_slots').delete().eq('id', id);
+  if (error) return errorResponse(res, 'Failed to delete delivery slot', 500, error);
+  return successResponse(res, { message: 'Delivery slot deleted' });
+};

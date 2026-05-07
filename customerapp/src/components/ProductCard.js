@@ -69,7 +69,7 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
   );
 
   const selectedSlot = useSelector((state) => state.config.selectedSlot);
-  const location = useSelector((state) => state.location);
+  const isServiceable = useSelector((state) => state.location.isServiceable);
 
   const quantity = cartItem ? cartItem.quantity : 0;
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
@@ -147,7 +147,7 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
         </TouchableOpacity>
 
         {isTall && (
-          !location.isServiceable ? (
+          !isServiceable ? (
             <View style={[styles.floatingAddButton, { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' }]}>
               <Text style={[styles.addButtonText, { color: '#9CA3AF', fontSize: 10 }]}>UNAVAILABLE</Text>
             </View>
@@ -179,62 +179,38 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
         </Text>
 
         <View style={styles.deliveryOptionsContainer}>
-          <Animated.View style={[styles.scooterBox, { transform: [{ translateY: bounceAnim }] }]}>
-            <Icon name="moped" size={16} color={activeTheme.primary} />
-          </Animated.View>
-          {['express', 'tomorrow_morning', 'tomorrow_evening'].map((slot, idx) => {
-            const deliveryOptions = product.delivery_options || [];
-            if (!deliveryOptions.includes(slot)) return null;
+          <View style={styles.scooterWrapper}>
+            <Animated.View style={{ transform: [{ translateY: bounceAnim }] }}>
+              <Icon name="moped" size={18} color={activeTheme.primary} />
+            </Animated.View>
+          </View>
 
-            const isExpress = slot === 'express';
-            const hasStock = isExpress ? (product.express_stock_qty > 0) : (product.scheduled_stock_qty > 0);
-            if (!hasStock) return null;
-
-            const isSelected = slot === selectedSlot;
-            const slotTheme = THEMES[slot] || THEMES.all;
-            const iconMap = {
-              'express': 'flash',
-              'tomorrow_morning': 'weather-sunny',
-              'tomorrow_evening': 'weather-night'
-            };
-            const textMap = {
-              'express': 'Express',
-              'tomorrow_morning': 'Tomorrow Morning',
-              'tomorrow_evening': 'Tomorrow Evening'
-            };
-
-            return (
-              <View 
-                key={slot} 
-                style={[
-                  styles.deliveryBadge, 
-                  { 
-                    backgroundColor: slotTheme.primary, 
-                    borderColor: slotTheme.primary,
-                    overflow: 'hidden',
-                  }
-                ]}
-              >
-                <Icon 
-                  name={iconMap[slot]} 
-                  size={12} 
-                  color={COLORS.white} 
-                />
-                <Text style={[styles.deliveryBadgeText, { color: COLORS.white }]}>
-                  {textMap[slot]}
-                </Text>
-                
+          <View style={styles.badgesColumn}>
+            {/* Express badge */}
+            {(product.delivery_options || []).includes('express') &&
+             product.express_stock_qty > 0 && (
+              <View style={[styles.deliveryBadge, { backgroundColor: '#F59E0B', borderColor: '#F59E0B', overflow: 'hidden' }]}>
+                <Icon name="flash" size={10} color={COLORS.white} />
+                <Text style={[styles.deliveryBadgeText, { color: COLORS.white }]}>Express</Text>
                 <Animated.View
-                  style={[
-                    styles.glitter,
-                    {
-                      transform: [{ skewX: '-20deg' }, { translateX: shimmerTranslateX }]
-                    }
-                  ]}
+                  style={[styles.glitter, { transform: [{ skewX: '-20deg' }, { translateX: shimmerTranslateX }] }]}
                 />
               </View>
-            );
-          })}
+            )}
+
+            {/* Tomorrow badge */}
+            {((product.delivery_options || []).includes('tomorrow_morning') ||
+              (product.delivery_options || []).includes('tomorrow_evening')) &&
+             product.scheduled_stock_qty > 0 && (
+              <View style={[styles.deliveryBadge, { backgroundColor: '#10B981', borderColor: '#10B981', overflow: 'hidden' }]}>
+                <Icon name="calendar-clock" size={10} color={COLORS.white} />
+                <Text style={[styles.deliveryBadgeText, { color: COLORS.white }]}>Tomorrow</Text>
+                <Animated.View
+                  style={[styles.glitter, { transform: [{ skewX: '-20deg' }, { translateX: shimmerTranslateX }] }]}
+                />
+              </View>
+            )}
+          </View>
         </View>
 
         {!(product.variants?.length > 0) && (
@@ -248,7 +224,7 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
 
         {!isTall && (
           <View style={styles.smallCardFooter}>
-            {!location.isServiceable ? (
+            {!isServiceable ? (
               <View style={[styles.smallAddBtn, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]}>
                 <Text style={[styles.smallAddBtnText, { color: '#9CA3AF' }]}>SERVICE UNAVAILABLE</Text>
               </View>
@@ -403,29 +379,35 @@ const styles = StyleSheet.create({
   },
   deliveryOptionsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginTop: 6,
+    alignItems: 'flex-start',
+    marginTop: 8,
     marginBottom: 4,
+    gap: 6,
   },
-  scooterBox: {
+  scooterWrapper: {
     width: 24,
-    justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 2,
+  },
+  badgesColumn: {
+    flex: 1,
+    gap: 4,
   },
   deliveryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 6,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 1,
     gap: 4,
+    width: 80,
   },
   deliveryBadgeText: {
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   glitter: {
     position: 'absolute',

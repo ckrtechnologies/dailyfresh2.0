@@ -10,7 +10,9 @@ import {
   LogOut,
   Settings,
   Truck,
-  Ticket
+  Ticket,
+  Route,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import '../../styles/layout.css';
@@ -25,6 +27,8 @@ const Sidebar = () => {
     { name: 'Home Manager', path: '/home-manager', icon: LayoutDashboard, roles: ['admin'] },
     { name: 'Stores', path: '/stores', icon: PlusCircle, roles: ['admin'] },
     { name: 'Riders', path: '/riders', icon: Truck, roles: ['admin'] },
+    { name: 'Rider Logs', path: '/rider-logs', icon: Route, roles: ['admin'] },
+    { name: 'Delivery Slots', path: '/delivery-slots', icon: Clock, roles: ['admin'] },
     { name: 'Customers', path: '/customers', icon: Users, roles: ['admin'] },
     { name: 'Notifications', path: '/notifications', icon: Bell, roles: ['admin'] },
     { name: 'Coupons', path: '/coupons', icon: Ticket, roles: ['admin'] },

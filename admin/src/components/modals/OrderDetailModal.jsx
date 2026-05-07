@@ -113,6 +113,34 @@ const OrderDetailModal = ({ order, onClose }) => {
                 </span>
               </div>
 
+              {/* Delivery Information */}
+              <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={16} /> Delivery Information
+                </h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ flex: 1, minWidth: '120px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase' }}>Mode</div>
+                    <div style={{ 
+                      fontSize: '13px', 
+                      fontWeight: '700', 
+                      marginTop: '4px',
+                      color: order.delivery_type === 'express' ? '#8b5cf6' : '#b91c1c'
+                    }}>
+                      {order.delivery_type === 'express' ? '⚡ EXPRESS' : '📅 SCHEDULED'}
+                    </div>
+                  </div>
+                  {order.delivery_slot_label && (
+                    <div style={{ flex: 1, minWidth: '120px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase' }}>Time Window</div>
+                      <div style={{ fontSize: '13px', fontWeight: '700', marginTop: '4px', color: '#1e293b' }}>
+                        {order.delivery_slot_label}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Customer Info */}
               <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>

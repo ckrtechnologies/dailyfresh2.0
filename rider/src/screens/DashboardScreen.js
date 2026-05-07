@@ -12,10 +12,11 @@ import {
   ActivityIndicator,
   Vibration,
   StatusBar,
-  useColorScheme
+  useColorScheme,
+  TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Power, User, ShoppingBag, TrendingUp, MapPinned, ChevronRight, Clock, Bell, Package } from 'lucide-react-native';
+import { Power, User, ShoppingBag, TrendingUp, MapPinned, ChevronRight, Clock, Bell, Package, Route } from 'lucide-react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
 import { setOnline, setLoading, setError, setProfile } from '../store/riderSlice';
@@ -38,18 +39,30 @@ const DashboardScreen = ({ navigation }) => {
   const [availableOrders, setAvailableOrders] = useState([]);
   const [stats, setStats] = useState({ orders: 0 });
   const [recentActivity, setRecentActivity] = useState([]);
+  const [showDistanceModal, setShowDistanceModal] = useState(false);
+  const [startReading, setStartReading] = useState('');
+  const [endReading, setEndReading] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [todayLog, setTodayLog] = useState(null);
 
   // 1. Initial Setup
   useEffect(() => {
     const init = async () => {
       console.log('📱 [Dashboard] Initializing components and listeners...');
       try {
-        // Check Location Permissions
-        await request(
-          Platform.OS === 'ios'
-            ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE
-            : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
-        );
+        // Check Permissions
+        if (Platform.OS === 'android') {
+          if (PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION) {
+            await request(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION);
+          }
+          if (Platform.Version >= 33 && PERMISSIONS.ANDROID.POST_NOTIFICATIONS) {
+            await request(PERMISSIONS.ANDROID.POST_NOTIFICATIONS);
+          }
+        } else {
+          if (PERMISSIONS.IOS.LOCATION_WHEN_IN_USE) {
+            await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+          }
+        }
 
         // Setup Notifications
         await notificationService.requestUserPermission();
@@ -71,13 +84,6 @@ const DashboardScreen = ({ navigation }) => {
     };
     init();
   }, []);
-
-  // 2. Refresh data on screen focus
-  useFocusEffect(
-    useCallback(() => {
-      fetchDashboardData();
-    }, [])
-  );
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -114,7 +120,28 @@ const DashboardScreen = ({ navigation }) => {
     } catch (err) {
       console.error('Fetch Dashboard Error:', err);
     }
-  }, [dispatch, profile]);
+  }, [dispatch]);
+
+  const fetchDistanceLogs = useCallback(async () => {
+    try {
+      const res = await api.get('/rider/distance-logs');
+      if (res.data.success && res.data.data.logs.length > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        const log = res.data.data.logs.find(l => l.log_date === today);
+        setTodayLog(log);
+      }
+    } catch (err) {
+      console.error('Fetch Distance Error:', err);
+    }
+  }, []);
+
+  // 2. Refresh data on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData();
+      fetchDistanceLogs();
+    }, [fetchDashboardData, fetchDistanceLogs])
+  );
 
   // 2. Control Background Service based on status
 
@@ -146,6 +173,38 @@ const DashboardScreen = ({ navigation }) => {
     } catch (err) {
       Alert.alert('Order Error', 'This order might have been taken by another rider.');
       console.error('Accept Error:', err);
+    }
+  };
+
+  const handleLogDistance = async () => {
+    if (!startReading || !endReading || isNaN(startReading) || isNaN(endReading)) {
+      Alert.alert('Invalid Input', 'Please enter valid numeric readings.');
+      return;
+    }
+
+    if (Number(endReading) < Number(startReading)) {
+      Alert.alert('Invalid Input', 'End reading cannot be less than start reading.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await api.post('/rider/distance-logs', { 
+        start_reading: startReading,
+        end_reading: endReading
+      });
+      if (res.data.success) {
+        setTodayLog(res.data.data.log);
+        setShowDistanceModal(false);
+        setStartReading('');
+        setEndReading('');
+        Alert.alert('Success', 'Daily distance logged successfully!');
+      }
+    } catch (err) {
+      console.error('Log Distance Error:', err);
+      Alert.alert('Error', 'Failed to log distance. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -239,6 +298,16 @@ const DashboardScreen = ({ navigation }) => {
                 <View style={styles.availableInfo}>
                   <Text style={styles.availableTitle}>Order #{item.id}</Text>
                   <Text style={styles.availableSub}>{item.store} • {item.store_address}</Text>
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: item.delivery_type === 'express' ? '#ef4444' : '#22c55e' }}>
+                      {item.delivery_type === 'express' ? '⚡ EXPRESS' : '📅 SCHEDULED'}
+                    </Text>
+                    {item.delivery_slot_label && (
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748b' }}>
+                        • {item.delivery_slot_label}
+                      </Text>
+                    )}
+                  </View>
                 </View>
                 <View style={styles.availableBadge}>
                   <Text style={styles.availableBadgeText}>AVAILABLE</Text>
@@ -250,6 +319,37 @@ const DashboardScreen = ({ navigation }) => {
               <Text style={styles.emptyAvailableText}>No pending orders in your area</Text>
             </View>
           )}
+        </View>
+
+        <View style={styles.availableSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>Daily Tracking</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('DistanceHistory')}>
+              <Text style={styles.viewAllText}>History</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity 
+            style={styles.distanceCard}
+            onPress={() => setShowDistanceModal(true)}
+          >
+            <View style={styles.distanceIcon}>
+              <Route color="#10b981" size={24} />
+            </View>
+            <View style={styles.distanceInfo}>
+              <Text style={styles.distanceTitle}>
+                {todayLog ? `${todayLog.distance_km} KM Logged` : 'Log Daily Distance'}
+              </Text>
+              <Text style={styles.distanceSub}>
+                {todayLog ? 'Click to update today\'s reading' : 'Enter your total KM for today'}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.logBtn}
+              onPress={() => setShowDistanceModal(true)}
+            >
+              <Text style={styles.logBtnText}>{todayLog ? 'UPDATE' : 'LOG'}</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </View>
 
         {/* PERFORMANCE STATS */}
@@ -346,6 +446,76 @@ const DashboardScreen = ({ navigation }) => {
                 onPress={handleAccept}
               >
                 <Text style={styles.acceptText}>Accept Order</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* DISTANCE LOGGING MODAL */}
+      <Modal
+        visible={showDistanceModal}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.distanceModalContent}>
+            <Text style={styles.modalTitle}>Log Daily Distance</Text>
+            <Text style={styles.modalSubtitle}>Enter odometer readings for today</Text>
+            
+            <Text style={styles.inputLabel}>Starting Reading</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.distanceInput}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                value={startReading}
+                onChangeText={setStartReading}
+              />
+              <Text style={styles.unitText}>KM</Text>
+            </View>
+
+            <Text style={styles.inputLabel}>Ending Reading</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.distanceInput}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                value={endReading}
+                onChangeText={setEndReading}
+              />
+              <Text style={styles.unitText}>KM</Text>
+            </View>
+
+            {startReading && endReading && !isNaN(startReading) && !isNaN(endReading) && (
+              <View style={styles.calcBox}>
+                <Text style={styles.calcLabel}>Calculated Distance:</Text>
+                <Text style={styles.calcValue}>{(Number(endReading) - Number(startReading)).toFixed(2)} KM</Text>
+              </View>
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setShowDistanceModal(false);
+                  setStartReading('');
+                  setEndReading('');
+                }}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.submitBtn}
+                onPress={handleLogDistance}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.submitText}>Save Log</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -575,64 +745,153 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 20,
   },
-  availableSection: {
-    marginBottom: 24,
-  },
-  availableCard: {
+  distanceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  availableIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#eff6ff',
+  distanceIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: '#ecfdf5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
-  availableInfo: {
+  distanceInfo: {
     flex: 1,
   },
-  availableTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+  distanceTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
     color: '#1e293b',
   },
-  availableSub: {
-    fontSize: 12,
+  distanceSub: {
+    fontSize: 13,
     color: '#64748b',
     marginTop: 2,
   },
-  availableBadge: {
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+  logBtn: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
-  availableBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#16a34a',
+  logBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
-  emptyAvailable: {
+  distanceModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 32,
+    padding: 32,
+    width: width * 0.85,
+    alignSelf: 'center',
+    marginTop: height * 0.2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#f8fafc',
     borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderStyle: 'dashed',
+    paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#e2e8f0',
+    marginBottom: 32,
   },
-  emptyAvailableText: {
-    color: '#94a3b8',
+  distanceInput: {
+    flex: 1,
+    height: 60,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  unitText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#64748b',
+    marginLeft: 8,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#64748b',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  calcBox: {
+    backgroundColor: '#eff6ff',
+    padding: 16,
+    borderRadius: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  calcLabel: {
     fontSize: 14,
+    color: '#1e40af',
+    fontWeight: '600',
+  },
+  calcValue: {
+    fontSize: 18,
+    color: '#1e40af',
+    fontWeight: 'bold',
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 54,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitBtn: {
+    flex: 2,
+    height: 54,
+    backgroundColor: '#10b981',
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  submitText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

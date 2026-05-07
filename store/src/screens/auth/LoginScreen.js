@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useAppDispatch } from '../../store/hooks';
-import { setCredentials } from '../../store/slices/authSlice';
+import { setCredentials, setStores } from '../../store/slices/authSlice';
 import { supabase } from '../../services/supabase';
 import { COLORS, SPACING, RADIUS, FONTS } from '../../theme/theme';
+import { alertService } from '../../utils/alertService';
 
 export default function LoginScreen() {
   const dispatch = useAppDispatch();
@@ -13,7 +14,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
+      alertService.error('Error', 'Please enter email and password');
       return;
     }
 
@@ -32,8 +33,20 @@ export default function LoginScreen() {
           token: data.session.access_token,
         })
       );
+
+      // Fetch stores after successful login
+      try {
+        const { storeApi } = require('../../services/api');
+        const { setStores } = require('../../store/slices/authSlice');
+        const storesRes = await storeApi.getMyStores();
+        if (storesRes.data?.success) {
+          dispatch(setStores(storesRes.data.data.stores));
+        }
+      } catch (se) {
+        console.error('Post-login store fetch error:', se);
+      }
     } catch (error) {
-      Alert.alert('Login Failed', error.message || 'An error occurred during login');
+      alertService.error('Login Failed', error.message || 'An error occurred during login');
     } finally {
       setLoading(false);
     }
