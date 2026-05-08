@@ -13,7 +13,8 @@ import {
   Vibration,
   StatusBar,
   useColorScheme,
-  TextInput
+  TextInput,
+  KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Power, User, ShoppingBag, TrendingUp, MapPinned, ChevronRight, Clock, Bell, Package, Route } from 'lucide-react-native';
@@ -33,8 +34,6 @@ const { width, height } = Dimensions.get('window');
 const DashboardScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { isOnline, user: profile, loading } = useSelector((state) => state.rider);
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [incomingOrder, setIncomingOrder] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
   const [availableOrders, setAvailableOrders] = useState([]);
   const [stats, setStats] = useState({ orders: 0 });
@@ -66,18 +65,7 @@ const DashboardScreen = ({ navigation }) => {
 
         // Setup Notifications
         await notificationService.requestUserPermission();
-        await notificationService.setupListeners((orderData) => {
-          if (!orderData) return;
-          setIncomingOrder({
-            id: orderData.order_id,
-            order_number: orderData.order_number,
-            store: orderData.store_name,
-            distance: orderData.distance || 'Nearby',
-            items: orderData.items || '...',
-            pay: '',
-          });
-          setShowOrderModal(true);
-        });
+        await notificationService.setupListeners();
       } catch (err) {
         console.error('[Dashboard] Init Error:', err);
       }
@@ -160,21 +148,7 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
-  const handleAccept = async () => {
-    Vibration.cancel();
-    setShowOrderModal(false);
-    try {
-      if (!incomingOrder?.id) return;
-      console.log(`📦 [Order Accept] Accepting Order ID: ${incomingOrder.id}`);
-      const res = await api.post('/rider/orders/accept', { orderId: incomingOrder.id });
-      if (res.data.success) {
-        navigation.navigate('ActiveDelivery', { order: res.data.data.order });
-      }
-    } catch (err) {
-      Alert.alert('Order Error', 'This order might have been taken by another rider.');
-      console.error('Accept Error:', err);
-    }
-  };
+
 
   const handleLogDistance = async () => {
     if (!startReading || !endReading || isNaN(startReading) || isNaN(endReading)) {
@@ -398,59 +372,7 @@ const DashboardScreen = ({ navigation }) => {
 
       </ScrollView>
 
-      {/* NEW ORDER MODAL */}
-      <Modal
-        visible={showOrderModal}
-        transparent
-        animationType="slide"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>NEW DELIVERY REQUEST</Text>
-              </View>
-            </View>
 
-            <Text style={styles.orderStore}>{incomingOrder?.store || 'New Store Order'}</Text>
-            <View style={styles.orderMeta}>
-              <View style={styles.metaItem}>
-                <ShoppingBag color="#64748b" size={16} />
-                <Text style={styles.metaText}>Order #{incomingOrder?.order_number}</Text>
-              </View>
-              <View style={styles.metaItem}>
-                <MapPinned color="#64748b" size={16} />
-                <Text style={styles.metaText}>{incomingOrder?.distance || 'Nearby'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.itemsBox}>
-              <Text style={styles.itemsTitle}>Items to Deliver:</Text>
-              <Text style={styles.itemsList}>{incomingOrder?.items}</Text>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.declineBtn}
-                onPress={() => {
-                  Vibration.cancel();
-                  setShowOrderModal(false);
-                }}
-              >
-                <Text style={styles.declineText}>Decline</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.acceptBtn}
-                onPress={handleAccept}
-              >
-                <Text style={styles.acceptText}>Accept Order</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* DISTANCE LOGGING MODAL */}
       <Modal
@@ -459,7 +381,12 @@ const DashboardScreen = ({ navigation }) => {
         animationType="fade"
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.distanceModalContent}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%', alignItems: 'center' }}
+          >
+            <View style={styles.distanceModalContent}>
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             <Text style={styles.modalTitle}>Log Daily Distance</Text>
             <Text style={styles.modalSubtitle}>Enter odometer readings for today</Text>
             
@@ -518,9 +445,11 @@ const DashboardScreen = ({ navigation }) => {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </Modal>
+    </Modal>
     </SafeAreaView>
   );
 };
@@ -653,57 +582,7 @@ const styles = StyleSheet.create({
   emptyActivity: { padding: 40, alignItems: 'center' },
   emptyActivityText: { color: '#94a3b8', fontSize: 14 },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: '#f1f7ff',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 32,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  badge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  badgeText: { color: '#3b82f6', fontSize: 12, fontWeight: 'bold' },
-  orderStore: { color: '#1e293b', fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
-  orderMeta: { flexDirection: 'row', gap: 16, marginBottom: 24 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metaText: { color: '#64748b', fontSize: 14 },
-  divider: { height: 1, backgroundColor: '#f1f5f9', marginBottom: 24 },
-  itemsBox: { backgroundColor: '#f8fafc', padding: 20, borderRadius: 16, marginBottom: 32 },
-  itemsTitle: { color: '#64748b', fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' },
-  itemsList: { color: '#1e293b', fontSize: 16, lineHeight: 24 },
-  modalActions: { flexDirection: 'row', gap: 16 },
-  declineBtn: {
-    flex: 1,
-    height: 60,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f1f5f9',
-  },
-  declineText: { color: '#64748b', fontSize: 16, fontWeight: '600' },
-  acceptBtn: {
-    flex: 2,
-    height: 60,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3b82f6',
-  },
-  acceptText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
 
   // ACTIVE DELIVERY STYLES
   activeSection: { marginTop: 24, paddingHorizontal: 0 },
@@ -737,13 +616,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginRight: 24,
   },
   viewAllText: {
     fontSize: 13,
     color: '#3b82f6',
     fontWeight: '600',
-    marginTop: 20,
   },
   distanceCard: {
     backgroundColor: '#fff',
@@ -795,10 +672,10 @@ const styles = StyleSheet.create({
   distanceModalContent: {
     backgroundColor: '#fff',
     borderRadius: 32,
-    padding: 32,
+    padding: 24,
     width: width * 0.85,
+    maxHeight: height * 0.8,
     alignSelf: 'center',
-    marginTop: height * 0.2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
@@ -806,66 +683,66 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1e293b',
     textAlign: 'center',
   },
   modalSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748b',
     textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 6,
+    marginBottom: 20,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
     borderRadius: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 32,
+    marginBottom: 16,
   },
   distanceInput: {
     flex: 1,
-    height: 60,
-    fontSize: 24,
+    height: 54,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1e293b',
   },
   unitText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#64748b',
     marginLeft: 8,
   },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#64748b',
-    marginBottom: 8,
+    marginBottom: 6,
     textTransform: 'uppercase',
   },
   calcBox: {
     backgroundColor: '#eff6ff',
-    padding: 16,
+    padding: 14,
     borderRadius: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#dbeafe',
   },
   calcLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#1e40af',
     fontWeight: '600',
   },
   calcValue: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#1e40af',
     fontWeight: 'bold',
   },
@@ -892,6 +769,63 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  availableSection: { marginBottom: 32 },
+  availableCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  availableIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  availableInfo: { flex: 1 },
+  availableTitle: { color: '#1e293b', fontSize: 15, fontWeight: '700' },
+  availableSub: { color: '#64748b', fontSize: 12, marginTop: 2 },
+  availableBadge: {
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+  },
+  availableBadgeText: {
+    color: '#16a34a',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  emptyAvailable: {
+    padding: 30,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    alignItems: 'center',
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  emptyAvailableText: { color: '#94a3b8', fontSize: 14 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

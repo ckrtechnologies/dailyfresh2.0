@@ -3,10 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { store } from '../store/store';
 import { logout } from '../store/slices/authSlice';
 import Toast from 'react-native-toast-message';
-import { API_BASE_URL } from '@env';
+import { API_URL } from '@env';
 
 // Get base URL from environment or fallback to emulator localhost
-const BASE_URL = API_BASE_URL || 'http://10.0.2.2:5000/api';
+const BASE_URL = API_URL || 'http://10.0.2.2:5010/api/v1';
 console.log('🚀 [Store API] Initializing with Base URL:', BASE_URL);
 
 const api = axios.create({

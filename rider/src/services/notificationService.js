@@ -1,6 +1,7 @@
 import messaging from '@react-native-firebase/messaging';
 import { Alert, Platform, Vibration } from 'react-native';
 import api from './api';
+import * as RootNavigation from '../navigation/RootNavigation';
 
 class NotificationService {
     async requestUserPermission() {
@@ -47,7 +48,8 @@ class NotificationService {
 
             if (remoteMessage.data?.type === 'NEW_ORDER_AVAILABLE') {
                 Vibration.vibrate([0, 500, 200, 500], true);
-                onNewOrder(remoteMessage.data);
+                RootNavigation.navigate('NewOrder', { order: remoteMessage.data });
+                if (onNewOrder) onNewOrder(remoteMessage.data);
             } else if (remoteMessage.notification) {
                 Alert.alert(
                     remoteMessage.notification.title || 'Notification',
@@ -59,12 +61,21 @@ class NotificationService {
         // App opened from notification
         messaging().onNotificationOpenedApp(remoteMessage => {
             console.log('[NotificationService] App opened from notification:', remoteMessage);
+            if (remoteMessage.data?.type === 'NEW_ORDER_AVAILABLE') {
+                RootNavigation.navigate('NewOrder', { order: remoteMessage.data });
+            }
         });
 
         // Check if app was opened from killed state by notification
         const initialNotification = await messaging().getInitialNotification();
         if (initialNotification) {
             console.log('[NotificationService] App opened from quit state:', initialNotification);
+            if (initialNotification.data?.type === 'NEW_ORDER_AVAILABLE') {
+                // Short delay to ensure navigation is ready
+                setTimeout(() => {
+                    RootNavigation.navigate('NewOrder', { order: initialNotification.data });
+                }, 1000);
+            }
         }
     }
 

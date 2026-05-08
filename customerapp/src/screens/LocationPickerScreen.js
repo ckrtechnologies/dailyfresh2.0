@@ -272,11 +272,13 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Image
-              source={require('../assets/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <View style={styles.logoCircle}>
+              <Image
+                source={require('../assets/DailyFreshLogo.jpeg')}
+                style={styles.logo}
+                resizeMode="cover"
+              />
+            </View>
             <Text style={styles.title}>
               {isMandatory ? 'Delivery Address Required' : 'Where should we deliver?'}
             </Text>
@@ -403,10 +405,26 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xxl,
     alignItems: 'center',
   },
+  logoCircle: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    elevation: 5,
+    marginBottom: SPACING.l,
+    borderWidth: 6,
+    borderColor: '#f8fafc',
+  },
   logo: {
-    width: width * 0.4,
-    height: width * 0.25,
-    marginBottom: SPACING.m,
+    width: '130%',
+    height: '130%',
   },
   title: {
     fontSize: 22,

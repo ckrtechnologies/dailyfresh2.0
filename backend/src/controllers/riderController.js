@@ -244,8 +244,9 @@ export const getDashboardStats = async (req, res) => {
 
     if (!rider) return errorResponse(res, 'Rider not found', 404);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Adjust to IST for "Today" calculation
+    const today = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+    today.setUTCHours(0, 0, 0, 0);
 
     const { count, error: countError } = await supabaseAdmin
       .from('orders')
@@ -396,7 +397,8 @@ export const logDistance = async (req, res) => {
 
     if (!rider) return errorResponse(res, 'Rider profile not found', 404);
 
-    const today = new Date().toISOString().split('T')[0];
+    // Get current date in IST
+    const today = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000)).toISOString().split('T')[0];
     const distance = Number(end_reading) - Number(start_reading);
 
     if (distance < 0) {

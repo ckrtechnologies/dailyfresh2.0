@@ -14,6 +14,7 @@ import LoginScreen from '../screens/LoginScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SplashScreen from '../screens/SplashScreen';
 import DistanceHistoryScreen from '../screens/DistanceHistoryScreen';
+import NewOrderScreen from '../screens/NewOrderScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -25,6 +26,7 @@ const DashboardStack = () => {
       <Stack.Screen name="ActiveDelivery" component={ActiveDeliveryScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="DistanceHistory" component={DistanceHistoryScreen} />
+      <Stack.Screen name="NewOrder" component={NewOrderScreen} />
     </Stack.Navigator>
   );
 };

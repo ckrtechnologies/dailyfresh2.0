@@ -553,12 +553,25 @@ export const updateOrderStatus = async (req, res) => {
       if (status === 'ready') {
         const { data: storeInfo } = await supabaseAdmin
           .from('stores')
-          .select('name')
+          .select('name, address')
           .eq('id', storeId)
           .single();
         
+        const { data: orderDetails } = await supabaseAdmin
+          .from('order_items')
+          .select('name, quantity')
+          .eq('order_id', orderId);
+
+        const itemsSummary = orderDetails?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'Fresh items';
+        
         if (order.order_number && storeInfo?.name) {
-          notificationService.notifyAvailableRiders(orderId, order.order_number, storeInfo.name);
+          notificationService.notifyAvailableRiders(
+            orderId, 
+            order.order_number, 
+            storeInfo.name, 
+            storeInfo.address, 
+            itemsSummary
+          );
         }
       }
     } catch (notifErr) {

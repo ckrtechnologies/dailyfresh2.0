@@ -7,37 +7,45 @@ import { store, persistor } from './src/store';
 import AppNavigator from './src/navigation/AppNavigator';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import notificationService from './src/services/notificationService';
+import { navigationRef } from './src/navigation/RootNavigation';
 
 import { useSelector } from 'react-redux';
 
-const App = () => {
+const AppContent = () => {
   const token = useSelector(state => state.rider.token);
 
   React.useEffect(() => {
     notificationService.requestUserPermission();
-    notificationService.setupListeners(() => {
-      // Refresh orders or handle new order logic if needed
+    notificationService.setupListeners((data) => {
+      console.log('[AppContent] New order notification received:', data);
+      // Logic to refresh orders can go here
     });
 
     return () => notificationService.removeListeners();
   }, []);
 
-  // Trigger token registration whenever the auth token changes (e.g. after login)
+  // Trigger token registration whenever the auth token changes
   React.useEffect(() => {
     if (token) {
-      console.log('[App] Auth token detected, refreshing FCM registration...');
+      console.log('[AppContent] Auth token detected, refreshing FCM registration...');
       notificationService.getToken();
     }
   }, [token]);
 
   return (
+    <NavigationContainer ref={navigationRef}>
+      <StatusBar barStyle="light-content" backgroundColor="#1e293b" />
+      <AppNavigator />
+    </NavigationContainer>
+  );
+};
+
+const App = () => {
+  return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <SafeAreaProvider>
-          <NavigationContainer>
-            <StatusBar barStyle="light-content" backgroundColor="#1e293b" />
-            <AppNavigator />
-          </NavigationContainer>
+          <AppContent />
         </SafeAreaProvider>
       </PersistGate>
     </Provider>

@@ -135,13 +135,14 @@ class NotificationService {
       console.log('Foreground notification received:', remoteMessage);
 
       // Handle Order Status Update for real-time state change
-      if (remoteMessage.data?.type === 'order_status_update') {
-        const { order_id, status } = remoteMessage.data;
+      if (remoteMessage.data?.type === 'order_status_update' || remoteMessage.data?.type === 'order_update') {
+        const { order_id, orderId, status } = remoteMessage.data;
+        const finalOrderId = order_id || orderId;
         if (dispatch) {
           console.log('[Notification] Dispatching order status update:', status);
           dispatch({
             type: 'order/updateOrderStatusLocal',
-            payload: { orderId: order_id, status }
+            payload: { orderId: finalOrderId, status }
           });
           dispatch(fetchActiveOrder());
         }
@@ -150,7 +151,10 @@ class NotificationService {
       // Show System Notification via Notifee
       try {
         if (notifee && typeof notifee.displayNotification === 'function') {
-          const isOrderUpdate = remoteMessage.data?.type === 'order_status_update' || remoteMessage.data?.type === 'order_confirmed';
+          const isOrderUpdate = remoteMessage.data?.type === 'order_status_update' || 
+                               remoteMessage.data?.type === 'order_update' || 
+                               remoteMessage.data?.type === 'order_confirmed' ||
+                               remoteMessage.data?.type === 'delivery_update';
           const imageUrl = remoteMessage.data?.image_url;
 
           await notifee.displayNotification({

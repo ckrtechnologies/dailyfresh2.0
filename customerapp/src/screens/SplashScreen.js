@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Dimensions, StatusBar, Text } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, StatusBar, Text, Image } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,11 +20,11 @@ const SplashScreen = () => {
   const taglineOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // 1. CINEMATIC SEQUENCE START (6 Seconds Total)
+    // 1. CINEMATIC SEQUENCE START (5 Seconds Total)
     Animated.sequence([
-      // --- PART 1: THE TEXT PHASES (3 Seconds) ---
+      // --- PART 1: THE TEXT PHASES (2.4 Seconds) ---
       
-      // Phase 1: Morning (0s - 1s)
+      // Phase 1: Morning
       Animated.parallel([
         Animated.timing(colorAnim, { toValue: 0.25, duration: 800, useNativeDriver: false }),
         Animated.sequence([
@@ -32,8 +32,7 @@ const SplashScreen = () => {
           Animated.timing(p1Opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
         ]),
       ]),
-
-      // Phase 2: Evening (1s - 2s)
+      // Phase 2: Evening
       Animated.parallel([
         Animated.timing(colorAnim, { toValue: 0.5, duration: 800, useNativeDriver: false }),
         Animated.sequence([
@@ -41,8 +40,7 @@ const SplashScreen = () => {
           Animated.timing(p2Opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
         ]),
       ]),
-
-      // Phase 3: Express (2s - 3s)
+      // Phase 3: Express
       Animated.parallel([
         Animated.timing(colorAnim, { toValue: 0.75, duration: 800, useNativeDriver: false }),
         Animated.sequence([
@@ -51,23 +49,23 @@ const SplashScreen = () => {
         ]),
       ]),
 
-      // --- PART 2: THE GRAND REVEAL (Utilizing 3 Full Seconds) ---
+      // --- PART 2: THE GRAND REVEAL (2.6 Seconds) ---
       
-      // Step A: Ray of Light Forms First (3.0s - 4.0s)
+      // Step A: Ray of Light (0.8s)
       Animated.parallel([
-        Animated.timing(colorAnim, { toValue: 1, duration: 1000, useNativeDriver: false }),
+        Animated.timing(colorAnim, { toValue: 1, duration: 800, useNativeDriver: false }),
         Animated.timing(rayOpacity, { toValue: 0.6, duration: 800, useNativeDriver: true }),
-        Animated.spring(rayScale, { toValue: 1.5, tension: 10, friction: 6, useNativeDriver: true }),
+        Animated.spring(rayScale, { toValue: 1.8, tension: 10, friction: 6, useNativeDriver: true }),
       ]),
 
-      // Step B: Logo Reveal (4.0s - 5.0s)
+      // Step B: Logo Reveal (Zoomed) (1.2s)
       Animated.parallel([
-        Animated.timing(logoOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.spring(logoScale, { toValue: 1, tension: 20, friction: 5, useNativeDriver: true }),
+        Animated.timing(logoOpacity, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.spring(logoScale, { toValue: 1.15, tension: 15, friction: 5, useNativeDriver: true }),
       ]),
 
-      // Step C: Tagline & Final Settle (5.0s - 6.0s)
-      Animated.timing(taglineOpacity, { toValue: 0.8, duration: 800, useNativeDriver: true }),
+      // Step C: Tagline (0.6s)
+      Animated.timing(taglineOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
     ]).start();
 
   }, []);
@@ -98,9 +96,12 @@ const SplashScreen = () => {
           opacity: logoOpacity, 
           transform: [{ scale: logoScale }] 
         }]}>
-          <Text style={styles.brandName}>DAILY</Text>
-          <View style={styles.freshContainer}>
-            <Text style={styles.freshText}>FRESH</Text>
+          <View style={styles.logoCircle}>
+            <Image 
+              source={require('../assets/DailyFreshLogo.jpeg')} 
+              style={styles.logoImage}
+              resizeMode="cover"
+            />
           </View>
         </Animated.View>
 
@@ -155,28 +156,25 @@ const styles = StyleSheet.create({
   logoWrapper: {
     alignItems: 'center',
   },
-  brandName: {
-    fontSize: 84,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 14,
-    lineHeight: 84,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 15,
-  },
-  freshContainer: {
+  logoCircle: {
+    width: 320,
+    height: 320,
+    borderRadius: 160,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 25,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginTop: 8,
+    overflow: 'hidden', // Crucial for resizeMode cover
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 30,
+    borderWidth: 8,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  freshText: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: '#000000',
-    letterSpacing: 16,
+  logoImage: {
+    width: '140%', // Zoom in to hide whitespace in the JPEG
+    height: '140%',
   },
   taglineRow: {
     flexDirection: 'row',

@@ -143,7 +143,7 @@ class NotificationService {
     if (!message || !navigation) return;
 
     const data = message.data;
-    if (data?.type === 'new_order' || data?.type === 'order_status_update') {
+    if (data?.type === 'new_order' || data?.type === 'order_status_update' || data?.type === 'order_update') {
       navigation.navigate('Orders');
     }
   }

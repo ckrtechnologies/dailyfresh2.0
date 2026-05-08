@@ -86,7 +86,7 @@ const ActiveDeliveryScreen = ({ route, navigation }) => {
         setOrder(res.data.data.order);
         if (newStatus === 'delivered') {
           Alert.alert('Success', 'Order delivered successfully!', [
-            { text: 'OK', onPress: () => navigation.navigate('Dashboard') }
+            { text: 'OK', onPress: () => navigation.navigate('DashboardMain') }
           ]);
         }
       }

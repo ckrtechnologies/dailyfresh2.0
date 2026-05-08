@@ -61,12 +61,11 @@ export const sendToUser = async (userId, title, body, data = {}) => {
         ttl: 3600 * 1000, // 1 hour
         notification: {
           channelId: 'orders',
-          priority: 'high',
           sound: 'ding',
           imageUrl: avatarUrl,
           sticky: false,
           visibility: 'public',
-          notificationPriority: 'high',
+          notificationPriority: 'PRIORITY_HIGH',
         }
       },
       apns: {
@@ -180,12 +179,11 @@ export const logInAppNotification = async (userId, title, body, type = 'info', d
 /**
  * Notify all Available Riders about a new order
  */
-export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => {
+export const notifyAvailableRiders = async (orderId, orderNumber, storeName, storeAddress = '', itemsSummary = '') => {
   try {
     console.log(`[Notification] Initiating broadcast for order #${orderNumber} from ${storeName}`);
     
     // 1. Fetch all online and approved riders with their FCM tokens from profiles
-    // We use profiles!user_id to be explicit about the relationship
     const { data: riders, error } = await supabaseAdmin
       .from('riders')
       .select(`
@@ -206,33 +204,19 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => 
       return;
     }
 
-    console.log(`[Notification] Found ${riders.length} online riders. Checking tokens...`);
-
-    // Filter out riders without profile or FCM token
-    const eligibleRiders = riders.filter(r => {
-      if (!r.profile) {
-        console.warn(`[Notification] Rider ${r.id} has no linked profile data.`);
-        return false;
-      }
-      if (!r.profile.fcm_token) {
-        console.warn(`[Notification] Rider ${r.profile.full_name || r.id} is online but has no FCM token.`);
-        return false;
-      }
-      return true;
-    });
+    // Filter eligible riders
+    const eligibleRiders = riders.filter(r => r.profile && r.profile.fcm_token);
 
     if (eligibleRiders.length === 0) {
       console.log('[Notification] No online riders have valid FCM tokens.');
       return;
     }
 
-    console.log(`[Notification] Broadcasting to ${eligibleRiders.length} eligible riders: ${eligibleRiders.map(r => r.profile.full_name || r.id).join(', ')}`);
-
     const title = 'New Order Available! 📦';
     const body = `Order #${orderNumber} from ${storeName} is ready for dispatch. Tap to accept.`;
 
     const promises = eligibleRiders.map(async (rider) => {
-      // 1. Log to Database for History (linked to rider's user_id)
+      // 1. Log to Database for History
       try {
         await supabaseAdmin.from('notifications').insert([{
           user_id: rider.user_id,
@@ -243,7 +227,9 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => 
             type: 'NEW_ORDER_AVAILABLE',
             order_id: String(orderId),
             order_number: String(orderNumber),
-            store_name: String(storeName)
+            store_name: String(storeName),
+            store_address: String(storeAddress),
+            items_summary: String(itemsSummary)
           }
         }]);
       } catch (logErr) {
@@ -253,25 +239,23 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName) => 
       // 2. Send Firebase Push
       const message = {
         token: rider.profile.fcm_token,
-        notification: {
-          title,
-          body,
-        },
+        notification: { title, body },
         data: {
           type: 'NEW_ORDER_AVAILABLE',
           order_id: String(orderId),
           order_number: String(orderNumber),
           store_name: String(storeName),
+          store_address: String(storeAddress),
+          items_summary: String(itemsSummary)
         },
         android: {
           priority: 'high',
           ttl: 3600 * 1000,
           notification: {
             channelId: 'orders',
-            priority: 'high',
             sound: 'default',
             defaultSound: true,
-            notificationPriority: 'high',
+            notificationPriority: 'PRIORITY_HIGH',
           },
         },
         apns: {
