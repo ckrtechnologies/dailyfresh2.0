@@ -20,12 +20,25 @@ export const setAccessToken = (token) => {
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+      let token = accessToken;
+
+      // Fallback: If local accessToken is not set, try fetching from Supabase session
+      // This prevents 401 errors during app startup race conditions on Android
+      if (!token) {
+        const { supabase } = require('./supabase');
+        const { data } = await supabase.auth.getSession();
+        token = data?.session?.access_token;
+        if (token) accessToken = token; // Cache it for subsequent requests
+      }
+
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
 
       // Log outgoing requests for debugging
-      console.log(`🚀 [API] ${config.method?.toUpperCase()} ${config.url}`, config.params || '');
+      if (__DEV__) {
+        console.log(`🚀 [API] ${config.method?.toUpperCase()} ${config.url}`, config.params || '');
+      }
 
     } catch (e) {
       console.error('Error in request interceptor', e);

@@ -8,6 +8,7 @@ import { showGlobalAlert } from '../services/alertService';
 
 class NotificationService {
   async requestUserPermission() {
+    if (Platform.OS === 'ios') return false;
     // 1. Request Firebase Permission (iOS/Android 13+)
     const authStatus = await messaging().requestPermission();
     const enabled =
@@ -73,6 +74,7 @@ class NotificationService {
   }
 
   async getFcmToken() {
+    if (Platform.OS === 'ios') return null;
     try {
       const fcmToken = await messaging().getToken();
       if (fcmToken) {
@@ -130,6 +132,7 @@ class NotificationService {
   }
 
   listenForNotifications(dispatch) {
+    if (Platform.OS === 'ios') return () => {};
     // 1. Foreground messages
     const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
       console.log('Foreground notification received:', remoteMessage);
