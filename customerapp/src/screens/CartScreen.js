@@ -153,7 +153,7 @@ const CartScreen = ({ navigation }) => {
       <View style={[styles.cartItem, isUnserviceable && styles.unserviceableItem]}>
         <Image source={{ uri: item.image_url }} style={styles.itemImage} />
         <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
           <Text style={styles.itemWeight}>{item.weight_unit || '500g pack'}</Text>
           <Text style={styles.itemPrice}>₹{item.price}</Text>
           

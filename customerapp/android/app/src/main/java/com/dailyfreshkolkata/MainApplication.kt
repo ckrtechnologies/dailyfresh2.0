@@ -1,4 +1,4 @@
-package com.customerapp
+package com.dailyfreshkolkata
 
 import android.app.Application
 import com.facebook.react.PackageList

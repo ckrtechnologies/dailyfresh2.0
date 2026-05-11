@@ -132,7 +132,7 @@ const OrdersScreen = ({ navigation }) => {
 
         <View style={styles.orderBody}>
           <View style={styles.itemsPreview}>
-            <Text style={styles.itemText} numberOfLines={1}>
+            <Text style={styles.itemText} numberOfLines={2}>
               {item.items?.map(it => it.variant?.name || it.name).join(', ')}
             </Text>
             <Text style={styles.itemCount}>

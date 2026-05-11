@@ -37,7 +37,7 @@ cd ..
 
 1. Go to the [Firebase Console](https://console.firebase.google.com/).
 2. Select your project.
-3. Add an **iOS App** to the project. Use the bundle ID found in `Info.plist` (likely `com.customerapp`).
+3. Add an **iOS App** to the project. Use the bundle ID found in `Info.plist` (likely `com.dailyfreshkolkata`).
 4. Download the `GoogleService-Info.plist` file.
 5. **Important**: Open `ios/customerapp.xcworkspace` in Xcode.
 6. Right-click on the `customerapp` folder in the project navigator and select **"Add Files to 'customerapp'..."**.

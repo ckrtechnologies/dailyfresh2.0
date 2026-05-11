@@ -174,7 +174,7 @@ const ProductCard = React.memo(({ product, onPress, horizontal = false, size = '
 
       <View style={styles.info}>
         <Text style={[styles.weight, { color: activeTheme.textLight }]}>{weight_unit || '500g pack'}</Text>
-        <Text style={[styles.name, { color: activeTheme.text }]} numberOfLines={isTall ? 2 : 1}>
+        <Text style={[styles.name, { color: activeTheme.text }]} numberOfLines={2}>
           {name}
         </Text>
 
