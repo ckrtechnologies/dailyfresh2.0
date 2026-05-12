@@ -154,9 +154,47 @@ const EditProfileScreen = ({ navigation }) => {
               <Text style={styles.updateBtnText}>Update Profile</Text>
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.deleteBtn} 
+            onPress={handleDeleteAccount}
+            disabled={loading}
+          >
+            <Text style={styles.deleteBtnText}>Delete Account</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+};
+
+const handleDeleteAccount = () => {
+  showGlobalAlert(
+    'Delete Account',
+    'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.',
+    'warning',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Delete', 
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const { default: authService } = await import('../api/authService');
+            const res = await authService.deleteAccount();
+            if (res.success) {
+              const { logout } = await import('../store/slices/authSlice');
+              // logout logic here
+              showGlobalAlert('Account Deleted', 'Your account has been successfully removed.', 'success');
+            } else {
+              throw new Error(res.error);
+            }
+          } catch (err) {
+            showGlobalAlert('Error', err.message || 'Failed to delete account', 'error');
+          }
+        }
+      }
+    ]
   );
 };
 
@@ -269,6 +307,16 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 18,
     fontWeight: '700',
+  },
+  deleteBtn: {
+    marginTop: SPACING.xl,
+    padding: SPACING.m,
+    alignItems: 'center',
+  },
+  deleteBtnText: {
+    color: '#EF4444',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

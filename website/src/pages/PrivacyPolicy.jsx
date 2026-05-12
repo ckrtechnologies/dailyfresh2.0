@@ -58,7 +58,17 @@ const PrivacyPolicy = () => {
           </section>
 
           <section style={{ marginBottom: '2rem' }}>
-            <h2 style={{ marginBottom: '1rem' }}>6. Contact Us</h2>
+            <h2 style={{ marginBottom: '1rem' }}>6. Account Deletion & Data Retention</h2>
+            <p>You have the right to request the deletion of your account and all associated personal data at any time. You can do this through:</p>
+            <ul style={{ marginLeft: '2rem', marginTop: '1rem' }}>
+              <li><strong>In-App:</strong> Navigate to Profile &gt; Edit Profile and click "Delete Account".</li>
+              <li><strong>Email:</strong> Send a request to <a href="mailto:support@dailyfreshkolkata.in">support@dailyfreshkolkata.in</a> with the subject "Account Deletion Request".</li>
+            </ul>
+            <p style={{ marginTop: '1rem' }}>Upon receiving a request, we will permanently delete your personal information, including your name, email, phone number, and address history, unless we are legally required to retain certain data for tax or legal purposes.</p>
+          </section>
+
+          <section style={{ marginBottom: '2rem' }}>
+            <h2 style={{ marginBottom: '1rem' }}>7. Contact Us</h2>
             <p>If you have any questions about this privacy policy or our privacy practices, please contact us at:</p>
             <p style={{ marginTop: '1rem', fontWeight: 600 }}>Email: support@dailyfreshkolkata.in</p>
             <p style={{ fontWeight: 600 }}>Phone: +91 8207226709</p>

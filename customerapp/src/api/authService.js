@@ -182,6 +182,20 @@ const authService = {
   logout: async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+  },
+
+  /**
+   * Delete Account
+   */
+  deleteAccount: async () => {
+    try {
+      const { default: apiClient } = await import('./apiClient');
+      const response = await apiClient.delete('/customer/profile');
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to delete account' };
+    }
   }
 };
 

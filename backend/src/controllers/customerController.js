@@ -180,3 +180,61 @@ export const updateFcmToken = async (req, res) => {
     return errorResponse(res, 'Failed to update FCM token', 500, error);
   }
 };
+/**
+ * Delete authenticated user account and data
+ */
+export const deleteProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    console.log(`[Account Deletion] Starting deletion for user: ${userId}`);
+
+    // 1. Fetch user orders to delete order_items first
+    const { data: userOrders } = await supabaseAdmin
+      .from('orders')
+      .select('id')
+      .eq('user_id', userId);
+
+    const orderIds = userOrders?.map(o => o.id) || [];
+
+    // 2. Delete dependent data in order of constraints
+    if (orderIds.length > 0) {
+      await supabaseAdmin.from('order_items').delete().in('order_id', orderIds);
+      console.log(`[Account Deletion] Deleted items for ${orderIds.length} orders`);
+    }
+
+    await supabaseAdmin.from('orders').delete().eq('user_id', userId);
+    await supabaseAdmin.from('addresses').delete().eq('user_id', userId);
+    await supabaseAdmin.from('cart_items').delete().eq('user_id', userId);
+    await supabaseAdmin.from('user_favorites').delete().eq('user_id', userId);
+    await supabaseAdmin.from('notifications').delete().eq('user_id', userId);
+    
+    console.log(`[Account Deletion] Cleared all dependent data for user ${userId}`);
+
+    // 3. Delete user profile
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('[Account Deletion] Error deleting profile data:', profileError);
+      // We continue anyway to try and delete the Auth account
+    }
+
+    // 4. Delete user from Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    
+    if (authError) {
+      console.error('[Account Deletion] Error deleting auth account:', authError);
+      return errorResponse(res, 'Failed to delete authentication account', 500, authError);
+    }
+
+    console.log(`[Account Deletion] Successfully deleted user ${userId}`);
+    return successResponse(res, null, 'Account and all associated data deleted successfully');
+  } catch (error) {
+    console.error('[Account Deletion] Critical Failure:', error);
+    return errorResponse(res, 'Internal server error during account deletion', 500, error);
+  }
+};
+

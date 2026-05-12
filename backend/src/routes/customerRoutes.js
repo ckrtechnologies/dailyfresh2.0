@@ -176,6 +176,7 @@ router.get('/profile', customerController.getProfile);
  *         description: Profile updated
  */
 router.put('/profile', customerController.updateProfile);
+router.delete('/profile', customerController.deleteProfile);
 
 /**
  * @swagger
