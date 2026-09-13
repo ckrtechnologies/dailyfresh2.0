@@ -204,8 +204,8 @@ const mapCouponPayload = (body) => {
 const mapBannerPayload = (req) => {
   const body = req.body || {};
   const data = {};
-  const imgUrl = getUploadedImageUrl(req, 'image') || body.image_url || body.imageUrl;
-  if (imgUrl) data.imageUrl = imgUrl;
+  const imgUrl = getUploadedImageUrl(req, 'image') || body.image_url || body.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80';
+  data.imageUrl = imgUrl;
 
   const mapping = {
     title: 'title',
