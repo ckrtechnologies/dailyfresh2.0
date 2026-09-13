@@ -15,12 +15,25 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 let poolConfig;
 const tenantId = process.env.POOLER_TENANT_ID || 'your-tenant-id';
 
+// Intelligent host resolver:
+// If running on Linux VPS and host is configured as db.ckrtechnologies.in or 45.122.121.248,
+// redirect to 127.0.0.1 to avoid Linux hairpin NAT connection drops / 10s timeouts.
+const resolveHost = (targetHost) => {
+  if (!targetHost) return '127.0.0.1';
+  if (process.platform === 'linux' && (targetHost === 'db.ckrtechnologies.in' || targetHost === '45.122.121.248')) {
+    console.log(`[DB] Linux VPS detected: automatically routing ${targetHost} -> 127.0.0.1 for local loopback speed`);
+    return '127.0.0.1';
+  }
+  return targetHost;
+};
+
 if (process.env.DB_HOST && process.env.DB_PASSWORD) {
   const baseUser = process.env.DB_USER || 'dailyfresh_user';
   const user = baseUser.includes('.') ? baseUser : `${baseUser}.${tenantId}`;
+  const host = resolveHost(process.env.DB_HOST);
 
   poolConfig = {
-    host: process.env.DB_HOST,
+    host,
     port: parseInt(process.env.DB_PORT || '5432', 10),
     database: process.env.DB_NAME || 'postgres',
     user,
@@ -35,8 +48,9 @@ if (process.env.DB_HOST && process.env.DB_PASSWORD) {
     const url = new URL(connStr);
     if (url.username && !url.username.includes('.')) {
       url.username = `${url.username}.${tenantId}`;
-      connStr = url.toString();
     }
+    url.hostname = resolveHost(url.hostname);
+    connStr = url.toString();
   } catch (_) {}
 
   poolConfig = {

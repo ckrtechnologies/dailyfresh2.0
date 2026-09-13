@@ -7,6 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import { successResponse } from './utils/response.js';
+import { pool } from './db/index.js';
 import errorHandler from './middlewares/errorHandler.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './config/swagger.js';
@@ -55,8 +56,30 @@ console.log("[STORAGE] Static /uploads serving from:", activeUploadDir);
 app.use("/uploads", express.static(activeUploadDir));
 
 // 3. Health Check
-app.get('/health', (req, res) => {
-  return successResponse(res, { uptime: process.uptime() }, 'API is healthy');
+app.get('/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  let dbLatencyMs = null;
+  let dbError = null;
+
+  try {
+    const start = Date.now();
+    await pool.query('SELECT 1');
+    dbLatencyMs = Date.now() - start;
+    dbStatus = 'connected';
+  } catch (err) {
+    dbError = err.message || String(err);
+  }
+
+  return successResponse(res, {
+    uptime: process.uptime(),
+    db: {
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
+      host: pool?.options?.host || 'unknown',
+      user: pool?.options?.user || 'unknown',
+      error: dbError
+    }
+  }, dbStatus === 'connected' ? 'API is healthy' : 'API running with database warning');
 });
 
 // 4. API Documentation
