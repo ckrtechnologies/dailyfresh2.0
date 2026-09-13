@@ -31,7 +31,7 @@ export const onboardStaffMember = async ({ email, password, full_name, phone, ro
     if (role === 'rider') {
       await tx.insert(riders).values({
         userId: newProfile.id,
-        storeId: store_id || null,
+        assignedStoreId: store_id || null,
         vehicleType: vehicle_type || 'bike',
         vehicleNumber: vehicle_number || 'N/A',
         approvalStatus: 'approved',

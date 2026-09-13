@@ -390,7 +390,8 @@ export const updateRiderStatus = async (req, res) => {
     if (req.body.isOnline !== undefined) payload.isOnline = req.body.isOnline;
     if (req.body.approval_status !== undefined) payload.approvalStatus = req.body.approval_status;
     if (req.body.approvalStatus !== undefined) payload.approvalStatus = req.body.approvalStatus;
-    if (req.body.store_id !== undefined) payload.storeId = req.body.store_id;
+    if (req.body.store_id !== undefined) payload.assignedStoreId = req.body.store_id;
+    if (req.body.assignedStoreId !== undefined) payload.assignedStoreId = req.body.assignedStoreId;
 
     const rider = await adminRepo.updateRiderStatus(req.params.riderId, payload);
     return successResponse(res, { rider }, 'Rider updated');
