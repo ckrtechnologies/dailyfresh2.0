@@ -3,12 +3,37 @@ import * as adminService from './service.js';
 import { successResponse, errorResponse } from '../../utils/response.js';
 
 // --- NORMALIZATION HELPERS ---
-const getUploadedImageUrl = (req, fieldname = 'image') => {
-  if (req.files && Array.isArray(req.files)) {
-    const file = req.files.find(f => f.fieldname === fieldname || f.fieldname === 'file' || f.fieldname === 'image_url');
-    if (file) return `${process.env.API_URL || ''}/uploads/${file.filename}`;
+export const formatAssetUrl = (filename, req = null) => {
+  if (!filename) return null;
+  if (filename.startsWith("http://") || filename.startsWith("https://")) return filename;
+  
+  const cleanName = filename.startsWith("/uploads/") ? filename.slice(9) : (filename.startsWith("uploads/") ? filename.slice(8) : filename.replace(/^\//, ""));
+  
+  if (process.env.CDN_BASE_URL) {
+    const cdn = process.env.CDN_BASE_URL.replace(/\/+$/, "");
+    return cdn.endsWith("/uploads") ? `${cdn}/${cleanName}` : `${cdn}/uploads/${cleanName}`;
   }
-  if (req.file) return `${process.env.API_URL || ''}/uploads/${req.file.filename}`;
+  
+  if (process.env.API_URL) {
+    const apiUrl = process.env.API_URL.replace(/\/+$/, "");
+    return `${apiUrl}/uploads/${cleanName}`;
+  }
+
+  if (req) {
+    const protocol = req.protocol || "http";
+    const host = req.get ? req.get("host") : (req.headers?.host || "localhost:4002");
+    return `${protocol}://${host}/uploads/${cleanName}`;
+  }
+
+  return `/uploads/${cleanName}`;
+};
+
+const getUploadedImageUrl = (req, fieldname = "image") => {
+  if (req.files && Array.isArray(req.files)) {
+    const file = req.files.find(f => f.fieldname === fieldname || f.fieldname === "file" || f.fieldname === "image_url");
+    if (file) return formatAssetUrl(file.filename, req);
+  }
+  if (req.file) return formatAssetUrl(req.file.filename, req);
   return null;
 };
 
@@ -166,7 +191,7 @@ const mapProductPayload = (req) => {
         weightValue: v.weight_value || v.weightValue ? String(v.weight_value || v.weightValue) : null,
         stockQuantity: Number(v.stock_quantity || v.stockQuantity || 0),
         isActive: v.is_active !== undefined ? (v.is_active === true || v.is_active === 'true') : true,
-        imageUrl: vImg ? `${process.env.API_URL || ''}/uploads/${vImg.filename}` : (v.image_url || v.imageUrl || null)
+        imageUrl: vImg ? formatAssetUrl(vImg.filename, req) : (v.image_url || v.imageUrl || null)
       };
     });
   }
@@ -826,6 +851,6 @@ export const updatePlatformSettings = async (req, res) => {
 
 export const uploadFile = async (req, res) => {
   if (!req.file) return errorResponse(res, 'No file uploaded', 400);
-  const fileUrl = `${process.env.API_URL || ''}/uploads/${req.file.filename}`;
+  const fileUrl = formatAssetUrl(req.file.filename, req);
   return successResponse(res, { url: fileUrl }, 'File uploaded');
 };
