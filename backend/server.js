@@ -17,20 +17,16 @@ const io = new Server(server, {
   }
 });
 
-// Basic Socket Events
+// Socket Events for Real-time Rider Tracking
 io.on('connection', (socket) => {
-  console.log(`[Socket] New connection: ${socket.id}`);
-  
   // Join a specific order room for private tracking
   socket.on('joinOrder', ({ orderId }) => {
     socket.join(`order_${orderId}`);
-    console.log(`[Socket] ${socket.id} joined tracking for order: ${orderId}`);
   });
 
   // Handle live location updates from Rider
   socket.on('updateLocation', (data) => {
     const { orderId, latitude, longitude, heading } = data;
-    // Broadcast to everyone in the order room EXCEPT the sender
     socket.to(`order_${orderId}`).emit('locationUpdated', {
       latitude,
       longitude,
@@ -39,22 +35,35 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', () => {
-    console.log(`[Socket] Disconnected: ${socket.id}`);
-  });
+  socket.on('disconnect', () => {});
 });
 
 // Attach io to app for use in controllers
 app.set('io', io);
 
-server.listen(PORT, () => {
-  console.log(`[Server] Daily Fresh API running on http://localhost:${PORT}`);
-  console.log(`[Server] Mode: ${process.env.NODE_ENV}`);
+// Bind to 0.0.0.0 for reverse-proxy & container compatibility
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[Server] Daily Fresh API running on http://0.0.0.0:${PORT}`);
+  console.log(`[Server] Mode: ${process.env.NODE_ENV || 'development'}`);
   
-  // Razorpay Key Check
   const rzpKey = process.env.RAZORPAY_KEY_ID;
   const rzpSecret = process.env.RAZORPAY_KEY_SECRET;
-  console.log(`[Razorpay] Key ID starts with: ${rzpKey ? rzpKey.substring(0, 8) + '...' : 'MISSING'}`);
-  console.log(`[Razorpay] Key Secret starts with: ${rzpSecret ? rzpSecret.substring(0, 4) + '...' : 'MISSING'}`);
+  console.log(`[Razorpay] Key ID: ${rzpKey ? rzpKey.substring(0, 8) + '...' : 'MISSING'}`);
+  console.log(`[Razorpay] Key Secret: ${rzpSecret ? rzpSecret.substring(0, 4) + '...' : 'MISSING'}`);
 });
 
+// Graceful Shutdown Handler for PM2 / Docker / systemd
+const gracefulShutdown = (signal) => {
+  console.log(`[Server] Received ${signal}. Shutting down gracefully...`);
+  server.close(() => {
+    console.log('[Server] HTTP and WebSocket connections closed.');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('[Server] Forcefully shutting down after timeout.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

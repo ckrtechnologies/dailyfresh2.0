@@ -10,12 +10,18 @@ import errorHandler from './middlewares/errorHandler.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './config/swagger.js';
 
-// Route Imports
-import authRoutes from './routes/authRoutes.js';
-import customerRoutes from './routes/customerRoutes.js';
-import adminRoutes from './routes/adminRoutes.js';
-import storeRoutes from './routes/storeRoutes.js';
-import riderRoutes from './routes/riderRoutes.js';
+// Shared Platform Route Imports
+import appConfigRoutes from './shared/app-config/routes.js';
+import authRoutes from './shared/auth/routes.js';
+import notificationRoutes from './shared/notifications/routes.js';
+import paymentRoutes from './shared/payments/routes.js';
+import mediaRoutes from './shared/media/routes.js';
+
+// Actor Subsystem Route Imports
+import customerRoutes from './domains/customer/routes.js';
+import adminRoutes from './domains/admin/routes.js';
+import storeRoutes from './domains/store/routes.js';
+import riderRoutes from './domains/rider/routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,7 +45,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// 2. Static Assets (CDN)
+// 2. Static Assets (CDN / uploads)
 app.use('/uploads', express.static(process.env.UPLOAD_PATH || path.join(__dirname, '../uploads')));
 
 // 3. Health Check
@@ -50,19 +56,25 @@ app.get('/health', (req, res) => {
 // 4. API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// 5. API Routes
+// 5. Shared Platform APIs
+app.use('/api/v1/app', appConfigRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/media', mediaRoutes);
+
+// 6. Actor Subsystem APIs
 app.use('/api/v1/customer', customerRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/store', storeRoutes);
 app.use('/api/v1/rider', riderRoutes);
 
-// 5. 404 Handler
+// 7. 404 Handler
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Endpoint not found' });
 });
 
-// 6. Global Error Handler
+// 8. Global Error Handler
 app.use(errorHandler);
 
 // Global listeners for debugging crashes

@@ -1,64 +1,44 @@
-import { supabaseAdmin } from '../config/supabase.js';
+import bcrypt from 'bcryptjs';
+import { db } from '../db/index.js';
+import { profiles } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 const ADMIN_EMAIL = 'admin@dailyfresh.com';
-const ADMIN_PASSWORD = 'argosmob';
+const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || 'password@1';
 const ADMIN_NAME = 'Daily Fresh Admin';
 const ADMIN_PHONE = '9999999999';
 
 async function setupAdmin() {
-  console.log('--- Daily Fresh: Admin Setup ---');
+  console.log('--- Daily Fresh: Drizzle Admin Setup ---');
 
   try {
-    // 1. Check if user already exists in profiles
-    const { data: existingUser, error: fetchError } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('email', ADMIN_EMAIL)
-      .single();
+    const [existingUser] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, ADMIN_EMAIL)).limit(1);
 
     if (existingUser) {
       console.log(`[Info] Admin user ${ADMIN_EMAIL} already exists in database.`);
-      return;
+      process.exit(0);
     }
 
     console.log(`[Action] Creating new admin user: ${ADMIN_EMAIL}...`);
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
-    // 2. Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const [newProfile] = await db.insert(profiles).values({
+      fullName: ADMIN_NAME,
       email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
-      email_confirm: true,
-      user_metadata: { full_name: ADMIN_NAME }
-    });
+      phone: ADMIN_PHONE,
+      passwordHash,
+      role: 'admin',
+      authProvider: 'local',
+      isActive: true,
+      avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(ADMIN_NAME)}`
+    }).returning();
 
-    if (authError) {
-      throw new Error(`Auth Error: ${authError.message}`);
-    }
-
-    const userId = authData.user.id;
-    console.log(`[Success] Auth user created with ID: ${userId}`);
-
-    // 3. Create profile entry
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .insert({
-        id: userId,
-        full_name: ADMIN_NAME,
-        email: ADMIN_EMAIL,
-        phone: ADMIN_PHONE,
-        role: 'admin',
-        is_active: true
-      });
-
-    if (profileError) {
-      throw new Error(`Profile Error: ${profileError.message}`);
-    }
-
-    console.log('[Success] Admin profile created successfully!');
+    console.log(`[Success] Admin profile created with ID: ${newProfile.id}`);
     console.log('--- Setup Complete ---');
-
+    process.exit(0);
   } catch (error) {
     console.error('[Error] Setup failed:', error.message);
+    process.exit(1);
   }
 }
 
