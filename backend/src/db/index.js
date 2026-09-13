@@ -13,11 +13,11 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 // Build connection options: supports both discrete variables and DATABASE_URL
 let poolConfig;
+const tenantId = process.env.POOLER_TENANT_ID || 'your-tenant-id';
 
 if (process.env.DB_HOST && process.env.DB_PASSWORD) {
-  const user = process.env.POOLER_TENANT_ID 
-    ? `${process.env.DB_USER}.${process.env.POOLER_TENANT_ID}`
-    : (process.env.DB_USER || 'dailyfresh_user');
+  const baseUser = process.env.DB_USER || 'dailyfresh_user';
+  const user = baseUser.includes('.') ? baseUser : `${baseUser}.${tenantId}`;
 
   poolConfig = {
     host: process.env.DB_HOST,
@@ -30,8 +30,17 @@ if (process.env.DB_HOST && process.env.DB_PASSWORD) {
     connectionTimeoutMillis: 10000,
   };
 } else if (process.env.DATABASE_URL) {
+  let connStr = process.env.DATABASE_URL;
+  try {
+    const url = new URL(connStr);
+    if (url.username && !url.username.includes('.')) {
+      url.username = `${url.username}.${tenantId}`;
+      connStr = url.toString();
+    }
+  } catch (_) {}
+
   poolConfig = {
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connStr,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
