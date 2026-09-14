@@ -35,10 +35,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.s,
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
   },
   searchIconWrapper: {
@@ -46,8 +48,8 @@ const styles = StyleSheet.create({
   },
   searchText: {
     fontSize: 14,
-    color: '#9CA3AF',
-    fontWeight: '500',
+    color: '#475569',
+    fontWeight: '600',
   },
 });
 

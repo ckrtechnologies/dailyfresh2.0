@@ -6,18 +6,38 @@ import { COLORS, SPACING } from '../../constants/theme';
 const CategoryStrip = React.memo(({ 
   categories, 
   activeTheme, 
+  navigation,
   onCategoryPress, 
   onViewAllPress 
 }) => {
+  const handleCategoryPress = useCallback((item) => {
+    if (onCategoryPress) {
+      onCategoryPress(item);
+    } else if (navigation) {
+      navigation.navigate('ProductList', {
+        categoryId: item.id,
+        title: item.name
+      });
+    }
+  }, [onCategoryPress, navigation]);
+
+  const handleViewAll = useCallback(() => {
+    if (onViewAllPress) {
+      onViewAllPress();
+    } else if (navigation) {
+      navigation.navigate('Categories');
+    }
+  }, [onViewAllPress, navigation]);
+
   const renderItem = useCallback(({ item }) => (
     <TouchableOpacity
       style={styles.categoryCard}
-      onPress={() => onCategoryPress(item)}
+      onPress={() => handleCategoryPress(item)}
       activeOpacity={0.7}
     >
       <View style={[styles.imageWrapper, { borderColor: activeTheme.primary + '30' }]}>
         <Image
-          source={{ uri: item.image_url }}
+          source={{ uri: item.image_url || item.imageUrl }}
           style={styles.image}
           resizeMode="cover"
         />
@@ -26,7 +46,7 @@ const CategoryStrip = React.memo(({
         <Text style={[styles.name, { color: activeTheme.text }]} numberOfLines={1}>{item.name}</Text>
       </View>
     </TouchableOpacity>
-  ), [onCategoryPress, activeTheme]);
+  ), [handleCategoryPress, activeTheme]);
 
   if (!categories || categories.length === 0) return null;
 
@@ -39,7 +59,7 @@ const CategoryStrip = React.memo(({
           </View>
           <Text style={[styles.title, { color: activeTheme.text }]}>Shop by Category</Text>
         </View>
-        <TouchableOpacity onPress={onViewAllPress} activeOpacity={0.6}>
+        <TouchableOpacity onPress={handleViewAll} activeOpacity={0.6}>
           <View style={styles.viewAllContainer}>
             <Text style={[styles.viewAll, { color: activeTheme.primary }]}>View All</Text>
             <Icon name="chevron-right" size={18} color={activeTheme.primary} />

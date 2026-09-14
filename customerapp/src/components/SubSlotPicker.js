@@ -55,10 +55,10 @@ const SubSlotPicker = ({ visible, onClose, onSelect, storeId }) => {
         <Icon name="clock-outline" size={20} color={COLORS.primary} />
       </View>
       <View style={styles.slotInfo}>
-        <Text style={styles.slotName}>{item.slot_name}</Text>
-        {item.start_time && item.end_time && (
+        <Text style={styles.slotName}>{item.slot_name || item.slotName}</Text>
+        {(item.start_time || item.startTime) && (item.end_time || item.endTime) && (
           <Text style={styles.slotTime}>
-            {item.start_time.slice(0, 5)} - {item.end_time.slice(0, 5)}
+            {(item.start_time || item.startTime).slice(0, 5)} - {(item.end_time || item.endTime).slice(0, 5)}
           </Text>
         )}
       </View>
@@ -66,77 +66,79 @@ const SubSlotPicker = ({ visible, onClose, onSelect, storeId }) => {
     </TouchableOpacity>
   );
 
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Delivery Time Window</Text>
-              <Text style={styles.subtitle}>Select a slot for tomorrow's delivery</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Icon name="close" size={24} color={COLORS.dark} />
-            </TouchableOpacity>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}>
+      <View style={[styles.overlay]}>
+      <TouchableOpacity 
+        style={StyleSheet.absoluteFillObject} 
+        activeOpacity={1} 
+        onPress={onClose} 
+      />
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Delivery Time Window</Text>
+            <Text style={styles.subtitle}>Select a slot for tomorrow's delivery</Text>
           </View>
-
-          {loading ? (
-            <View style={styles.loaderContainer}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
-            </View>
-          ) : (
-            <>
-              <View style={styles.tabs}>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'tomorrow_morning' && styles.activeTab]}
-                  onPress={() => setActiveTab('tomorrow_morning')}
-                >
-                  <Icon 
-                    name="weather-sunny" 
-                    size={18} 
-                    color={activeTab === 'tomorrow_morning' ? COLORS.primary : COLORS.gray} 
-                  />
-                  <Text style={[styles.tabText, activeTab === 'tomorrow_morning' && styles.activeTabText]}>
-                    Morning
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'tomorrow_evening' && styles.activeTab]}
-                  onPress={() => setActiveTab('tomorrow_evening')}
-                >
-                  <Icon 
-                    name="weather-night" 
-                    size={18} 
-                    color={activeTab === 'tomorrow_evening' ? COLORS.primary : COLORS.gray} 
-                  />
-                  <Text style={[styles.tabText, activeTab === 'tomorrow_evening' && styles.activeTabText]}>
-                    Evening
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <FlatList
-                data={slots[activeTab]}
-                keyExtractor={(item) => item.id}
-                renderItem={renderSlot}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <Icon name="clock-alert-outline" size={48} color={COLORS.lightGray} />
-                    <Text style={styles.emptyText}>No slots available for this period</Text>
-                  </View>
-                }
-              />
-            </>
-          )}
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Icon name="close" size={24} color={COLORS.dark} />
+          </TouchableOpacity>
         </View>
+
+        {loading ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : (
+          <>
+            <View style={styles.tabs}>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'tomorrow_morning' && styles.activeTab]}
+                onPress={() => setActiveTab('tomorrow_morning')}
+              >
+                <Icon 
+                  name="weather-sunny" 
+                  size={18} 
+                  color={activeTab === 'tomorrow_morning' ? COLORS.primary : COLORS.gray} 
+                />
+                <Text style={[styles.tabText, activeTab === 'tomorrow_morning' && styles.activeTabText]}>
+                  Morning
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'tomorrow_evening' && styles.activeTab]}
+                onPress={() => setActiveTab('tomorrow_evening')}
+              >
+                <Icon 
+                  name="weather-night" 
+                  size={18} 
+                  color={activeTab === 'tomorrow_evening' ? COLORS.primary : COLORS.gray} 
+                />
+                <Text style={[styles.tabText, activeTab === 'tomorrow_evening' && styles.activeTabText]}>
+                  Evening
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={slots[activeTab]}
+              keyExtractor={(item) => item.id}
+              renderItem={renderSlot}
+              contentContainerStyle={styles.listContent}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Icon name="clock-alert-outline" size={48} color={COLORS.lightGray} />
+                  <Text style={styles.emptyText}>No slots available for this period</Text>
+                </View>
+              }
+            />
+          </>
+        )}
       </View>
-    </Modal>
+    </View>
+    </View>
   );
 };
 
@@ -152,6 +154,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADIUS.xl,
     height: '60%',
     paddingTop: SPACING.l,
+    zIndex: 1001,
+    elevation: 10,
   },
   header: {
     flexDirection: 'row',
@@ -163,18 +167,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: COLORS.dark,
+    color: '#0F172A',
   },
   subtitle: {
     fontSize: 13,
-    color: COLORS.gray,
+    color: '#475569',
     marginTop: 2,
+    fontWeight: '500',
   },
   closeBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -194,23 +199,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: RADIUS.m,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
     gap: 8,
   },
   activeTab: {
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '10',
+    backgroundColor: COLORS.primary + '15',
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.gray,
+    fontWeight: '700',
+    color: '#475569',
   },
   activeTabText: {
     color: COLORS.primary,
+    fontWeight: '800',
   },
   listContent: {
     paddingHorizontal: SPACING.l,
@@ -219,18 +226,23 @@ const styles = StyleSheet.create({
   slotItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
     padding: SPACING.m,
     borderRadius: RADIUS.m,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   slotIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -239,13 +251,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   slotName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.dark,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   slotTime: {
-    fontSize: 12,
-    color: COLORS.gray,
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '600',
     marginTop: 2,
   },
   emptyContainer: {
@@ -254,9 +267,10 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   emptyText: {
-    fontSize: 14,
-    color: COLORS.gray,
+    fontSize: 15,
+    color: '#64748B',
     marginTop: 12,
+    fontWeight: '500',
   },
 });
 

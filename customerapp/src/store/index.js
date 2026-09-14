@@ -8,6 +8,7 @@ import orderReducer from './slices/orderSlice';
 
 import configReducer from './slices/configSlice';
 import uiReducer from './slices/uiSlice';
+import { baseApi } from '../shared/api/baseApi';
 
 export const store = configureStore({
   reducer: {
@@ -19,9 +20,10 @@ export const store = configureStore({
     order: orderReducer,
     config: configReducer,
     ui: uiReducer,
+    [baseApi.reducerPath]: baseApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }),
+    }).concat(baseApi.middleware),
 });

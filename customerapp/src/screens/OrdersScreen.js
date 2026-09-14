@@ -4,19 +4,20 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
   Platform,
   Linking,
+  RefreshControl,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import orderService from '../api/orderService';
-import LogoLoader from '../components/LogoLoader';
-import { format, parseISO } from 'date-fns';
+import { formatSafeDate, formatSafeDateTime } from '../utils/dateUtils';
 
 const OrdersScreen = ({ navigation }) => {
   const [orders, setOrders] = useState([]);
@@ -31,7 +32,10 @@ const OrdersScreen = ({ navigation }) => {
     setLoading(true);
     const res = await orderService.getMyOrders(filters);
     if (res.success) {
-      setOrders(res.data.orders);
+      const orderList = Array.isArray(res.data) ? res.data : (res.data?.orders || []);
+      setOrders(orderList);
+    } else {
+      setOrders([]);
     }
     setLoading(false);
   };
@@ -95,15 +99,24 @@ const OrdersScreen = ({ navigation }) => {
     // In a real app, use Clipboard.setString(text)
   };
 
+  const formatOrderDateTime = (dateValue) => {
+    return formatSafeDateTime(dateValue, 'Recent');
+  };
+
   const renderOrderItem = ({ item, index }) => {
     // S.No logic based on rule: (page_number - 1) * page_size + row_index + 1
     // For mobile simple list, we use index + 1
     const sNo = index + 1;
+    const orderNumber = item.order_number || item.orderNumber || item.id || '';
+    const totalAmt = item.total_amount || item.totalAmount || 0;
+    const isItemCod = (item.payment_method || item.paymentMethod) === 'cod';
+    const itemPStatus = String(item.payment_status || item.paymentStatus || 'unpaid').toLowerCase();
+    const isItemPaid = itemPStatus === 'paid' || itemPStatus === 'completed';
 
     return (
       <TouchableOpacity 
         style={styles.orderCard}
-        onPress={() => navigation.navigate('OrderDetail', { order: item })}
+        onPress={() => navigation.navigate('OrderDetail', { order: item, orderId: item.id })}
         activeOpacity={0.7}
       >
         <View style={styles.orderHeader}>
@@ -117,14 +130,27 @@ const OrdersScreen = ({ navigation }) => {
             <View>
               <Text style={styles.storeName}>Daily Fresh Hub</Text>
               <Text style={styles.orderDate}>
-                {format(new Date(item.created_at), 'dd MMM yyyy')} • {format(new Date(item.created_at), 'hh:mm a')}
+                {formatOrderDateTime(item.created_at || item.createdAt)}
               </Text>
             </View>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {(item.status || 'UNKNOWN').replace(/_/g, ' ').toUpperCase()}
-            </Text>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
+              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                {(item.status || 'UNKNOWN').replace(/_/g, ' ').toUpperCase()}
+              </Text>
+            </View>
+            <View style={[
+              styles.payBadgeMini,
+              { backgroundColor: isItemPaid ? '#DCFCE7' : isItemCod ? '#F1F5F9' : '#FEF3C7' }
+            ]}>
+              <Text style={[
+                styles.payBadgeMiniText,
+                { color: isItemPaid ? '#166534' : isItemCod ? '#475569' : '#B45309' }
+              ]}>
+                {isItemPaid ? 'PAID' : isItemCod ? 'COD' : 'PENDING'}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -140,8 +166,10 @@ const OrdersScreen = ({ navigation }) => {
             </Text>
           </View>
           <View style={styles.amountContainer}>
-            <Text style={styles.amountLabel}>Total Paid</Text>
-            <Text style={styles.totalAmount}>₹{item.total_amount}</Text>
+            <Text style={styles.amountLabel}>
+              {isItemPaid ? 'Total Paid' : isItemCod ? 'To Pay (COD)' : 'To Pay (Pending)'}
+            </Text>
+            <Text style={styles.totalAmount}>₹{totalAmt}</Text>
           </View>
         </View>
 
@@ -164,10 +192,10 @@ const OrdersScreen = ({ navigation }) => {
         <View style={styles.orderFooter}>
           <TouchableOpacity 
             style={styles.orderIdContainer}
-            onPress={() => copyToClipboard(item.order_number)}
+            onPress={() => copyToClipboard(orderNumber)}
           >
             <Text style={styles.orderIdLabel}>Order ID:</Text>
-            <Text style={styles.orderIdValue}>#{item.order_number?.slice(-8).toUpperCase() || 'N/A'}</Text>
+            <Text style={styles.orderIdValue}>#{orderNumber.slice(-8).toUpperCase() || 'N/A'}</Text>
             <Icon name="content-copy" size={12} color={COLORS.gray} style={{ marginLeft: 4 }} />
           </TouchableOpacity>
           <View style={styles.viewDetailBtn}>
@@ -180,12 +208,7 @@ const OrdersScreen = ({ navigation }) => {
   };
 
   const formatDateReadable = (dateStr) => {
-    if (!dateStr) return '';
-    try {
-      return format(parseISO(dateStr), 'dd MMM yyyy');
-    } catch (e) {
-      return dateStr;
-    }
+    return formatSafeDate(dateStr, dateStr || '');
   };
 
   return (
@@ -273,28 +296,36 @@ const OrdersScreen = ({ navigation }) => {
         />
       )}
 
-      {loading ? (
+      {loading && !refreshing && (!orders || orders.length === 0) ? (
         <LogoLoader fullScreen />
-      ) : orders.length === 0 ? (
-        <View style={styles.centerContainer}>
-          <Icon name="shopping-outline" size={80} color="#E5E7EB" />
-          <Text style={styles.emptyTitle}>No Orders Yet</Text>
-          <Text style={styles.emptySubtitle}>When you place an order, it will appear here.</Text>
-          <TouchableOpacity 
-            style={styles.shopBtn}
-            onPress={() => navigation.navigate('AppTabs', { screen: 'Home' })}
-          >
-            <Text style={styles.shopBtnText}>Start Shopping</Text>
-          </TouchableOpacity>
-        </View>
+      ) : (!orders || orders.length === 0) ? (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          }
+        >
+          <View style={styles.centerContainer}>
+            <Icon name="shopping-outline" size={80} color="#E5E7EB" />
+            <Text style={styles.emptyTitle}>No Orders Yet</Text>
+            <Text style={styles.emptySubtitle}>When you place an order, it will appear here.</Text>
+            <TouchableOpacity 
+              style={styles.shopBtn}
+              onPress={() => navigation.navigate('AppTabs', { screen: 'Home' })}
+            >
+              <Text style={styles.shopBtnText}>Start Shopping</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={orders}
           renderItem={renderOrderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          }
         />
       )}
     </SafeAreaView>
@@ -439,8 +470,9 @@ const styles = StyleSheet.create({
     color: COLORS.dark,
   },
   orderDate: {
-    fontSize: 11,
-    color: COLORS.gray,
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
     marginTop: 2,
   },
   statusBadge: {
@@ -614,6 +646,17 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 10,
     fontWeight: '800',
+  },
+  payBadgeMini: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-end',
+  },
+  payBadgeMiniText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });
 

@@ -71,8 +71,9 @@ export const updateDeliveryStatus = async (orderId, riderUserId, status) => {
       body = `Your order #${updated.orderNumber} has been delivered successfully.`;
     }
 
-    if (title && updated.customerId) {
-      await notifService.sendToUser(updated.customerId, title, body, {
+    const customerUserId = updated.userId || updated.user_id || updated.customerId || fullOrder?.userId;
+    if (title && customerUserId) {
+      await notifService.sendToUser(customerUserId, title, body, {
         type: 'delivery_update',
         status,
         order_id: updated.id

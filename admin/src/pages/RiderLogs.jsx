@@ -1,24 +1,33 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { Route, Gauge, Calendar as CalendarIcon } from 'lucide-react';
 import apiClient from '../services/api';
 import DataTable from '../components/common/DataTable';
 import { useFilters } from '../context/FilterContext';
 
-const RiderLogs = () => {
-  const { searchQuery, setSearchQuery, dateRange } = useFilters();
+const RiderLogs = ({ storeId: propStoreId, dateRange: propDateRange, searchQuery: propSearchQuery } = {}) => {
+  const filterContext = useFilters();
+  const outletFilters = useOutletContext() || {};
+
+  const globalStoreId = propStoreId ?? outletFilters.globalStoreId ?? filterContext.globalStoreId;
+  const dateRange = propDateRange ?? outletFilters.dateRange ?? filterContext.dateRange;
+  const searchQuery = propSearchQuery ?? outletFilters.searchQuery ?? filterContext.searchQuery;
+  const setSearchQuery = outletFilters.setSearchQuery ?? filterContext.setSearchQuery;
+
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
 
   // Fetch Rider Logs
   const { data: response, isLoading } = useQuery({
-    queryKey: ['rider-logs', pagination, searchQuery, dateRange],
+    queryKey: ['rider-logs', pagination, searchQuery, dateRange, globalStoreId],
     queryFn: async () => {
       const resp = await apiClient.get('/admin/rider-logs', {
         params: { 
           ...pagination, 
           search: searchQuery || undefined,
-          startDate: dateRange.startDate || undefined,
-          endDate: dateRange.endDate || undefined
+          store_id: globalStoreId || undefined,
+          startDate: dateRange?.startDate || undefined,
+          endDate: dateRange?.endDate || undefined
         }
       });
       return resp.data.data;

@@ -18,9 +18,12 @@ router.get('/categories/tree', catalogueController.getCategoryTree);
 router.get('/banners', catalogueController.getBanners);
 router.get('/home', catalogueController.getHomeData);
 router.get('/stores/nearest', catalogueController.getNearestStore);
+router.get('/stores/:id', catalogueController.getStoreById);
 router.get('/delivery-slots', catalogueController.getDeliverySlots);
 router.get('/products', catalogueController.listProducts);
 router.get('/products/:id', catalogueController.getProductById);
+router.get('/coupons', couponController.listCoupons);
+router.post('/cart/validate', cartController.validateCart);
 
 /**
  * --- AUTHENTICATED CUSTOMER ROUTES ---
@@ -43,6 +46,7 @@ router.delete('/addresses/:id', profileController.deleteAddress);
 router.get('/cart', cartController.getCart);
 router.post('/cart/sync', cartController.syncCart);
 router.post('/cart/validate', cartController.validateCart);
+router.delete('/cart', cartController.clearCart);
 
 // Orders & Payments
 router.post('/orders', orderController.placeOrder);
@@ -55,7 +59,6 @@ router.get('/favorites', favoritesController.getFavorites);
 router.post('/favorites/toggle', favoritesController.toggleFavorite);
 
 // Coupons
-router.get('/coupons', couponController.listCoupons);
 router.post('/coupons/validate', couponController.validateCoupon);
 
 // Notifications

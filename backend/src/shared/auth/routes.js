@@ -51,6 +51,9 @@ router.post('/register', authController.register);
  *         description: Login successful
  */
 router.post('/login', authController.login);
+router.post('/google', authController.loginGoogle);
+router.get('/google/url', authController.getGoogleAuthUrl);
+router.get('/google/callback', authController.googleCallback);
 
 // Authenticated routes
 /**

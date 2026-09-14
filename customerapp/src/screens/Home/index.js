@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   View, 
   FlatList, 
@@ -21,6 +21,7 @@ import BannerSlider from './BannerSlider';
 import CategoryStrip from './CategoryStrip';
 import ProductSection from './ProductSection';
 import TrustStrip from './TrustStrip';
+import ComingSoonScreen from '../ComingSoonScreen';
 
 // Constants & Tools
 import { COLORS, THEMES } from '../../constants/theme';
@@ -33,6 +34,7 @@ const HomeScreen = () => {
     refreshing,
     onRefresh,
     banners,
+    hasAnyProducts,
     filteredCategories,
     dynamicSections,
     filteredFlashSale,
@@ -54,19 +56,30 @@ const HomeScreen = () => {
     navigation
   } = useHomeData();
 
-  // Plain JS scroll progress (0 → 1 over first 80px of scroll).
-  // Using plain state instead of Animated.Value avoids all _children freeze /
-  // native-driver conflicts that arise when passing interpolations through props.
+  // Scroll offset tracking
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [showRecovery, setShowRecovery] = useState(false);
+
+  useEffect(() => {
+    let timeout;
+    if (loading && !refreshing) {
+      timeout = setTimeout(() => {
+        setShowRecovery(true);
+      }, 4000);
+    } else {
+      setShowRecovery(false);
+    }
+    return () => clearTimeout(timeout);
+  }, [loading, refreshing]);
 
   const onScroll = useCallback((event) => {
     const y = event.nativeEvent.contentOffset.y;
     setScrollProgress(Math.min(Math.max(y / 80, 0), 1));
   }, []);
 
-  // Plain numbers — HomeHeader already does plain math on these props.
-  const headerOpacity = 1 - scrollProgress;
-  const headerHeight  = Math.max(50 * (1 - scrollProgress), 0);
+  // Keep HomeHeader permanently visible so location and delivery mode switchers never disappear
+  const headerOpacity = 1;
+  const headerHeight  = 56;
   const progress      = scrollProgress;
 
   const headerColorValue = activeTheme.primary; 
@@ -74,46 +87,86 @@ const HomeScreen = () => {
 
   // FlatList sections
   const sections = useMemo(() => {
-    const list = [
-      { id: 'banners', type: 'banners' },
-      { id: 'categories', type: 'categories' },
-      { id: 'flash_sale', type: 'products', title: 'Flash Sale', data: filteredFlashSale, timer: flashSaleTimer, sectionType: 'flash_sale' },
-      { id: 'deals', type: 'products', title: 'Todays Deals', data: filteredDeals, sectionType: 'deals' },
-      { id: 'frozen', type: 'products', title: 'Frozen Products', data: filteredFrozen, sectionType: 'frozen' },
-      { id: 'exclusive', type: 'products', title: 'Exclusive Offers', data: filteredExclusive, sectionType: 'exclusive' },
-      { id: 'trending', type: 'products', title: 'Trending Products', data: filteredTrending, sectionType: 'trending' },
-      { id: 'new_launch', type: 'products', title: 'New Launch', data: filteredNewLaunch, sectionType: 'new_launch' },
-      { id: 'featured', type: 'products', title: 'Fresh Catch', data: filteredFeatured, sectionType: 'featured' },
-    ];
+    if (!location.isServiceable) return [];
+    const list = [];
+    if (banners && banners.length > 0) {
+      list.push({ type: 'banners', id: 'banners' });
+    }
+    if (filteredCategories && filteredCategories.length > 0) {
+      list.push({ type: 'categories', id: 'categories' });
+    }
 
-    // Add dynamic category sections
-    dynamicSections.forEach(section => {
-      list.push({
-        id: `section_${section.id}`,
-        type: 'products',
-        title: section.title,
-        data: section.filteredProducts,
-        sectionType: 'category',
-        extraParams: { categoryId: section.id }
+    if (filteredFlashSale && filteredFlashSale.length > 0) {
+      list.push({ type: 'products', id: 'flashSale', title: '⚡ Flash Sale', data: filteredFlashSale, timer: flashSaleTimer, sectionType: 'flash_sale', extraParams: { is_flash_sale: true } });
+    }
+    if (filteredDeals && filteredDeals.length > 0) {
+      list.push({ type: 'products', id: 'todaysDeals', title: '🏷️ Today\'s Deals', data: filteredDeals, sectionType: 'deals', extraParams: { is_deal: true } });
+    }
+    if (filteredFrozen && filteredFrozen.length > 0) {
+      list.push({ type: 'products', id: 'frozen', title: '❄️ Frozen Delights', data: filteredFrozen, sectionType: 'frozen', extraParams: { is_frozen: true } });
+    }
+    if (filteredExclusive && filteredExclusive.length > 0) {
+      list.push({ type: 'products', id: 'exclusive', title: '✨ Exclusive Offers', data: filteredExclusive, sectionType: 'exclusive', extraParams: { is_exclusive: true } });
+    }
+    if (filteredTrending && filteredTrending.length > 0) {
+      list.push({ type: 'products', id: 'trending', title: '🔥 Trending Products', data: filteredTrending, sectionType: 'trending', extraParams: { is_trending: true } });
+    }
+    if (filteredNewLaunch && filteredNewLaunch.length > 0) {
+      list.push({ type: 'products', id: 'newLaunch', title: '🚀 New Launches', data: filteredNewLaunch, sectionType: 'new_launch', extraParams: { is_new_launch: true } });
+    }
+    if (filteredFeatured && filteredFeatured.length > 0) {
+      list.push({ type: 'products', id: 'featured', title: '🌟 Featured Products', data: filteredFeatured, sectionType: 'featured', extraParams: { is_featured: true } });
+    }
+
+    if (dynamicSections && dynamicSections.length > 0) {
+      dynamicSections.forEach(s => {
+        list.push({
+          type: 'products',
+          id: `sec_${s.id}`,
+          title: s.name || s.title || 'Products',
+          data: s.filteredProducts,
+          sectionType: 'category',
+          extraParams: { sub_category_id: s.id }
+        });
       });
-    });
+    }
 
-    list.push({ id: 'trust', type: 'trust' });
-    
-    return list.filter(s => s.type !== 'products' || (s.data && s.data.length > 0));
-  }, [filteredFlashSale, filteredDeals, filteredFrozen, filteredExclusive, filteredTrending, filteredNewLaunch, filteredFeatured, dynamicSections, flashSaleTimer]);
+    if (list.length === 0 && !loading) {
+      list.push({ type: 'empty_store', id: 'empty_store' });
+    }
 
-  const renderSection = React.useCallback(({ item }) => {
+    list.push({ type: 'trust', id: 'trust' });
+    return list;
+  }, [
+    banners,
+    filteredCategories,
+    filteredFlashSale,
+    filteredDeals,
+    filteredFrozen,
+    filteredExclusive,
+    filteredTrending,
+    filteredNewLaunch,
+    filteredFeatured,
+    dynamicSections,
+    flashSaleTimer,
+    loading,
+    location.isServiceable
+  ]);
+
+  const renderSection = useCallback(({ item }) => {
     switch (item.type) {
       case 'banners':
-        return <BannerSlider banners={banners} onBannerPress={(b) => navigation.navigate('ProductList', { title: b.title, type: 'banner', bannerId: b.id })} />;
+        return <BannerSlider banners={banners} activeTheme={activeTheme} />;
       case 'categories':
-        return <CategoryStrip 
-          categories={filteredCategories} 
-          activeTheme={activeTheme} 
-          onCategoryPress={(c) => navigation.navigate('ProductList', { title: c.name, type: 'category', categoryId: c.id })}
-          onViewAllPress={() => navigation.navigate('Categories')}
-        />;
+        return (
+          <CategoryStrip 
+            categories={filteredCategories} 
+            activeTheme={activeTheme} 
+            navigation={navigation}
+            onCategoryPress={(cat) => navigation.navigate('ProductList', { categoryId: cat.id, title: cat.name })}
+            onViewAllPress={() => navigation.navigate('Categories')}
+          />
+        );
       case 'products':
         return <ProductSection 
           title={item.title} 
@@ -124,17 +177,72 @@ const HomeScreen = () => {
           type={item.sectionType}
           extraParams={item.extraParams}
         />;
+      case 'empty_store':
+        return (
+          <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center', marginTop: 40 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <Icon name="store-off-outline" size={40} color="#94a3b8" />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e293b', textAlign: 'center', marginBottom: 8 }}>
+              No Products Available
+            </Text>
+            <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 20, marginBottom: 20, paddingHorizontal: 20 }}>
+              There are currently no items in stock for this delivery slot at your location. Please try switching your delivery slot or choosing another delivery address.
+            </Text>
+            <TouchableOpacity
+              onPress={() => isAuthenticated ? navigation.navigate('SavedAddresses', { selectMode: true }) : navigation.navigate('LocationPicker', { changeLocation: true })}
+              style={{ paddingHorizontal: 24, paddingVertical: 12, backgroundColor: activeTheme.primary || COLORS.primary, borderRadius: 10 }}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>Change Location</Text>
+            </TouchableOpacity>
+          </View>
+        );
       case 'trust':
         return <TrustStrip activeTheme={activeTheme} />;
       default:
         return null;
     }
-  }, [banners, filteredCategories, activeTheme, navigation]);
+  }, [banners, filteredCategories, activeTheme, navigation, hasAnyProducts, isAuthenticated]);
 
-  if (loading && !refreshing) {
+  const hasCachedContent = location.isServiceable && ((banners && banners.length > 0) || hasAnyProducts);
+
+  if (loading && !refreshing && !hasCachedContent) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <LogoLoader size={100} />
+      <View style={{ flex: 1, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <LogoLoader size={90} />
+        {showRecovery ? (
+          <View style={{ marginTop: 24, alignItems: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#1e293b', textAlign: 'center', marginBottom: 6 }}>
+              Taking longer than usual...
+            </Text>
+            <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 20, lineHeight: 18, maxWidth: 280 }}>
+              Connecting to the nearest store. You can retry or switch your delivery location.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRecovery(false);
+                  onRefresh();
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 18, paddingVertical: 10, backgroundColor: activeTheme.primary || COLORS.primary, borderRadius: 8 }}
+              >
+                <Icon name="refresh" size={18} color="#ffffff" />
+                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Retry Now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('LocationPicker', { changeLocation: true })}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f1f5f9', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1' }}
+              >
+                <Icon name="map-marker" size={18} color="#475569" />
+                <Text style={{ color: '#475569', fontWeight: '600', fontSize: 13 }}>Change Location</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <Text style={{ marginTop: 16, fontSize: 13, color: '#94a3b8', fontWeight: '500' }}>
+            Loading freshest picks...
+          </Text>
+        )}
       </View>
     );
   }
@@ -155,7 +263,7 @@ const HomeScreen = () => {
           progress={progress}
           headerHeight={headerHeight}
           headerOpacity={headerOpacity}
-          onLocationPress={() => isAuthenticated ? navigation.navigate('SavedAddresses', { selectMode: true }) : navigation.navigate('LocationPicker')}
+          onLocationPress={() => isAuthenticated ? navigation.navigate('SavedAddresses', { selectMode: true }) : navigation.navigate('LocationPicker', { changeLocation: true })}
           onSlotPress={() => navigation.navigate('DeliveryMode')}
           onNotificationPress={() => navigation.navigate('Notifications')}
         />
@@ -168,55 +276,37 @@ const HomeScreen = () => {
         />
       </View>
 
-      <FlatList
-        data={sections}
-        renderItem={renderSection}
-        keyExtractor={item => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
-        }
-        removeClippedSubviews={true}
-        initialNumToRender={4}
-        maxToRenderPerBatch={4}
-        windowSize={5}
-      />
-
-      {/* Not Serviceable Overlay */}
-      {location.isHydrated && !location.isServiceable && (
-        <View style={styles.unserviceableOverlay}>
-          <View style={styles.unserviceableCard}>
-            <View style={[styles.iconCircle, { backgroundColor: activeTheme.primary + '15' }]}>
-              <Icon name="map-marker-radius-outline" size={48} color={activeTheme.primary} />
-            </View>
-            <Text style={styles.unserviceableTitle}>We're Coming Soon!</Text>
-            <Text style={styles.unserviceableText}>
-              Currently, we don't deliver fresh cuts to your neighborhood, but we're expanding rapidly. Stay tuned!
-            </Text>
-            <TouchableOpacity 
-              style={[styles.changeLocBtn, { backgroundColor: activeTheme.primary }]}
-              onPress={() => navigation.navigate('LocationPicker')}
-            >
-              <Text style={styles.changeLocBtnText}>Change Location</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+      {!location.isServiceable ? (
+        <ComingSoonScreen pincode={location.pincode} showHeader={false} />
+      ) : (
+        <FlatList
+          data={sections}
+          renderItem={renderSection}
+          keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
+          }
+          removeClippedSubviews={true}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
+        />
       )}
     </View>
   );
 };
 
 const styles = {
-  unserviceableOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+  unserviceableContainer: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 2000,
   },
   unserviceableCard: {
     width: '100%',

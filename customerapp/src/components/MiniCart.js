@@ -80,8 +80,10 @@ const MiniCart = () => {
     );
   };
 
+  const bottomPosition = 68 + (insets.bottom > 0 ? insets.bottom : 12);
+
   return (
-    <View style={[styles.outerContainer, { bottom: 70 }]}>
+    <View style={[styles.outerContainer, { bottom: bottomPosition }]}>
       <Swipeable
         renderRightActions={renderRightActions}
         friction={2}

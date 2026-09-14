@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import CustomAlert from '../components/CustomAlert';
+import AppAlert from '../shared/components/ui/AppAlert';
 import { registerAlert } from '../services/alertService';
 
 const AlertContext = createContext();
@@ -10,16 +10,18 @@ export const AlertProvider = ({ children }) => {
     title: '',
     message: '',
     type: 'info',
-    buttons: []
+    buttons: [],
+    dismissable: true,
   });
 
-  const showAlert = useCallback((title, message, type = 'info', buttons = []) => {
+  const showAlert = useCallback((title, message, type = 'info', buttons = [], options = {}) => {
     setConfig({
       visible: true,
       title,
       message,
       type,
-      buttons
+      buttons,
+      dismissable: options?.dismissable !== undefined ? options.dismissable : true,
     });
   }, []);
 
@@ -35,12 +37,13 @@ export const AlertProvider = ({ children }) => {
   return (
     <AlertContext.Provider value={{ showAlert, hideAlert }}>
       {children}
-      <CustomAlert 
+      <AppAlert 
         visible={config.visible}
         title={config.title}
         message={config.message}
         type={config.type}
         buttons={config.buttons}
+        dismissable={config.dismissable}
         onClose={hideAlert}
       />
     </AlertContext.Provider>

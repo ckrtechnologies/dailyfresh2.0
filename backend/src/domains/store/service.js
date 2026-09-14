@@ -31,6 +31,30 @@ export const updateStoreOrderStatus = async (orderId, storeId, newStatus) => {
 
   const updated = await storeRepo.updateOrderStatus(orderId, storeId, newStatus);
 
+  // Notify customer of store status changes
+  try {
+    let title = '';
+    let body = '';
+    if (newStatus === 'preparing') {
+      title = 'Order Being Prepared 🍳';
+      body = `Your items for order #${updated.orderNumber} are being packed fresh.`;
+    } else if (newStatus === 'ready') {
+      title = 'Order Packed & Ready! 📦';
+      body = `Your order #${updated.orderNumber} is packed and ready for delivery.`;
+    }
+
+    const customerUserId = existingOrder.userId || existingOrder.user_id || updated.userId;
+    if (title && customerUserId) {
+      notifService.sendToUser(customerUserId, title, body, {
+        type: 'order_status_update',
+        status: newStatus,
+        order_id: updated.id,
+      }).catch(err => console.error('[Store Customer Notify Error]', err.message));
+    }
+  } catch (notifErr) {
+    console.error('[Store Customer Notify Error]', notifErr.message);
+  }
+
   // If ready, notify riders
   if (newStatus === 'ready') {
     const store = await storeRepo.getStoreById(storeId);

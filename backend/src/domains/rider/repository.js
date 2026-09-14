@@ -68,12 +68,16 @@ export const assignRiderToOrder = async (orderId, riderUserId) => {
 };
 
 export const updateOrderStatus = async (orderId, riderUserId, status) => {
+  const updateData = {
+    status,
+    updatedAt: new Date()
+  };
+  if (status === 'delivered') {
+    updateData.paymentStatus = 'paid';
+  }
   const [updated] = await db
     .update(orders)
-    .set({
-      status,
-      updatedAt: new Date()
-    })
+    .set(updateData)
     .where(and(eq(orders.id, orderId), eq(orders.riderId, riderUserId)))
     .returning();
   return updated;

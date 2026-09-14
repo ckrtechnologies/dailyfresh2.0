@@ -39,8 +39,10 @@ if (process.env.DB_HOST && process.env.DB_PASSWORD) {
     user,
     password: process.env.DB_PASSWORD,
     max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 90000,
+    connectionTimeoutMillis: 90000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 90000,
   };
 } else if (process.env.DATABASE_URL) {
   let connStr = process.env.DATABASE_URL;
@@ -58,6 +60,8 @@ if (process.env.DB_HOST && process.env.DB_PASSWORD) {
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   };
 } else {
   console.error('❌ Fatal: Neither DB_HOST/DB_PASSWORD nor DATABASE_URL is set in .env');

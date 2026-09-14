@@ -24,8 +24,10 @@ const ProductSection = React.memo(({
 
   if (!products || products.length === 0) return null;
 
-  const getSectionIcon = (title) => {
-    const t = title.toLowerCase();
+  const displayTitle = title || 'Featured Products';
+
+  const getSectionIcon = (str) => {
+    const t = String(str || '').toLowerCase();
     if (t.includes('flash')) return 'lightning-bolt';
     if (t.includes('deal')) return 'tag-heart';
     if (t.includes('frozen')) return 'snowflake';
@@ -36,7 +38,7 @@ const ProductSection = React.memo(({
     return 'star';
   };
 
-  const iconName = getSectionIcon(title);
+  const iconName = getSectionIcon(displayTitle);
 
   return (
     <View style={styles.section}>
@@ -45,7 +47,7 @@ const ProductSection = React.memo(({
           <View style={[styles.sectionIconCircle, { backgroundColor: activeTheme.primary + '10' }]}>
             <Icon name={iconName} size={18} color={activeTheme.primary} />
           </View>
-          <Text style={[styles.sectionTitle, { color: activeTheme.text }]}>{title}</Text>
+          <Text style={[styles.sectionTitle, { color: activeTheme.text }]}>{displayTitle}</Text>
           {timer && (
             <View style={styles.timerBadge}>
               <Icon name="timer-outline" size={14} color={COLORS.white} />
@@ -54,7 +56,7 @@ const ProductSection = React.memo(({
           )}
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('ProductList', {
-          title,
+          title: displayTitle,
           type,
           initialProducts: products,
           ...extraParams

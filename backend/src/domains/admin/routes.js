@@ -1,5 +1,6 @@
 import express from 'express';
 import * as adminController from './controller.js';
+import * as analyticsController from './analyticsController.js';
 import * as notificationController from '../../shared/notifications/controller.js';
 import { authenticate, authorize } from '../../shared/auth/middleware.js';
 import { upload } from '../../middlewares/uploadMiddleware.js';
@@ -69,6 +70,13 @@ router.get('/orders', authorize(['admin', 'store_manager']), adminController.lis
  *         description: Status updated
  */
 router.patch('/orders/:id/status', authorize(['admin', 'store_manager']), adminController.updateOrderStatus);
+router.post('/orders/:id/refund', authorize(['admin']), adminController.refundOrder);
+
+// Analytics Routes
+router.get('/analytics/revenue-chart', authorize(['admin', 'store_manager']), analyticsController.getRevenueChart);
+router.get('/analytics/orders-by-status', authorize(['admin', 'store_manager']), analyticsController.getOrdersByStatus);
+router.get('/analytics/top-products', authorize(['admin', 'store_manager']), analyticsController.getTopProducts);
+router.get('/analytics/store-performance', authorize(['admin', 'store_manager']), analyticsController.getStorePerformance);
 
 /**
  * @swagger
@@ -107,6 +115,10 @@ router.post('/onboard-staff', authorize(['admin']), adminController.onboardStaff
 router.get('/staff', authorize(['admin']), adminController.listStaff);
 router.delete('/staff/:id', authorize(['admin']), adminController.deleteStaff);
 router.get('/customers', authorize(['admin']), adminController.listCustomers);
+router.post('/customers', authorize(['admin']), adminController.createCustomer);
+router.get('/customers/:id', authorize(['admin']), adminController.getCustomerDetails);
+router.patch('/customers/:id', authorize(['admin']), adminController.updateCustomer);
+router.delete('/customers/:id', authorize(['admin']), adminController.deleteCustomer);
 router.get('/notifications', authorize(['admin']), notificationController.getAllNotifications);
 router.post('/stores', authorize(['admin']), adminController.createStore);
 router.patch('/stores/:id', authorize(['admin']), adminController.updateStore);

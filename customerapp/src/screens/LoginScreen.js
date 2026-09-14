@@ -25,6 +25,8 @@ import { PermissionsAndroid } from 'react-native';
 import { setLocation } from '../store/slices/locationSlice';
 import apiClient from '../api/apiClient';
 import { showGlobalAlert } from '../services/alertService';
+import { autoAssignNearestStore } from '../services/locationHelper';
+import { signInWithGoogleNative, openGoogleBrowserLogin } from '../services/googleAuth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,6 +34,7 @@ const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const dispatch = useDispatch();
 
   const logoAnim = React.useRef(new Animated.Value(0)).current;
@@ -55,36 +58,11 @@ const LoginScreen = ({ navigation }) => {
     try {
       const response = await authService.loginWithEmail(email, password);
       if (response.success) {
-        // Silently initialize location before finishing login process
+        // Seamlessly assign nearest store like Blinkit
         try {
-          const hasPermission = Platform.OS === 'ios' 
-            ? (await Geolocation.requestAuthorization('whenInUse')) === 'granted'
-            : (await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION)) === PermissionsAndroid.RESULTS.GRANTED;
-
-          if (hasPermission) {
-            Geolocation.getCurrentPosition(
-              async (position) => {
-                const { latitude, longitude } = position.coords;
-                const storeRes = await apiClient.get('/customer/stores/nearest', { 
-                  params: { lat: latitude, lng: longitude } 
-                });
-                const store = storeRes.data?.data?.store;
-                
-                dispatch(setLocation({
-                  pincode: '000000', // Placeholder or fetched if needed
-                  address: 'Current Location',
-                  coords: { lat: latitude, lng: longitude },
-                  isServiceable: !!store,
-                  storeId: store?.id || null,
-                  storeName: store?.name || null
-                }));
-              },
-              () => {}, // Silent fail for location detection
-              { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
-            );
-          }
+          await autoAssignNearestStore(dispatch, { isAuthenticated: true });
         } catch (locErr) {
-          console.log('Location initialization skipped:', locErr);
+          console.log('Location initialization error:', locErr);
         }
 
         dispatch(setCredentials({
@@ -101,11 +79,51 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    try {
+      setIsGoogleSubmitting(true);
+      const googleRes = await signInWithGoogleNative();
+
+      if (googleRes.cancelled) {
+        return;
+      }
+
+      if (googleRes.success) {
+        dispatch(setLoading(true));
+        const res = await authService.signInWithGoogle(googleRes);
+
+        if (res.success) {
+          try {
+            await autoAssignNearestStore(dispatch, { isAuthenticated: true });
+          } catch (locErr) {
+            console.log('Location assignment error:', locErr);
+          }
+
+          dispatch(setCredentials({
+            user: res.data.user,
+            token: res.data.access_token,
+          }));
+          return;
+        }
+      }
+
+      // Seamless fallback: browser-based Google SSO
+      console.log('[LoginScreen] Native Google sign-in bypassed or failed, launching browser SSO...');
+      await openGoogleBrowserLogin();
+    } catch (err) {
+      console.error('Google Sign-In error:', err);
+      await openGoogleBrowserLogin();
+    } finally {
+      setIsGoogleSubmitting(false);
+      dispatch(setLoading(false));
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#012a21" />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
         <ScrollView
@@ -180,14 +198,21 @@ const LoginScreen = ({ navigation }) => {
             </View>
 
             <TouchableOpacity
-              style={styles.googleButton}
-              onPress={() => authService.signInWithGoogle()}
+              style={[styles.googleButton, isGoogleSubmitting && styles.disabledButton]}
+              onPress={handleGoogleLogin}
+              disabled={isGoogleSubmitting || isSubmitting}
             >
-              <Image
-                source={require('../assets/icons/google_logo.jpg')}
-                style={styles.googleIcon}
-              />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              {isGoogleSubmitting ? (
+                <ActivityIndicator color="#1F2937" />
+              ) : (
+                <>
+                  <Image
+                    source={require('../assets/icons/google_logo.jpg')}
+                    style={styles.googleIcon}
+                  />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
+              )}
             </TouchableOpacity>
 
             <View style={styles.footer}>
@@ -213,7 +238,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   logoContainer: {
     alignItems: 'center',

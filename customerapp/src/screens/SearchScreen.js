@@ -19,9 +19,10 @@ import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import productService from '../api/productService';
 import ProductCard from '../components/ProductCard';
 import LogoLoader from '../components/LogoLoader';
+import ComingSoonScreen from './ComingSoonScreen';
 
 const SearchScreen = ({ navigation }) => {
-  const { storeId } = useSelector((state) => state.location);
+  const { storeId, isServiceable, pincode } = useSelector((state) => state.location);
   const { selectedSlot } = useSelector((state) => state.config);
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState([]);
@@ -41,6 +42,10 @@ const SearchScreen = ({ navigation }) => {
   }, [searchQuery, storeId, selectedSlot]);
 
   const handleSearch = async (query) => {
+    if (!isServiceable || !storeId) {
+      setProducts([]);
+      return;
+    }
     setLoading(true);
     try {
       const res = await productService.getProducts({ 
@@ -99,11 +104,21 @@ const SearchScreen = ({ navigation }) => {
     </View>
   );
 
+  if (!isServiceable) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        {renderHeader()}
+        <ComingSoonScreen pincode={pincode} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         {renderHeader()}
@@ -125,7 +140,11 @@ const SearchScreen = ({ navigation }) => {
             <Text style={styles.emptySubtitle}>Try searching for something else like "Mutton" or "Prawns".</Text>
           </View>
         ) : (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView 
+            showsVerticalScrollIndicator={false} 
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: 60 }]}
+            keyboardShouldPersistTaps="handled"
+          >
             {products.map((section) => (
               <View key={section.title} style={styles.section}>
                 <View style={styles.sectionHeader}>
@@ -218,7 +237,8 @@ const styles = StyleSheet.create({
   },
   productWrapper: {
     width: '50%',
-    padding: SPACING.s,
+    padding: 6,
+    display: 'flex',
   },
   centerContainer: {
     flex: 1,

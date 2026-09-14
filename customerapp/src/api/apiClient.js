@@ -1,12 +1,13 @@
 import axios from 'axios';
-import Config from 'react-native-config';
+import { ENV } from '../config/env';
 import { showGlobalAlert } from '../services/alertService';
+import storage from '../utils/storage';
 
 let accessToken = null;
 
 const apiClient = axios.create({
-  baseURL: Config.API_URL,
-  timeout: 10000,
+  baseURL: ENV.API_BASE_URL,
+  timeout: ENV.DEFAULT_TIMEOUT_MS || 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,6 +15,9 @@ const apiClient = axios.create({
 
 export const setAccessToken = (token) => {
   accessToken = token;
+  if (token) {
+    storage.setItem('access_token', token);
+  }
 };
 
 // Request interceptor to inject JWT
@@ -22,13 +26,10 @@ apiClient.interceptors.request.use(
     try {
       let token = accessToken;
 
-      // Fallback: If local accessToken is not set, try fetching from Supabase session
-      // This prevents 401 errors during app startup race conditions on Android
+      // Read token from local storage if in-memory cache is empty
       if (!token) {
-        const { supabase } = require('./supabase');
-        const { data } = await supabase.auth.getSession();
-        token = data?.session?.access_token;
-        if (token) accessToken = token; // Cache it for subsequent requests
+        token = await storage.getItem('access_token');
+        if (token) accessToken = token;
       }
 
       if (token) {
@@ -48,34 +49,50 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+let lastAlertTime = 0;
+
 // Response interceptor to handle errors globally
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
+    // Ignore canceled requests (unmount, search debounce, tab switch)
+    if (axios.isCancel(error) || error.name === 'CanceledError' || error.message === 'canceled') {
+      return Promise.reject(error);
+    }
+
     // Handle 401 Unauthorized
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      // Handle token refresh logic here if needed
+    if (error.response?.status === 401 && !originalRequest?._retry) {
+      if (originalRequest) originalRequest._retry = true;
+      // Token expired or invalid
     }
 
-    // Handle 500 Internal Server Error
-    if (error.response?.status >= 500) {
-      showGlobalAlert(
-        'Server Busy',
-        'Our kitchen is currently overwhelmed with orders! Please try again in a moment.',
-        'warning'
-      );
+    const now = Date.now();
+    const isBackgroundGet = originalRequest?.method?.toLowerCase() === 'get';
+
+    // Handle 500 Internal Server Error (only alert for user-triggered mutations or non-background)
+    if (error.response?.status >= 500 && !isBackgroundGet) {
+      if (now - lastAlertTime > 10000) {
+        lastAlertTime = now;
+        showGlobalAlert(
+          'Server Busy',
+          'Our kitchen is currently overwhelmed with orders! Please try again in a moment.',
+          'warning'
+        );
+      }
     }
 
-    // Handle Network Timeout/Disconnect
-    if (error.code === 'ECONNABORTED' || !error.response) {
-      showGlobalAlert(
-        'Connection Lost',
-        'We can\'t reach the store right now. Please check your internet and try again.',
-        'error'
-      );
+    // Handle Network Timeout/Disconnect (only alert for mutations, not background polling)
+    if ((error.code === 'ECONNABORTED' || !error.response) && !isBackgroundGet) {
+      if (now - lastAlertTime > 12000) {
+        lastAlertTime = now;
+        showGlobalAlert(
+          'Connection Lost',
+          'We can\'t reach the store right now. Please check your internet and try again.',
+          'error'
+        );
+      }
     }
 
     return Promise.reject(error);

@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js';
 import { notifications, profiles, riders } from '../../db/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, or, isNull } from 'drizzle-orm';
 
 export const createNotification = async (data) => {
   const [row] = await db.insert(notifications).values(data).returning();
@@ -50,7 +50,7 @@ export const getUserNotifications = async (userId, limit = 50, offset = 0) => {
   return await db
     .select()
     .from(notifications)
-    .where(eq(notifications.userId, userId))
+    .where(or(eq(notifications.userId, userId), isNull(notifications.userId)))
     .orderBy(desc(notifications.createdAt))
     .limit(limit)
     .offset(offset);
@@ -67,8 +67,26 @@ export const markAsRead = async (id, userId) => {
 
 export const getAllNotifications = async (limit = 100, offset = 0) => {
   return await db
-    .select()
+    .select({
+      id: notifications.id,
+      userId: notifications.userId,
+      title: notifications.title,
+      body: notifications.body,
+      type: notifications.type,
+      data: notifications.data,
+      isRead: notifications.isRead,
+      createdAt: notifications.createdAt,
+      profile: {
+        id: profiles.id,
+        fullName: profiles.fullName,
+        full_name: profiles.fullName,
+        role: profiles.role,
+        email: profiles.email,
+        phone: profiles.phone,
+      }
+    })
     .from(notifications)
+    .leftJoin(profiles, eq(notifications.userId, profiles.id))
     .orderBy(desc(notifications.createdAt))
     .limit(limit)
     .offset(offset);

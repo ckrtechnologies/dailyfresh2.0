@@ -17,9 +17,22 @@ import { useSelector } from 'react-redux';
 const { width } = Dimensions.get('window');
 
 const OrderSuccessScreen = ({ route, navigation }) => {
-  const { orderId } = route.params || {};
+  const { orderId: rawOrderId, order_id, id } = route.params || {};
+  const orderId = rawOrderId || order_id || id;
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
+
+  const handleViewOrder = () => {
+    if (orderId) {
+      try {
+        navigation.navigate('OrderDetail', { orderId, order: { id: orderId } });
+      } catch (e) {
+        navigation.navigate('Orders');
+      }
+    } else {
+      navigation.navigate('Orders');
+    }
+  };
 
   const scaleAnim = new Animated.Value(0);
   const opacityAnim = new Animated.Value(0);
@@ -71,7 +84,7 @@ const OrderSuccessScreen = ({ route, navigation }) => {
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
             style={[styles.viewOrderBtn, { backgroundColor: activeTheme.primary }]}
-            onPress={() => navigation.replace('OrderDetail', { order: { id: orderId } })}
+            onPress={handleViewOrder}
           >
             <Text style={styles.viewOrderText}>View My Order</Text>
           </TouchableOpacity>

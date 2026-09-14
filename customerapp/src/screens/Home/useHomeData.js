@@ -8,7 +8,8 @@ import {
   setCategories,
   setFeaturedProducts,
   setCategorySections,
-  setHomeCollections
+  setHomeCollections,
+  clearProducts
 } from '../../store/slices/productSlice';
 import { THEMES } from '../../constants/theme';
 import { setServiceability } from '../../store/slices/locationSlice';
@@ -47,46 +48,59 @@ const useHomeData = () => {
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
   // Filter helper
+  // Filter helper
   const filterBySlot = useCallback((products) => {
-    if (!products) return [];
+    if (!products || !Array.isArray(products)) return [];
     if (!selectedSlot || selectedSlot === 'all') return products;
 
-    const slotMap = {
-      'tomorrow': ['morning', 'evening', 'tomorrow morning', 'tomorrow evening', 'tomorrow_morning', 'tomorrow_evening', 'tomorrow'],
-      'express': ['express', 'express delivery']
-    };
-    const searchTerms = slotMap[selectedSlot] || [selectedSlot];
+    const isTomorrow = ['tomorrow', 'tomorrow_morning', 'tomorrow_evening'].includes(selectedSlot);
+    const isExpress = selectedSlot === 'express';
 
     return products.filter(p => {
       const hasVariants = p.variants && p.variants.length > 0;
       let supportsSlot = false;
+      const options = p.delivery_options || p.deliveryOptions || [];
+      const productSupportsExpress = options.includes('express');
+      const productSupportsTomorrow = options.includes('tomorrow_morning') || options.includes('tomorrow_evening') || options.includes('tomorrow');
 
       if (hasVariants) {
         supportsSlot = p.variants.some(v => {
           const vInfo = Array.isArray(v.delivery_info)
             ? v.delivery_info
-            : (v.delivery_info ? v.delivery_info.split(',').map(s => s.trim().toLowerCase()) : []);
+            : (Array.isArray(v.deliveryInfo)
+              ? v.deliveryInfo
+              : (v.delivery_info || v.deliveryInfo ? String(v.delivery_info || v.deliveryInfo).split(',').map(s => s.trim().toLowerCase()) : []));
 
-          return vInfo.some(info => searchTerms.includes(info.toLowerCase()));
+          if (isExpress) {
+            return vInfo.some(info => info.includes('express')) || productSupportsExpress;
+          }
+          if (isTomorrow) {
+            return vInfo.some(info => info.includes('morning') || info.includes('evening') || info.includes('tomorrow')) || productSupportsTomorrow;
+          }
+          return true;
         });
       } else {
-        const options = p.delivery_options || ['express'];
-        const normalizedOptions = options.map(o =>
-          o === 'morning' ? 'tomorrow_morning' :
-            o === 'evening' ? 'tomorrow_evening' : o
-        );
-        
-        if (selectedSlot === 'tomorrow') {
-          supportsSlot = normalizedOptions.includes('tomorrow_morning') || normalizedOptions.includes('tomorrow_evening');
+        if (isExpress) {
+          supportsSlot = productSupportsExpress;
+        } else if (isTomorrow) {
+          supportsSlot = productSupportsTomorrow;
         } else {
-          supportsSlot = normalizedOptions.includes(selectedSlot);
+          supportsSlot = options.includes(selectedSlot);
         }
       }
 
       if (!supportsSlot) return false;
 
-      const isExpress = selectedSlot === 'express';
-      return isExpress ? (p.express_stock_qty > 0) : (p.scheduled_stock_qty > 0);
+      const expressStock = Number(p.express_stock_qty ?? p.expressStockQty ?? 0);
+      const scheduledStock = Number(p.scheduled_stock_qty ?? p.scheduledStockQty ?? 0);
+
+      if (isExpress) {
+        return expressStock > 0;
+      }
+      if (isTomorrow) {
+        return scheduledStock > 0;
+      }
+      return expressStock > 0 || scheduledStock > 0;
     });
   }, [selectedSlot]);
 
@@ -107,9 +121,27 @@ const useHomeData = () => {
     })).filter(section => section.filteredProducts && section.filteredProducts.length > 0);
   }, [categorySections, filterBySlot]);
 
+  const hasAnyProducts = useMemo(() => {
+    return (
+      (filteredFlashSale && filteredFlashSale.length > 0) ||
+      (filteredDeals && filteredDeals.length > 0) ||
+      (filteredFrozen && filteredFrozen.length > 0) ||
+      (filteredExclusive && filteredExclusive.length > 0) ||
+      (filteredTrending && filteredTrending.length > 0) ||
+      (filteredNewLaunch && filteredNewLaunch.length > 0) ||
+      (filteredFeatured && filteredFeatured.length > 0) ||
+      (dynamicSections && dynamicSections.length > 0)
+    );
+  }, [filteredFlashSale, filteredDeals, filteredFrozen, filteredExclusive, filteredTrending, filteredNewLaunch, filteredFeatured, dynamicSections]);
+
   const filteredCategories = useMemo(() => {
-    return categories || [];
-  }, [categories]);
+    if (!hasAnyProducts || !categories || categories.length === 0) return [];
+    if (dynamicSections && dynamicSections.length > 0) {
+      const activeCatIds = new Set(dynamicSections.map(s => s.id));
+      return categories.filter(c => activeCatIds.has(c.id));
+    }
+    return [];
+  }, [hasAnyProducts, categories, dynamicSections]);
 
   // Distance Calculation Helper
   const getDistance = (lat1, lon1, lat2, lon2) => {
@@ -125,46 +157,76 @@ const useHomeData = () => {
   };
 
   const loadData = useCallback(async (isCancelled = { current: false }) => {
-    let currentStoreId = storeId;
-    if (!currentStoreId && (location.pincode || location.coords)) {
-      try {
-        const params = {};
-        if (location.coords) {
-          params.lat = location.coords.lat;
-          params.lng = location.coords.lng;
-        } else if (location.pincode) {
-          params.pincode = location.pincode;
-        }
+    let resolvedStoreId = location.storeId || storeId;
+    let resolvedIsServiceable = location.isServiceable;
+
+    // Always re-validate serviceability with backend.
+    // Never trust storeId from Redux alone — it may be stale from a previous address.
+    try {
+      const params = {};
+      if (location.pincode) {
+        // Pincode takes absolute priority — send it alone without GPS so backend
+        // cannot fall through to GPS-radius matching for a different city.
+        params.pincode = location.pincode;
+      } else if (location.coords) {
+        // Only use GPS when no pincode is available
+        params.lat = location.coords.lat;
+        params.lng = location.coords.lng;
+      }
+
+      if (Object.keys(params).length > 0) {
         const storeRes = await productService.findNearestStore(params);
         if (storeRes.success && storeRes.data) {
-          currentStoreId = storeRes.data.id;
+          const isDeliverable = storeRes.data.is_deliverable === true;
+          const storeObj = storeRes.data.store || null;
+          resolvedIsServiceable = isDeliverable;
+          resolvedStoreId = isDeliverable && storeObj ? storeObj.id : null;
+
+          if (location.isServiceable !== isDeliverable || (location.storeId || storeId) !== resolvedStoreId) {
+            dispatch(setServiceability({
+              isServiceable: isDeliverable,
+              storeId: resolvedStoreId,
+              storeName: isDeliverable && storeObj ? storeObj.name : null,
+            }));
+          }
+
+          if (!isDeliverable) {
+            dispatch(clearProducts());
+            if (!refreshing) dispatch(setLoading(false));
+            return;
+          }
         }
-      } catch (e) {
-        console.error('Error finding nearest store:', e);
       }
+    } catch (e) {
+      console.error('Error validating serviceability:', e);
     }
 
-    if (!currentStoreId) return;
+    if (!resolvedIsServiceable && (location.isHydrated || location.pincode || location.address)) {
+      dispatch(clearProducts());
+      if (!refreshing) dispatch(setLoading(false));
+      return;
+    }
+
+    // Fallback to flagship store only for cold startup when serviceability is still pending
+    let currentStoreId = resolvedStoreId || storeId || 'bdd5ba57-6d11-4f7d-aec9-73378b01675e';
 
     try {
       if (!refreshing) dispatch(setLoading(true));
       const res = await productService.getHomeData(currentStoreId, selectedSlot);
-      if (!isCancelled.current && res.success) {
-        const { 
-          banners, 
-          categories,
-          featuredProducts, 
-          categorySections, 
-          flashSale, 
-          frozenProducts, 
-          exclusiveOffers, 
-          trendingProducts, 
-          newLaunch, 
-          todaysDeals 
-        } = res.data;
+      if (!isCancelled.current && res.success && res.data) {
+        const banners = res.data.banners || [];
+        const categories = res.data.categories || [];
+        const featuredProducts = res.data.featuredProducts || res.data.featured_products || [];
+        const categorySections = res.data.categorySections || res.data.category_sections || res.data.sections || [];
+        const flashSale = res.data.flashSale || res.data.flash_sale || [];
+        const frozenProducts = res.data.frozenProducts || res.data.frozen_products || [];
+        const exclusiveOffers = res.data.exclusiveOffers || res.data.exclusive_offers || [];
+        const trendingProducts = res.data.trendingProducts || res.data.trending_products || [];
+        const newLaunch = res.data.newLaunch || res.data.new_launch || [];
+        const todaysDeals = res.data.todaysDeals || res.data.todays_deals || [];
 
         dispatch(setBanners(banners));
-        dispatch(setCategories(categories || []));
+        dispatch(setCategories(categories));
         dispatch(setFeaturedProducts(featuredProducts));
         dispatch(setCategorySections(categorySections));
         dispatch(setHomeCollections({
@@ -174,17 +236,27 @@ const useHomeData = () => {
     } catch (error) {
       console.error('Error loading home data:', error);
     } finally {
-      if (!isCancelled.current) {
-        dispatch(setLoading(false));
-      }
+      dispatch(setLoading(false));
     }
-  }, [dispatch, storeId, location.pincode, location.coords, selectedSlot]);
+  }, [dispatch, storeId, location.pincode, location.coords?.lat, location.coords?.lng, location.selectedAddress?.id, selectedSlot, refreshing]);
 
   useEffect(() => {
     const isCancelled = { current: false };
     loadData(isCancelled);
     return () => { isCancelled.current = true; };
   }, [loadData]);
+
+  // Watchdog recovery timer: Never let the screen remain stuck on loading for > 5s
+  useEffect(() => {
+    let timeout;
+    if (loading) {
+      timeout = setTimeout(() => {
+        console.warn('[useHomeData] Watchdog timeout triggered: forcing loading to false');
+        dispatch(setLoading(false));
+      }, 5000);
+    }
+    return () => clearTimeout(timeout);
+  }, [loading, dispatch]);
 
   // Timer logic
   useEffect(() => {
@@ -214,20 +286,9 @@ const useHomeData = () => {
           const res = await productService.getStoreDetail(storeId);
           if (res.success) {
             setStoreDetail(res.data);
-            if (res.data.latitude && res.data.longitude) {
-              if (coords) {
-                const dist = getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude);
-                setDistance(dist);
-                
-                // Force unserviceable if distance is too high (e.g. Noida to Kolkata)
-                if (dist > 20) {
-                  dispatch(setServiceability({
-                    isServiceable: false,
-                    storeId: null,
-                    storeName: null
-                  }));
-                }
-              }
+            if (res.data.latitude && res.data.longitude && coords) {
+              const dist = getDistance(coords.lat, coords.lng, res.data.latitude, res.data.longitude);
+              setDistance(dist);
             }
           }
         } catch (e) {
@@ -236,7 +297,7 @@ const useHomeData = () => {
       }
     };
     fetchStore();
-  }, [storeId, coords, dispatch]);
+  }, [storeId, coords]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -249,6 +310,7 @@ const useHomeData = () => {
     refreshing,
     onRefresh,
     banners,
+    hasAnyProducts,
     filteredCategories,
     dynamicSections,
     filteredFlashSale,

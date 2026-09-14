@@ -24,11 +24,14 @@ const locationSlice = createSlice({
       state.isServiceable = isServiceable;
       state.storeId = storeId || null;
       state.storeName = storeName || null;
+      state.selectedAddress = null;
+      state.isHydrated = true;
 
       if (pincode) storage.setItem('pincode', pincode);
       if (address) storage.setItem('address', address);
       if (storeId) storage.setItem('store_id', storeId);
       if (storeName) storage.setItem('store_name', storeName);
+      storage.removeItem('selected_address');
       
       if (coords) {
         storage.setItem('coords', coords);
@@ -38,18 +41,30 @@ const locationSlice = createSlice({
     },
     setSelectedAddress: (state, action) => {
       state.selectedAddress = action.payload;
+      state.isHydrated = true;
       if (action.payload) {
         state.pincode = action.payload.pincode;
         state.address = action.payload.line1 + (action.payload.line2 ? `, ${action.payload.line2}` : '');
         state.coords = action.payload.latitude ? { lat: action.payload.latitude, lng: action.payload.longitude } : null;
-        state.storeId = action.payload.store_id || null;
-        state.storeName = action.payload.store_name || null;
-        state.isServiceable = !!action.payload.store_id;
+        
+        const resolvedStoreId = action.payload.store_id || action.payload.storeId || state.storeId;
+        const resolvedStoreName = action.payload.store_name || action.payload.storeName || state.storeName;
+        state.storeId = resolvedStoreId || null;
+        state.storeName = resolvedStoreName || null;
+        // is_serviceable priority: explicit flag -> fallback to valid resolvedStoreId
+        if (action.payload.is_serviceable !== undefined) {
+          state.isServiceable = Boolean(action.payload.is_serviceable);
+        } else if (action.payload.isServiceable !== undefined) {
+          state.isServiceable = Boolean(action.payload.isServiceable);
+        } else {
+          state.isServiceable = Boolean(resolvedStoreId);
+        }
         
         storage.setItem('selected_address', action.payload);
         if (action.payload.pincode) storage.setItem('pincode', action.payload.pincode);
         if (state.address) storage.setItem('address', state.address);
-        if (action.payload.store_id) storage.setItem('store_id', action.payload.store_id);
+        if (state.storeId) storage.setItem('store_id', state.storeId);
+        if (state.storeName) storage.setItem('store_name', state.storeName);
         
         if (state.coords) {
           storage.setItem('coords', state.coords);
@@ -85,12 +100,14 @@ const locationSlice = createSlice({
       state.storeId = action.payload.storeId || null;
       state.storeName = action.payload.storeName || null;
       state.selectedAddress = action.payload.selectedAddress || null;
-      // It is only truly serviceable if we have an assigned storeId
-      state.isServiceable = !!action.payload.storeId;
+      // Serviceable ONLY if a storeId is assigned (verified by backend at save time).
+      // Pincode alone is NOT enough — pincode may be from an unserviceable area.
+      state.isServiceable = Boolean(action.payload.storeId);
       state.isHydrated = true;
     },
     setServiceability: (state, action) => {
       state.isServiceable = action.payload.isServiceable;
+      state.isHydrated = true;
       if (action.payload.storeId !== undefined) {
         state.storeId = action.payload.storeId;
       }

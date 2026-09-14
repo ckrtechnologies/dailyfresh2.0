@@ -4,98 +4,192 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   SafeAreaView,
   StatusBar,
   ScrollView,
+  Dimensions,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import { setDeliveryMode } from '../store/slices/configSlice';
+
+const { width } = Dimensions.get('window');
 
 const DeliveryModeScreen = ({ navigation }) => {
   const dispatch = useDispatch();
+  const selectedSlot = useSelector((state) => state.config.selectedSlot);
 
   const handleSelectMode = (mode) => {
     dispatch(setDeliveryMode(mode));
     navigation.replace('AppTabs');
   };
 
-  const scheduledSlots = [
-    { id: 'tomorrow', title: 'Tomorrow Delivery', time: 'Select Time at Checkout', icon: 'calendar-clock', color: '#10B981' },
-  ];
+  const isExpressActive = !selectedSlot || selectedSlot === 'express' || selectedSlot === 'all';
+  const isTomorrowActive = selectedSlot === 'tomorrow' || selectedSlot?.startsWith('tomorrow');
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
+      {/* Navigation Header */}
+      <View style={styles.navHeader}>
+        <TouchableOpacity 
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Icon name="arrow-left" size={24} color="#0F172A" />
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>Choose Delivery Mode</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Image
-            source={require('../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>Delivery Options</Text>
-          <Text style={styles.subtitle}>Select how you'd like to receive your fresh products.</Text>
+        <View style={styles.introHeader}>
+          <Text style={styles.headerSubtitle}>
+            Select how you'd like your fresh meats and seafood delivered to your door.
+          </Text>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Instant Delivery</Text>
+        {/* 1. EXPRESS DELIVERY SOLID CARD */}
+        <View style={styles.cardWrapper}>
           <TouchableOpacity 
-            style={[styles.modeCard, styles.expressCard]}
+            style={[
+              styles.modeCard, 
+              styles.expressCard,
+              isExpressActive && styles.activeCardBorder
+            ]}
             onPress={() => handleSelectMode('express')}
             activeOpacity={0.9}
           >
-            <View style={styles.iconContainer}>
-              <Icon name="lightning-bolt" size={32} color="#F59E0B" />
+            <View style={styles.cardHeader}>
+              <View style={styles.badgeRow}>
+                <View style={styles.expressBadge}>
+                  <Icon name="lightning-bolt" size={14} color="#FFFFFF" />
+                  <Text style={styles.expressBadgeText}>INSTANT • 90 MINS</Text>
+                </View>
+                {isExpressActive && (
+                  <View style={styles.currentTag}>
+                    <Icon name="check-circle" size={14} color="#10B981" />
+                    <Text style={styles.currentTagText}>CURRENT</Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View style={styles.cardContent}>
-              <View style={styles.modeHeader}>
-                <Text style={styles.modeTitle}>Express Delivery</Text>
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>90 MINS</Text>
+
+            <View style={styles.cardBody}>
+              <View style={styles.titleRow}>
+                <View style={styles.iconCircleExpress}>
+                  <Icon name="flash" size={26} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Express Delivery</Text>
+                  <Text style={styles.cardSub}>Delivered fresh in under 90 minutes</Text>
                 </View>
               </View>
-              <Text style={styles.modeDescription}>
-                Fresh meat & fish delivered in 90 minutes.
-              </Text>
+
+              <View style={styles.featuresList}>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#7C3AED" />
+                  <Text style={styles.featureText}>Live order tracking with assigned rider</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#7C3AED" />
+                  <Text style={styles.featureText}>Freshly prepped cuts from nearest hub</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={[
+                  styles.solidCtaButton, 
+                  { backgroundColor: isExpressActive ? '#6D28D9' : '#7C3AED' }
+                ]}
+                onPress={() => handleSelectMode('express')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.solidCtaText}>
+                  {isExpressActive ? '✓ SELECTED FOR SHOPPING' : 'SWITCH TO EXPRESS'}
+                </Text>
+                <Icon name="arrow-right" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
-            <Icon name="chevron-right" size={24} color={COLORS.gray} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Scheduled Delivery</Text>
-          <View style={styles.slotsContainer}>
-            {scheduledSlots.map((slot) => (
-              <TouchableOpacity 
-                key={slot.id}
-                style={[styles.modeCard, { borderLeftColor: slot.color, marginTop: 0 }]}
-                onPress={() => handleSelectMode(slot.id)}
-                activeOpacity={0.9}
-              >
-                <View style={[styles.iconContainer, { backgroundColor: slot.color + '15' }]}>
-                  <Icon name={slot.icon} size={32} color={slot.color} />
+        {/* 2. SCHEDULED / TOMORROW SOLID CARD */}
+        <View style={styles.cardWrapper}>
+          <TouchableOpacity 
+            style={[
+              styles.modeCard, 
+              styles.scheduledCard,
+              isTomorrowActive && styles.activeScheduledBorder
+            ]}
+            onPress={() => handleSelectMode('tomorrow')}
+            activeOpacity={0.9}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.badgeRow}>
+                <View style={styles.scheduledBadge}>
+                  <Icon name="calendar-clock" size={14} color="#FFFFFF" />
+                  <Text style={styles.scheduledBadgeText}>NEXT DAY • GUARANTEED SLOTS</Text>
                 </View>
-                <View style={styles.cardContent}>
-                  <View style={styles.modeHeader}>
-                    <Text style={styles.modeTitle}>{slot.title}</Text>
+                {isTomorrowActive && (
+                  <View style={styles.currentTag}>
+                    <Icon name="check-circle" size={14} color="#059669" />
+                    <Text style={styles.currentTagText}>CURRENT</Text>
                   </View>
-                  <Text style={styles.modeDescription}>
-                    {slot.time}
-                  </Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.cardBody}>
+              <View style={styles.titleRow}>
+                <View style={styles.iconCircleScheduled}>
+                  <Icon name="calendar-check" size={26} color="#059669" />
                 </View>
-                <Icon name="chevron-right" size={24} color={COLORS.gray} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Scheduled Delivery</Text>
+                  <Text style={styles.cardSub}>Tomorrow Morning or Evening Delivery</Text>
+                </View>
+              </View>
+
+              <View style={styles.featuresList}>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#059669" />
+                  <Text style={styles.featureText}>Morning Slot: 7:00 AM - 10:00 AM</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#059669" />
+                  <Text style={styles.featureText}>Evening Slot: 4:00 PM - 7:00 PM</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#059669" />
+                  <Text style={styles.featureText}>Full farm-fresh catalog & special cuts available</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={[
+                  styles.solidCtaButton, 
+                  { backgroundColor: isTomorrowActive ? '#047857' : '#059669' }
+                ]}
+                onPress={() => handleSelectMode('tomorrow')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.solidCtaText}>
+                  {isTomorrowActive ? '✓ SELECTED FOR SHOPPING' : 'SWITCH TO SCHEDULED'}
+                </Text>
+                <Icon name="arrow-right" size={18} color="#FFFFFF" />
               </TouchableOpacity>
-            ))}
-          </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            * Inventory and prices may vary based on your selection.
+        <View style={styles.footerNote}>
+          <Icon name="information" size={16} color="#64748B" />
+          <Text style={styles.footerNoteText}>
+            You can also switch or fine-tune your specific delivery time window directly during checkout.
           </Text>
         </View>
       </ScrollView>
@@ -106,145 +200,219 @@ const DeliveryModeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F8FAFC',
+  },
+  navHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.l,
+    paddingVertical: SPACING.m,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   scrollContent: {
-    paddingBottom: SPACING.xl,
+    padding: SPACING.l,
+    paddingBottom: 40,
   },
-  header: {
-    alignItems: 'center',
-    paddingTop: SPACING.xl,
-    paddingHorizontal: SPACING.xl,
+  introHeader: {
     marginBottom: SPACING.l,
   },
-  logo: {
-    width: 100,
-    height: 60,
-    marginBottom: SPACING.s,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.dark,
-    textAlign: 'center',
-    marginBottom: SPACING.xs,
-  },
-  subtitle: {
+  headerSubtitle: {
     fontSize: 14,
-    color: COLORS.gray,
-    textAlign: 'center',
-    paddingHorizontal: SPACING.l,
+    color: '#475569',
+    lineHeight: 20,
+    fontWeight: '500',
   },
-  section: {
-    paddingHorizontal: SPACING.l,
-    marginTop: SPACING.xl,
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.gray,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: SPACING.m,
-    marginLeft: 4,
+  cardWrapper: {
+    marginBottom: SPACING.l,
   },
   modeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.l,
-    padding: SPACING.l,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
     shadowRadius: 10,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
   },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FFFBEB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
+  expressCard: {
+    backgroundColor: '#FFFFFF',
   },
-  cardContent: {
-    flex: 1,
+  scheduledCard: {
+    backgroundColor: '#FFFFFF',
   },
-  modeHeader: {
+  activeCardBorder: {
+    borderColor: '#7C3AED',
+    borderWidth: 2,
+  },
+  activeScheduledBorder: {
+    borderColor: '#059669',
+    borderWidth: 2,
+  },
+  cardHeader: {
+    paddingHorizontal: SPACING.l,
+    paddingTop: SPACING.m,
+    paddingBottom: 4,
+  },
+  badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  modeTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.dark,
+  expressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
   },
-  tag: {
-    backgroundColor: '#FEF3C7',
+  expressBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  scheduledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  scheduledBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  currentTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  tagText: {
+  currentTagText: {
+    color: '#065F46',
     fontSize: 10,
     fontWeight: '800',
-    color: '#D97706',
   },
-  modeDescription: {
-    fontSize: 13,
-    color: COLORS.gray,
+  cardBody: {
+    padding: SPACING.l,
+    paddingTop: SPACING.m,
   },
-  slotsContainer: {
-    gap: 12,
-  },
-  slotCard: {
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: SPACING.m,
-    borderRadius: RADIUS.m,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    gap: 14,
+    marginBottom: SPACING.m,
   },
-  slotIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  iconCircleExpress: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EDE9FE',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: SPACING.m,
   },
-  slotInfo: {
-    flex: 1,
-  },
-  slotTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  slotTime: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 2,
-  },
-  footer: {
-    marginTop: SPACING.xxl,
+  iconCircleScheduled: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#D1FAE5',
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
+    justifyContent: 'center',
   },
-  footerText: {
+  cardTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  cardSub: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  featuresList: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: SPACING.m,
+    gap: 8,
+    marginBottom: SPACING.l,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  featureText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  solidCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: 12,
+    gap: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+  },
+  solidCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  footerNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F1F5F9',
+    padding: SPACING.m,
+    borderRadius: 10,
+    marginTop: SPACING.s,
+  },
+  footerNoteText: {
+    flex: 1,
     fontSize: 12,
-    color: COLORS.gray,
-    fontStyle: 'italic',
-    textAlign: 'center',
+    color: '#475569',
+    lineHeight: 18,
+    fontWeight: '500',
   },
 });
 

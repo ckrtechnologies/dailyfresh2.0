@@ -26,11 +26,22 @@ export const syncCart = async (req, res) => {
 };
 
 export const validateCart = async (req, res) => {
-  const { items } = req.body;
+  const { items, storeId, store_id } = req.body;
   try {
-    const result = await custService.validateCartItems(items);
+    const targetStore = storeId || store_id || null;
+    const result = await custService.validateCartItems(items, targetStore);
     return successResponse(res, result, 'Cart validation completed');
   } catch (error) {
     return errorResponse(res, 'Failed to validate cart', 500, error.message);
   }
 };
+
+export const clearCart = async (req, res) => {
+  try {
+    await custService.clearCart(req.user.id);
+    return successResponse(res, { success: true }, 'Cart cleared successfully');
+  } catch (error) {
+    return errorResponse(res, 'Failed to clear cart', 500, error.message);
+  }
+};
+

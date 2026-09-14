@@ -1,40 +1,51 @@
-import React, { createContext, useContext, useState } from 'react';
-
-const FilterContext = createContext();
+import React, { useCallback } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import {
+  setGlobalStoreId as setStoreAction,
+  setSearchQuery as setSearchAction,
+  setDateRange as setDateAction,
+  setPreset as setPresetAction,
+  clearFilters as clearAction,
+  selectAllFilters
+} from '../store/slices/filterSlice';
 
 export const FilterProvider = ({ children }) => {
-  const [globalStoreId, setGlobalStoreId] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [dateRange, setDateRange] = useState({
-    startDate: '', // YYYY-MM-DD
-    endDate: ''
-  });
-
-  const clearFilters = () => {
-    setGlobalStoreId('');
-    setSearchQuery('');
-    setDateRange({ startDate: '', endDate: '' });
-  };
-
-  return (
-    <FilterContext.Provider value={{
-      globalStoreId,
-      setGlobalStoreId,
-      searchQuery,
-      setSearchQuery,
-      dateRange,
-      setDateRange,
-      clearFilters
-    }}>
-      {children}
-    </FilterContext.Provider>
-  );
+  return <>{children}</>;
 };
 
 export const useFilters = () => {
-  const context = useContext(FilterContext);
-  if (!context) {
-    throw new Error('useFilters must be used within a FilterProvider');
-  }
-  return context;
+  const dispatch = useDispatch();
+  const filters = useSelector(selectAllFilters);
+
+  const setGlobalStoreId = useCallback((id) => {
+    dispatch(setStoreAction(id));
+  }, [dispatch]);
+
+  const setSearchQuery = useCallback((query) => {
+    dispatch(setSearchAction(query));
+  }, [dispatch]);
+
+  const setDateRange = useCallback((updater) => {
+    dispatch(setDateAction(updater));
+  }, [dispatch]);
+
+  const setPreset = useCallback((val) => {
+    dispatch(setPresetAction(val));
+  }, [dispatch]);
+
+  const clearFilters = useCallback(() => {
+    dispatch(clearAction());
+  }, [dispatch]);
+
+  return {
+    globalStoreId: filters.globalStoreId,
+    setGlobalStoreId,
+    searchQuery: filters.searchQuery,
+    setSearchQuery,
+    dateRange: filters.dateRange,
+    setDateRange,
+    preset: filters.preset,
+    setPreset,
+    clearFilters
+  };
 };

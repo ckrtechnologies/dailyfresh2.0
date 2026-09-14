@@ -18,9 +18,13 @@ import Geolocation from 'react-native-geolocation-service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
-import { setLocation } from '../store/slices/locationSlice';
+import { setLocation, clearLocation } from '../store/slices/locationSlice';
+import { logout } from '../store/slices/authSlice';
+import { clearCart } from '../store/slices/cartSlice';
+import { clearOrders } from '../store/slices/orderSlice';
+import { clearFavorites } from '../store/slices/favoritesSlice';
 import apiClient from '../api/apiClient';
-import { supabase } from '../api/supabase';
+import authService from '../api/authService';
 import { showGlobalAlert } from '../services/alertService';
 
 const fetchNearestStore = async ({ lat, lng, pincode } = {}) => {
@@ -30,9 +34,13 @@ const fetchNearestStore = async ({ lat, lng, pincode } = {}) => {
     if (lng) params.lng = lng;
     if (pincode) params.pincode = pincode;
     const res = await apiClient.get('/customer/stores/nearest', { params });
-    return res.data?.data?.store || null;
+    const data = res.data?.data;
+    if (data?.is_deliverable === false || !data?.store) {
+      return null;
+    }
+    return data.store;
   } catch {
-    return null; // Non-fatal — fallback handled by backend
+    return null;
   }
 };
 
@@ -50,12 +58,12 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   const isMandatory = !!route.params?.mandatory;
   const params = route.params || {};
 
-  // If we already have a selected address or just detected location, don't stay here
+  // Only auto-redirect on cold startup if explicitly requested and NOT changing location
   useEffect(() => {
-    if (selectedAddress || (route.params?.autoRedirect && storeId)) {
+    if (route.params?.autoRedirect && storeId && !route.params?.changeLocation) {
       navigation.replace('AppTabs');
     }
-  }, [selectedAddress, storeId]);
+  }, [storeId, route.params?.autoRedirect, route.params?.changeLocation]);
 
   useEffect(() => {
     const checkAddresses = async () => {
@@ -134,7 +142,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
             displayAddress = data.display_name?.split(',').slice(0, 2).join(', ') || 'Unknown Address';
           }
 
-          const pincode = addr.postcode || '201301';
+          const pincode = addr.postcode ? addr.postcode.replace(/\D/g, '').slice(0, 6) : '';
 
           console.log('Resolved Address:', displayAddress);
           console.log('Resolved Pincode:', pincode);
@@ -205,6 +213,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
 
       // Geocode the pincode FIRST so the backend can use lat/lng for radius checks
       let pincodeCoords = null;
+      let localityAddress = `Pincode: ${pincode}`;
       try {
         const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${pincode}&country=India`, {
           headers: { 'User-Agent': 'DailyFreshApp' }
@@ -212,6 +221,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
         const geoData = await geoRes.json();
         if (geoData && geoData[0]) {
           pincodeCoords = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
+          localityAddress = geoData[0].display_name?.split(',').slice(0, 2).join(', ') || localityAddress;
           console.log('📍 Resolved Pincode Coords:', pincodeCoords);
         }
       } catch (e) {
@@ -229,7 +239,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
       if (store) {
         const locationData = {
           pincode,
-          address: store.address || `Store: ${store.name}`,
+          address: localityAddress,
           coords: pincodeCoords,
           isServiceable: true,
           storeId: store.id,
@@ -251,6 +261,15 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
           }}]
         );
       } else {
+        const locationData = {
+          pincode,
+          address: localityAddress,
+          coords: pincodeCoords,
+          isServiceable: false,
+          storeId: null,
+          storeName: null,
+        };
+        dispatch(setLocation(locationData));
         setIsComingSoon(true);
       }
     } catch {
@@ -263,7 +282,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
@@ -271,6 +290,14 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {navigation.canGoBack() && (
+            <TouchableOpacity 
+              style={{ position: 'absolute', top: Math.max(insets.top, 16), left: 16, zIndex: 10, padding: 8, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 20 }}
+              onPress={() => navigation.goBack()}
+            >
+              <Icon name="arrow-left" size={24} color={COLORS.dark} />
+            </TouchableOpacity>
+          )}
           <View style={styles.header}>
             <View style={styles.logoCircle}>
               <Image
@@ -293,8 +320,13 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
                 onPress={() => {
                   showGlobalAlert('Logout', 'Are you sure you want to logout and switch accounts?', 'warning', [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Logout', onPress: () => {
-                      supabase.auth.signOut(); // This will trigger the SIGNED_OUT listener in App.js
+                    { text: 'Logout', onPress: async () => {
+                      await authService.logout();
+                      dispatch(logout());
+                      dispatch(clearCart());
+                      dispatch(clearOrders());
+                      dispatch(clearFavorites());
+                      dispatch(clearLocation());
                     }}
                   ]);
                 }}
@@ -325,7 +357,7 @@ const LocationPickerScreen = ({ navigation, route = { params: {} } }) => {
             {isAuthenticated && hasSavedAddresses && (
               <TouchableOpacity
                 style={[styles.locationButton, { marginTop: SPACING.m, borderStyle: 'solid', backgroundColor: COLORS.white }]}
-                onPress={() => navigation.navigate('SavedAddresses', { from: 'LocationPicker' })}
+                onPress={() => navigation.navigate('SavedAddresses', { from: 'LocationPicker', selectMode: true })}
               >
                 <View style={styles.buttonContent}>
                   <Icon name="notebook-outline" size={20} color={COLORS.primary} />
@@ -399,6 +431,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.xl,
     flexGrow: 1,
+    paddingBottom: 80,
   },
   header: {
     marginTop: SPACING.xl,

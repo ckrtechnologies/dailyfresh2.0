@@ -52,6 +52,10 @@ export const updateOrderStatusWorkflow = async (orderId, status, riderId = null)
   if (riderId) {
     extraFields.riderId = riderId;
   }
+  if (status === 'delivered') {
+    // When delivered, cash on delivery / order payment is collected
+    extraFields.paymentStatus = 'paid';
+  }
   const updated = await adminRepo.updateOrderStatus(orderId, status, extraFields);
   if (!updated) {
     const err = new Error('Order not found');
@@ -69,6 +73,12 @@ export const updateOrderStatusWorkflow = async (orderId, status, riderId = null)
     } else if (status === 'preparing') {
       title = 'Order Being Prepared 🍳';
       body = `Your items for order #${updated.orderNumber} are being packed fresh.`;
+    } else if (status === 'ready') {
+      title = 'Order Packed & Ready! 📦';
+      body = `Your order #${updated.orderNumber} is packed and ready for delivery.`;
+    } else if (status === 'picked_up') {
+      title = 'Order Picked Up! 🛵';
+      body = `Your order #${updated.orderNumber} has been picked up by our delivery partner.`;
     } else if (status === 'out_for_delivery') {
       title = 'Out For Delivery! 🛵';
       body = `Your order #${updated.orderNumber} is on its way to you.`;

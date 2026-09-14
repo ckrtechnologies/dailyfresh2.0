@@ -18,10 +18,10 @@ const BannerSlider = React.memo(({ banners, onBannerPress }) => {
     <TouchableOpacity
       activeOpacity={0.9}
       style={styles.bannerWrapper}
-      onPress={() => onBannerPress(item)}
+      onPress={() => onBannerPress?.(item)}
     >
       <Image
-        source={{ uri: item.image_url }}
+        source={{ uri: item.image_url || item.imageUrl }}
         style={styles.bannerImage}
         resizeMode="cover"
       />

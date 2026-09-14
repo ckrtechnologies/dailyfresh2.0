@@ -144,8 +144,11 @@ const Notifications = () => {
     const payload = {
       targetType: formData.targetType,
       targetValue: formData.targetValue,
+      role: formData.targetType === 'role' ? formData.targetValue : undefined,
+      user_id: formData.targetType === 'user' ? formData.targetValue : undefined,
       title: formData.title,
       body: formData.body,
+      type: formData.type,
       data: { 
         type: formData.type,
         link: formData.link || undefined,
@@ -159,13 +162,17 @@ const Notifications = () => {
   const columns = [
     { 
       header: 'Recipients', 
-      accessor: (row) => row.profile?.full_name || 'Broadcast',
-      render: (row) => (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '13px', fontWeight: '600' }}>{row.profile?.full_name || 'Broadcast'}</span>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{row.profile?.role || row.target_value || 'Global'}</span>
-        </div>
-      )
+      accessor: (row) => row.profile?.full_name || row.profile?.fullName || (row.data?.targetType === 'role' ? `Role: ${row.data?.targetValue}` : row.data?.targetType === 'topic' ? `Topic: ${row.data?.targetValue}` : 'Broadcast (All)'),
+      render: (row) => {
+        const recipientName = row.profile?.full_name || row.profile?.fullName || (row.data?.targetType === 'role' ? `Role: ${row.data?.targetValue}` : row.data?.targetType === 'topic' ? `Topic: ${row.data?.targetValue}` : 'Broadcast');
+        const subText = row.profile?.role || row.data?.targetValue || (row.userId ? 'Direct User' : 'Global Audience');
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '13px', fontWeight: '600' }}>{recipientName}</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{subText}</span>
+          </div>
+        );
+      }
     },
     { header: 'Title', accessor: 'title', render: (row) => <span style={{ fontWeight: '500' }}>{row.title}</span> },
     { 
@@ -181,20 +188,26 @@ const Notifications = () => {
       header: 'Type', 
       accessor: 'type',
       align: 'center',
-      render: (row) => (
-        <span className={`badge badge-${
-          row.type === 'promo' ? 'active' : 
-          row.type === 'system' ? 'failed' : 
-          row.type === 'NEW_ORDER_AVAILABLE' ? 'warning' :
-          row.type === 'order' ? 'processing' : 'disabled'
-        }`}>
-          {row.type.replace(/_/g, ' ').toUpperCase()}
-        </span>
-      )
+      render: (row) => {
+        const t = row.type || row.data?.type || 'info';
+        return (
+          <span className={`badge badge-${
+            t === 'promo' ? 'active' : 
+            t === 'system' ? 'failed' : 
+            t === 'NEW_ORDER_AVAILABLE' ? 'warning' :
+            t === 'order' ? 'processing' : 'disabled'
+          }`}>
+            {String(t).replace(/_/g, ' ').toUpperCase()}
+          </span>
+        );
+      }
     },
     { 
       header: 'Sent At', 
-      accessor: (row) => new Date(row.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }),
+      accessor: (row) => {
+        const d = row.created_at || row.createdAt;
+        return d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'Just now';
+      },
       align: 'center'
     },
     {
@@ -203,19 +216,17 @@ const Notifications = () => {
       align: 'center',
       render: (row) => (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-          <button className="btn-icon" title="View Details"><Eye size={14} /></button>
           <button className="btn-icon" title="Resend" onClick={() => {
             setFormData({
               ...formData,
               title: row.title,
               body: row.body,
-              type: row.type,
+              type: row.type || row.data?.type || 'promo',
               link: row.data?.link || '',
               image_url: row.data?.image_url || ''
             });
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}><Send size={14} /></button>
-          <button className="btn-icon" style={{ color: 'var(--danger)' }} title="Delete Log"><Trash2 size={14} /></button>
         </div>
       )
     }
@@ -453,9 +464,9 @@ const Notifications = () => {
       <DataTable 
         title="Notification History"
         columns={columns}
-        data={response?.notifications || []}
+        data={Array.isArray(response) ? response : (response?.notifications || [])}
         loading={historyLoading}
-        pagination={response?.pagination || pagination}
+        pagination={response?.pagination || { ...pagination, total: (Array.isArray(response) ? response.length : response?.total || 0) }}
         onPageChange={(p) => setPagination(prev => ({ ...prev, page: p }))}
         onPageSizeChange={(ps) => setPagination({ page: 1, pageSize: ps })}
       />

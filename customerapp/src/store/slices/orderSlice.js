@@ -6,9 +6,10 @@ export const fetchActiveOrder = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const res = await orderService.getMyOrders(); // Get recent orders
-      if (res.success && res.data.orders.length > 0) {
+      const orderList = Array.isArray(res.data) ? res.data : (res.data?.orders || []);
+      if (res.success && orderList.length > 0) {
         // Find the first order that is NOT delivered or cancelled
-        const active = res.data.orders.find(o => 
+        const active = orderList.find(o => 
           !['delivered', 'cancelled'].includes(o.status)
         );
         return active || null;

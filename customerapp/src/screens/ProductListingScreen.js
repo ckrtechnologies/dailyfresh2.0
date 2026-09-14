@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -14,26 +15,35 @@ import productService from '../api/productService';
 import ProductCard from '../components/ProductCard';
 
 const ProductListingScreen = ({ route, navigation }) => {
-  const { categoryId, categoryName, subCategoryId } = route.params;
+  const { categoryId, categoryName, subCategoryId } = route.params || {};
   const { storeId } = useSelector((state) => state.location);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchProducts = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    const response = await productService.getProducts({
+      categoryId,
+      subCategoryId,
+      storeId
+    });
+    if (response.success) {
+      setProducts(response.data || []);
+    }
+    setLoading(false);
+    setRefreshing(false);
+  }, [categoryId, subCategoryId, storeId]);
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      const response = await productService.getProducts({
-        categoryId: subCategoryId || categoryId,
-        storeId
-      });
-      if (response.success) {
-        setProducts(response.data);
-      }
-      setLoading(false);
-    };
-
     fetchProducts();
-  }, [categoryId, subCategoryId, storeId]);
+  }, [fetchProducts]);
+
+  const onRefresh = () => {
+    fetchProducts(true);
+  };
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -50,7 +60,7 @@ const ProductListingScreen = ({ route, navigation }) => {
     </View>
   );
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -64,15 +74,21 @@ const ProductListingScreen = ({ route, navigation }) => {
       <FlatList
         data={products}
         renderItem={({ item }) => (
-          <ProductCard
-            product={item}
-            onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-          />
+          <View style={styles.productWrapper}>
+            <ProductCard
+              product={item}
+              onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+            />
+          </View>
         )}
         keyExtractor={(item) => item.id}
         numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Icon name="basket-remove-outline" size={64} color={COLORS.gray} />
@@ -122,8 +138,16 @@ const styles = StyleSheet.create({
     padding: SPACING.s,
   },
   listContent: {
-    padding: SPACING.l,
+    padding: SPACING.m,
+  },
+  columnWrapper: {
     justifyContent: 'space-between',
+    alignItems: 'stretch',
+  },
+  productWrapper: {
+    width: '50%',
+    padding: 6,
+    display: 'flex',
   },
   emptyState: {
     flex: 1,

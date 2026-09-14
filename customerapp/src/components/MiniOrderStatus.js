@@ -12,6 +12,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { navigationRef } from '../navigation/RootNavigator';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchActiveOrder, hideMiniStatus } from '../store/slices/orderSlice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -19,11 +20,13 @@ const SWIPE_THRESHOLD = -100; // Swipe left 100px to show delete
 
 const MiniOrderStatus = () => {
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
   const { activeOrder, hidden } = useSelector((state) => state.order);
   const { user } = useSelector((state) => state.auth);
   const selectedSlot = useSelector((state) => state.config.selectedSlot);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
+  const bottomPosition = 68 + (insets.bottom > 0 ? insets.bottom : 12);
   const translateX = useRef(new Animated.Value(0)).current;
 
 
@@ -68,14 +71,14 @@ const MiniOrderStatus = () => {
         return { label: 'Out for Delivery', icon: 'truck-delivery', color: '#8B5CF6' };
       default:
         const capitalized = status.charAt(0).toUpperCase() + status.slice(1);
-        return { label: capitalized, icon: 'information-outline', color: activeTheme.textLight };
+        return { label: capitalized, icon: 'information-outline', color: activeTheme.textSecondary };
     }
   };
 
   const config = getStatusConfig(activeOrder.status);
 
   return (
-    <View style={styles.outerContainer}>
+    <View style={[styles.outerContainer, { bottom: bottomPosition }]}>
       {/* Background Close Button */}
       <TouchableOpacity 
         style={styles.closeBtn}

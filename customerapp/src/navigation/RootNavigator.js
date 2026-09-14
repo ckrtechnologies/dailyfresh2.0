@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image } from 'react-native';
+import { View, Text, Image, Platform } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,6 +13,7 @@ import { COLORS, THEMES } from '../constants/theme';
 // Components & Config
 import MiniCart from '../components/MiniCart';
 import MiniOrderStatus from '../components/MiniOrderStatus';
+import notificationService from '../services/notificationService';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -48,10 +49,10 @@ import ReturnPolicyScreen from '../screens/ReturnPolicyScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Basic Icon Mapping
+// High-Contrast iOS Standard Icon Mapping (Solid filled active, clean weighted inactive)
 const ICON_MAP = {
-  Home: { active: 'home-variant', inactive: 'home-variant-outline' },
-  Favorites: { active: 'heart-multiple', inactive: 'heart-multiple-outline' },
+  Home: { active: 'home', inactive: 'home-outline' },
+  Favorites: { active: 'heart', inactive: 'heart-outline' },
   Categories: { active: 'view-grid', inactive: 'view-grid-outline' },
   Cart: { active: 'cart', inactive: 'cart-outline' },
   Account: { active: 'account-circle', inactive: 'account-circle-outline' }
@@ -71,37 +72,45 @@ const AppTabs = () => {
   const { items: cartItems } = useSelector((state) => state.cart);
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
+  const tabHeight = 56 + (bottomInset > 0 ? bottomInset : 10);
+  const paddingBottom = bottomInset > 0 ? bottomInset + 4 : 8;
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarActiveTintColor: activeTheme.primary, 
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarInactiveTintColor: '#334155', // Dark solid slate for crisp iOS contrast
         headerShown: false,
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          backgroundColor: COLORS.white,
+          backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
-          borderTopColor: '#F3F4F6',
-          elevation: 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          height: 70,
-          paddingBottom: 10,
-          paddingTop: 10,
+          borderTopColor: '#E2E8F0',
+          elevation: 12,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 10,
+          height: tabHeight,
+          paddingTop: 6,
+          paddingBottom: paddingBottom,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '700',
+          letterSpacing: -0.2,
           marginTop: 2,
         },
-        tabBarIcon: ({ color, size, focused }) => {
+        tabBarItemStyle: {
+          paddingVertical: 2,
+        },
+        tabBarIcon: ({ color, focused }) => {
           const iconConfig = ICON_MAP[route.name];
           const iconName = focused ? iconConfig.active : iconConfig.inactive;
           
-          return <Icon name={iconName} size={size} color={color} />;
+          return <Icon name={iconName} size={24} color={color} />;
         },
       })}
     >
@@ -114,9 +123,15 @@ const AppTabs = () => {
         options={{ 
           tabBarBadge: cartItems.length > 0 ? cartItems.length : null,
           tabBarBadgeStyle: {
-            backgroundColor: activeTheme.primary,
-            color: COLORS.white,
+            backgroundColor: '#EF4444',
+            color: '#FFFFFF',
             fontSize: 10,
+            fontWeight: '800',
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            lineHeight: 16,
+            textAlign: 'center',
           }
         }} 
       />
@@ -169,15 +184,18 @@ const linking = {
           AppTabs: {
             screens: {
               Home: 'home',
+              Favorites: 'favorites',
               Categories: 'categories',
-              Orders: 'orders',
+              Cart: 'cart',
               Account: 'account',
             },
           },
+          Orders: 'orders',
+          OrderDetail: 'order/:orderId',
           ProductDetail: 'product/:productId',
           ProductList: 'list/:type/:categoryId?',
-          OrderDetail: 'order/:orderId',
           Search: 'search',
+          Notifications: 'notifications',
         },
       },
       Auth: {
@@ -199,11 +217,6 @@ const RootNavigator = () => {
   React.useEffect(() => {
     if (isAuthenticated && user) {
       dispatch(fetchActiveOrder());
-      
-      const interval = setInterval(() => {
-        dispatch(fetchActiveOrder());
-      }, 30000);
-      return () => clearInterval(interval);
     }
   }, [isAuthenticated, user]);
 
@@ -215,6 +228,7 @@ const RootNavigator = () => {
         onReady={() => {
           const route = navigationRef.getCurrentRoute();
           setCurrentRoute(route?.name);
+          notificationService.flushPendingDeepLink();
         }}
         onStateChange={() => {
           const route = navigationRef.getCurrentRoute();

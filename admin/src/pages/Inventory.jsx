@@ -1,53 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Tag, Layers, Package, Pencil, Trash2, Image as ImageIcon } from 'lucide-react';
+import { useOutletContext, useLocation } from 'react-router-dom';
+import { Plus, Tag, Layers, Package, Pencil, Trash2, Image as ImageIcon, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../services/api';
 import DataTable from '../components/common/DataTable';
 import { useFilters } from '../context/FilterContext';
 import { CategoryForm, ProductForm, SubCategoryForm } from '../components/modals/EntityForms';
+import { exportToCsv } from '../utils/exportCsv';
 
-const Inventory = () => {
+const Inventory = ({ storeId: propStoreId, searchQuery: propSearchQuery, activeTab: propActiveTab } = {}) => {
   const { user, isAdmin, isStoreManager } = useAuth();
-  const { globalStoreId, searchQuery, setSearchQuery } = useFilters();
+  const filterContext = useFilters();
+  const outletFilters = useOutletContext() || {};
+  const location = useLocation();
+  const navState = location.state || {};
+
+  const globalStoreId = propStoreId ?? navState.storeId ?? outletFilters.globalStoreId ?? filterContext.globalStoreId;
+  const searchQuery = propSearchQuery ?? navState.search ?? outletFilters.searchQuery ?? filterContext.searchQuery;
+  const setSearchQuery = outletFilters.setSearchQuery ?? filterContext.setSearchQuery;
+
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('products');
+  const [activeTab, setActiveTab] = useState(propActiveTab || navState.activeTab || 'products');
+  const [targetProductId, setTargetProductId] = useState(navState.productId || null);
+
+  useEffect(() => {
+    if (navState.productId) {
+      setTargetProductId(navState.productId);
+      setSearchQuery('');
+    }
+    if (navState.activeTab) {
+      setActiveTab(navState.activeTab);
+    }
+    if (navState.storeId !== undefined && navState.storeId !== filterContext.globalStoreId) {
+      filterContext.setGlobalStoreId(navState.storeId);
+    }
+  }, [navState]);
+
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
   const [modal, setModal] = useState({ show: false, type: null, data: null });
 
   // --- DATA FETCHING ---
   const { data: prodResp, isLoading: prodLoading } = useQuery({
-    queryKey: ['admin-products', pagination, user?.store_id, globalStoreId, searchQuery],
+    queryKey: ['admin-products', pagination, user?.store_id, globalStoreId, searchQuery, targetProductId],
     queryFn: async () => {
       const storeIdToFetch = isStoreManager ? user.store_id : globalStoreId;
       const resp = await apiClient.get('/admin/products', { 
-        params: { ...pagination, store_id: storeIdToFetch || undefined, search: searchQuery || undefined } 
+        params: { 
+          ...pagination, 
+          store_id: storeIdToFetch || undefined, 
+          search: targetProductId ? undefined : (searchQuery || undefined),
+          product_id: targetProductId || undefined
+        } 
       });
       return resp.data.data;
     },
     enabled: activeTab === 'products'
   });
 
+  const subCategorySearch = activeTab === 'subcategories' ? searchQuery : undefined;
+  const categorySearch = activeTab === 'categories' ? searchQuery : undefined;
+
   const { data: subCatResp } = useQuery({
-    queryKey: ['admin-subcategories', searchQuery],
+    queryKey: ['admin-subcategories', subCategorySearch],
     queryFn: async () => {
       const resp = await apiClient.get('/admin/sub-categories', {
-        params: { search: searchQuery || undefined }
+        params: { search: subCategorySearch || undefined }
       });
       return resp.data.data.sub_categories;
-    },
-    enabled: isAdmin || (activeTab === 'products' && modal.show)
+    }
   });
 
   const { data: catResp } = useQuery({
-    queryKey: ['admin-categories', searchQuery],
+    queryKey: ['admin-categories', categorySearch],
     queryFn: async () => {
       const resp = await apiClient.get('/admin/categories', {
-        params: { search: searchQuery || undefined }
+        params: { search: categorySearch || undefined }
       });
       return resp.data.data.categories;
-    },
-    enabled: isAdmin || (activeTab === 'products' && modal.show)
+    }
   });
 
   const { data: storeResp } = useQuery({
@@ -120,30 +151,66 @@ const Inventory = () => {
     loading: mutation.isPending
   };
 
+  const handleExportProductsCsv = () => {
+    const productsToExport = prodResp?.products || [];
+    if (!productsToExport.length) {
+      alert('No products to export');
+      return;
+    }
+
+    const exportRows = productsToExport.map(p => ({
+      'SKU': p.sku || '',
+      'Name': p.name,
+      'Category': p.sub_category?.category?.name || p.subCategory?.category?.name || '',
+      'Sub-Category': p.sub_category?.name || p.subCategory?.name || '',
+      'Store': p.store?.name || 'Global',
+      'Price': p.price,
+      'Discount Price': p.discount_price ?? p.discountPrice ?? '',
+      'Express Stock': p.express_stock_qty ?? p.expressStockQty ?? 0,
+      'Scheduled Stock': p.scheduled_stock_qty ?? p.scheduledStockQty ?? 0,
+      'Unit': p.weight_unit || p.weightUnit || 'kg',
+      'Is Active': p.is_active ? 'Yes' : 'No',
+      'Is Deal': p.is_deal ? 'Yes' : 'No'
+    }));
+
+    exportToCsv(exportRows, 'products_catalog');
+  };
+
   const columns = {
     products: [
-      { header: 'Image', accessor: 'image_url', render: (row) => (
-        <div 
-          onClick={() => setModal({ show: true, type: 'products', data: row })}
-          style={{ width: '44px', height: '44px', borderRadius: '6px', background: '#f1f5f9', overflow: 'hidden', border: '1px solid var(--border)', cursor: 'pointer', position: 'relative' }}
-          className="image-cell-container"
-        >
-          {row.image_url ? (
-            <img src={row.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            <ImageIcon size={14} style={{ margin: '15px', color: '#94a3b8' }} />
-          )}
-          <div className="image-overlay">
-            <Pencil size={10} color="white" />
+      { header: 'Image', accessor: 'image_url', render: (row) => {
+        const img = row.image_url || row.imageUrl || row.variants?.[0]?.image_url || row.variants?.[0]?.imageUrl;
+        return (
+          <div 
+            onClick={() => setModal({ show: true, type: 'products', data: row })}
+            style={{ width: '44px', height: '44px', borderRadius: '6px', background: '#f1f5f9', overflow: 'hidden', border: '1px solid var(--border)', cursor: 'pointer', position: 'relative' }}
+            className="image-cell-container"
+          >
+            {img ? (
+              <img src={img} alt={row.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <ImageIcon size={14} style={{ margin: '15px', color: '#94a3b8' }} />
+            )}
+            <div className="image-overlay">
+              <Pencil size={10} color="white" />
+            </div>
           </div>
-        </div>
-      )},
+        );
+      }},
       { header: 'Product', accessor: 'name', render: (row) => <div><div style={{ fontWeight: '600' }}>{row.name}</div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>SKU: {row.sku || 'N/A'}</div></div> },
-      { header: 'Hierarchy', accessor: (row) => row.sub_category?.name, render: (row) => <div style={{ fontSize: '11px' }}><span style={{ color: 'var(--primary)', fontWeight: '500' }}>{row.sub_category?.category?.name}</span><span style={{ margin: '0 4px', color: '#cbd5e1' }}>›</span><span>{row.sub_category?.name}</span></div> },
+      { header: 'Hierarchy', accessor: (row) => row.sub_category?.name, render: (row) => <div style={{ fontSize: '11px' }}><span style={{ color: 'var(--primary)', fontWeight: '500' }}>{row.sub_category?.category?.name || row.subCategory?.category?.name}</span><span style={{ margin: '0 4px', color: '#cbd5e1' }}>›</span><span>{row.sub_category?.name || row.subCategory?.name}</span></div> },
       isAdmin && { header: 'Store', accessor: (row) => row.store?.name, render: (row) => <div style={{ fontSize: '11px', fontWeight: '500' }}><span className="badge badge-pending">{row.store?.name || 'Global'}</span></div> },
       { header: 'Price', accessor: 'price', align: 'right', render: (row) => <b>₹{row.price}</b> },
-      { header: 'Express Stock', accessor: 'express_stock_qty', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.express_stock_qty < 10 ? 'var(--danger)' : 'inherit' }}>{row.express_stock_qty} {row.weight_unit}</span> },
-      { header: 'Scheduled Stock', accessor: 'scheduled_stock_qty', align: 'right', render: (row) => <span style={{ fontWeight: '600', color: row.scheduled_stock_qty < 10 ? 'var(--danger)' : 'inherit' }}>{row.scheduled_stock_qty} {row.weight_unit}</span> },
+      { header: 'Express Stock', accessor: 'express_stock_qty', align: 'right', render: (row) => {
+        const qty = row.express_stock_qty ?? row.expressStockQty ?? 0;
+        const unit = row.weight_unit || row.weightUnit || 'kg';
+        return <span style={{ fontWeight: '600', color: Number(qty) < 10 ? 'var(--danger)' : 'inherit' }}>{qty} {unit}</span>;
+      }},
+      { header: 'Scheduled Stock', accessor: 'scheduled_stock_qty', align: 'right', render: (row) => {
+        const qty = row.scheduled_stock_qty ?? row.scheduledStockQty ?? 0;
+        const unit = row.weight_unit || row.weightUnit || 'kg';
+        return <span style={{ fontWeight: '600', color: Number(qty) < 10 ? 'var(--danger)' : 'inherit' }}>{qty} {unit}</span>;
+      }},
       { header: 'Actions', accessor: 'id', align: 'center', render: (row) => (
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
           <button onClick={() => setModal({ show: true, type: 'products', data: row })} className="btn-icon"><Pencil size={12} /></button>
@@ -213,7 +280,16 @@ const Inventory = () => {
           <p>{isAdmin ? 'Global catalog and stock management' : 'Manage your store inventory'}</p>
         </div>
         {(isAdmin || activeTab === 'products') && (
-          <div className="page-actions">
+          <div className="page-actions" style={{ display: 'flex', gap: '8px' }}>
+            {activeTab === 'products' && (
+              <button 
+                onClick={handleExportProductsCsv} 
+                className="btn-compact" 
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', color: '#1e293b', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+              >
+                <Download size={13} /> Export CSV
+              </button>
+            )}
             <button onClick={() => setModal({ show: true, type: activeTab, data: null })} className="btn-compact" style={{ background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={14} /> Add {activeTab === 'products' ? 'Product' : activeTab === 'categories' ? 'Category' : 'Sub-Category'}
             </button>
@@ -230,6 +306,24 @@ const Inventory = () => {
           </>
         )}
       </div>
+
+      {targetProductId && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#ecfdf5', border: '1px solid #10b981', borderRadius: '6px', marginBottom: '14px' }}>
+          <span style={{ fontSize: '13px', color: '#065f46' }}>
+            Viewing specific product: <strong>{prodResp?.products?.[0]?.name || navState.productName || 'Selected Product'}</strong>
+          </span>
+          <button
+            onClick={() => {
+              setTargetProductId(null);
+              setSearchQuery('');
+              window.history.replaceState({}, document.title);
+            }}
+            style={{ padding: '4px 10px', background: 'white', border: '1px solid #10b981', borderRadius: '4px', fontSize: '12px', fontWeight: '600', color: '#047857', cursor: 'pointer' }}
+          >
+            Show All Products
+          </button>
+        </div>
+      )}
 
       <DataTable 
         title={activeTab} 
@@ -248,7 +342,8 @@ const Inventory = () => {
           initialData={modal.data} 
           isManager={isStoreManager}
           stores={storeResp?.map(s => ({ id: s.id, name: s.name })) || []}
-          subcategories={subCatResp?.map(s => ({ id: s.id, name: s.name })) || []}
+          categories={catResp?.map(c => ({ id: c.id, name: c.name })) || []}
+          subcategories={subCatResp?.map(s => ({ id: s.id, name: s.name, category_id: s.category_id || s.categoryId, categoryId: s.categoryId || s.category_id })) || []}
           onSave={(data) => mutation.mutate({ type: 'products', id: modal.data?.id, method: modal.data ? 'PATCH' : 'POST', data })} 
         />
       )}

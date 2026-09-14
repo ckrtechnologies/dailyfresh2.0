@@ -9,7 +9,7 @@ const cartService = {
       const response = await apiClient.get('/customer/cart');
       return { success: true, data: response.data.data.items };
     } catch (error) {
-      console.error('Error fetching cart:', error);
+      console.warn('Cart fetch note:', error?.message || error);
       return { success: false, error: error.response?.data?.message || 'Failed to fetch cart' };
     }
   },

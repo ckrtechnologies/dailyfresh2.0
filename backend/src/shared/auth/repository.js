@@ -11,6 +11,14 @@ export const findByEmail = async (email) => {
 };
 
 /**
+ * Find user profile by Google ID
+ */
+export const findByGoogleId = async (googleId) => {
+  const [user] = await db.select().from(profiles).where(eq(profiles.googleId, googleId)).limit(1);
+  return user || null;
+};
+
+/**
  * Find user profile by primary UUID
  */
 export const findById = async (id) => {

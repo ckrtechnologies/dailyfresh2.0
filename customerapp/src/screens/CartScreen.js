@@ -4,14 +4,18 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
+  TextInput,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
-import { addItem, removeItem, clearCart, updateCartAfterValidation } from '../store/slices/cartSlice';
+import { addItem, removeItem, clearCart, setCart, updateCartAfterValidation, setItemQuantity } from '../store/slices/cartSlice';
 import { setSelectedAddress } from '../store/slices/locationSlice';
 import productService from '../api/productService';
 import addressService from '../api/addressService';
@@ -22,7 +26,7 @@ import { showGlobalAlert } from '../services/alertService';
 const CartScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { items, totalAmount } = useSelector((state) => state.cart);
-  const { address, selectedAddress } = useSelector((state) => state.location);
+  const { address, selectedAddress, storeId, isServiceable } = useSelector((state) => state.location);
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
 
@@ -31,29 +35,45 @@ const CartScreen = ({ navigation }) => {
   const flatListRef = useRef(null);
 
   const FREE_DELIVERY_THRESHOLD = 499;
-  const { storeId } = useSelector((state) => state.location);
   const [validating, setValidating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [validationMessage, setValidationMessage] = useState(null);
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      const res = await cartService.getCart();
+      if (res.success && res.data) {
+        dispatch(setCart(res.data.items || res.data));
+      }
+    } catch (e) {
+      console.warn('Error refreshing cart:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleAddressSelect = async (addr) => {
     try {
       setValidating(true);
       // Resolve store for the selected address
+      const storeParams = addr.pincode
+        ? { pincode: addr.pincode }
+        : { lat: addr.latitude, lng: addr.longitude };
       const res = await apiClient.get('/customer/stores/nearest', {
-        params: {
-          pincode: addr.pincode,
-          lat: addr.latitude,
-          lng: addr.longitude
-        }
+        params: storeParams
       });
       
-      const store = res.data?.data?.store;
+      const storeData = res.data?.data;
+      const store = storeData?.store;
+      const isDeliverable = storeData?.is_deliverable === true && !!store;
       
       dispatch(setSelectedAddress({
         ...addr,
-        store_id: store?.id || null,
-        store_name: store?.name || null
+        store_id: isDeliverable ? store?.id : null,
+        store_name: isDeliverable ? store?.name : null,
+        is_serviceable: isDeliverable,
       }));
       
       setShowAddressModal(false);
@@ -92,33 +112,31 @@ const CartScreen = ({ navigation }) => {
   // Soft Re-validation Logic B - Triggers when storeId changes
   useEffect(() => {
     const revalidate = async () => {
-      // Run validation if we have items, regardless of whether a store is resolved
-      // If storeId is missing, it means the location is unserviceable, so items MUST be removed/flagged.
       if (items.length > 0) {
         // If no storeId, all items are effectively "mismatched"
-        const needsValidation = !storeId || items.some(item => item.store_id !== storeId);
+        const needsValidation = !storeId || items.some(item => {
+          const itemStore = item.store_id || item.storeId;
+          return itemStore && itemStore !== storeId;
+        });
         
         if (needsValidation) {
           console.log('[CartScreen] Store mismatch detected. Validating cart with store:', storeId);
-          console.log('[CartScreen] Sending items to validate:', items.map(it => ({ id: it.id, name: it.name, store: it.store_id })));
+          console.log('[CartScreen] Sending items to validate:', items.map(it => ({ id: it.id, name: it.name, store: it.store_id || it.storeId })));
           setValidating(true);
           setValidationMessage('Checking availability at your new location...');
           const res = await cartService.validateCart(items, storeId);
           setValidating(false);
           
-          if (res.success && res.data.hasChanges) {
+          if (res.success && (res.data?.hasChanges || res.data?.has_changes)) {
             dispatch(updateCartAfterValidation({ items: res.data.items }));
             cartService.syncCart(res.data.items);
             
-            let removedCount = res.data.changes.removed.length;
+            const removedCount = res.data?.changes?.removed?.length || 0;
             if (removedCount > 0) {
               setValidationMessage(`${removedCount} item(s) are not available at this location. Please remove them to proceed.`);
             } else {
               setValidationMessage('Prices or stock have been updated for your new location.');
             }
-            
-            // Note: We no longer auto-dispatch updateCartAfterValidation here 
-            // so the user can see the unserviceable items highlighted.
           } else {
             setValidationMessage(null);
           }
@@ -146,9 +164,33 @@ const CartScreen = ({ navigation }) => {
     );
   };
 
-  const renderCartItem = ({ item }) => {
-    const isUnserviceable = storeId && item.store_id !== storeId;
+  const CartItemRow = React.memo(({ item, storeId, activeTheme, dispatch }) => {
+    const itemStore = item.store_id || item.storeId;
+    const isUnserviceable = storeId && itemStore && itemStore !== storeId;
     
+    // Local state for quantity input to allow typing empty string temporarily
+    const [inputValue, setInputValue] = useState(item.quantity.toString());
+
+    useEffect(() => {
+      setInputValue(item.quantity.toString());
+    }, [item.quantity]);
+
+    const handleQuantityChange = (text) => {
+      setInputValue(text);
+      if (text !== '') {
+        const qty = parseInt(text, 10);
+        if (!isNaN(qty)) {
+          dispatch(setItemQuantity({ item, quantity: qty }));
+        }
+      }
+    };
+
+    const handleQuantitySubmit = () => {
+      if (inputValue === '' || parseInt(inputValue, 10) === 0) {
+        dispatch(setItemQuantity({ item, quantity: 0 }));
+      }
+    };
+
     return (
       <View style={[styles.cartItem, isUnserviceable && styles.unserviceableItem]}>
         <Image source={{ uri: item.image_url }} style={styles.itemImage} />
@@ -168,31 +210,58 @@ const CartScreen = ({ navigation }) => {
           <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(removeItem(item))}>
             <Icon name="minus" size={20} color={isUnserviceable ? '#6B7280' : activeTheme.primary} />
           </TouchableOpacity>
-          <Text style={[styles.quantity, { color: isUnserviceable ? '#6B7280' : activeTheme.primary }]}>{item.quantity}</Text>
+          <TextInput 
+            style={[styles.quantity, { color: isUnserviceable ? '#6B7280' : activeTheme.primary, padding: 0, minWidth: 28, textAlign: 'center' }]}
+            value={inputValue}
+            keyboardType="numeric"
+            editable={!isUnserviceable}
+            onChangeText={handleQuantityChange}
+            onEndEditing={handleQuantitySubmit}
+            onBlur={handleQuantitySubmit}
+          />
           <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(addItem(item))}>
             <Icon name="plus" size={20} color={isUnserviceable ? '#6B7280' : activeTheme.primary} />
           </TouchableOpacity>
         </View>
       </View>
     );
-  };
+  });
+
+  const renderCartItem = ({ item }) => (
+    <CartItemRow item={item} storeId={storeId} activeTheme={activeTheme} dispatch={dispatch} />
+  );
+
+  const insets = useSafeAreaInsets();
 
   if (items.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Icon name="cart-off" size={100} color={COLORS.primary} />
-        <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
-        <Text style={styles.emptySubtitle}>Looks like you haven't added anything yet.</Text>
-        <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('Home')}>
-          <Text style={styles.shopText}>Start Shopping</Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
+        }
+      >
+        <View style={styles.emptyContainer}>
+          <View style={[styles.emptyIconCircle, { backgroundColor: activeTheme.primary + '15' }]}>
+            <Icon name="cart-outline" size={48} color={activeTheme.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
+          <Text style={styles.emptySubtitle}>Looks like you haven't added anything yet.</Text>
+          <TouchableOpacity 
+            style={[styles.shopBtn, { backgroundColor: activeTheme.primary }]} 
+            onPress={() => navigation.navigate('Home')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.shopText}>Start Shopping</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + SPACING.l }]}>
         <Text style={styles.headerTitle}>My Cart</Text>
         <TouchableOpacity onPress={handleClearCart}>
           <Text style={styles.clearText}>Clear All</Text>
@@ -212,6 +281,9 @@ const CartScreen = ({ navigation }) => {
         renderItem={renderCartItem}
         keyExtractor={(item) => `${item.id}-${item.variant?.id || 'base'}-${item.cutPreference || 'none'}-${item.cleaningPreference || 'none'}`}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
+        }
         ListHeaderComponent={() => (
           <>
             {validationMessage && (
@@ -278,14 +350,20 @@ const CartScreen = ({ navigation }) => {
           <TouchableOpacity
             style={[
               styles.checkoutBtn, 
-              { backgroundColor: activeTheme.primary },
-              (validating || items.some(it => it.store_id !== storeId)) && { opacity: 0.6 }
+              { backgroundColor: !isServiceable ? '#9CA3AF' : activeTheme.primary },
+              (validating || !isServiceable || items.some(it => {
+                const itStore = it.store_id || it.storeId;
+                return itStore && storeId && itStore !== storeId;
+              })) && { opacity: 0.6 }
             ]}
             onPress={() => navigation.navigate('Checkout')}
-            disabled={validating || items.some(it => it.store_id !== storeId)}
+            disabled={validating || !isServiceable || items.some(it => {
+              const itStore = it.store_id || it.storeId;
+              return itStore && storeId && itStore !== storeId;
+            })}
           >
             <Text style={styles.checkoutText}>
-              {validating ? 'Validating Cart...' : 'Proceed to Checkout'}
+              {!isServiceable ? 'Outside Delivery Area' : (validating ? 'Validating Cart...' : 'Proceed to Checkout')}
             </Text>
             {validating ? (
               <ActivityIndicator size="small" color={COLORS.white} />
@@ -345,11 +423,29 @@ const styles = StyleSheet.create({
   footerSub: { fontSize: 12, color: COLORS.gray },
   checkoutBtn: { backgroundColor: COLORS.primary, flexDirection: 'row', paddingHorizontal: SPACING.xl, paddingVertical: 12, borderRadius: 24, alignItems: 'center', gap: 8 },
   checkoutText: { color: COLORS.white, fontWeight: '700', fontSize: 16 },
+  emptyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: COLORS.white },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: COLORS.dark, marginTop: 20 },
-  emptySubtitle: { textAlign: 'center', color: COLORS.gray, marginTop: 10, marginBottom: 30 },
-  shopBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 30, paddingVertical: 15, borderRadius: 24 },
-  shopText: { color: COLORS.white, fontWeight: '700' },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: COLORS.dark, marginTop: 12 },
+  emptySubtitle: { textAlign: 'center', color: '#64748B', marginTop: 8, marginBottom: 24, fontSize: 14 },
+  shopBtn: { 
+    backgroundColor: COLORS.primary, 
+    paddingHorizontal: 36, 
+    paddingVertical: 14, 
+    borderRadius: 25,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+  },
+  shopText: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
   validationBanner: {
     flexDirection: 'row',
     alignItems: 'center',

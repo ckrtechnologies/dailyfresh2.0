@@ -17,7 +17,33 @@ const HomeHeader = React.memo(({
   onSlotPress,
   onNotificationPress
 }) => {
-  if (headerHeight <= 0) return null;
+  const selectedAddr = location?.selectedAddress;
+  let locationTitle = 'Pick Location';
+  let addressSubtitle = address || 'Select your delivery address';
+
+  if (selectedAddr) {
+    locationTitle = selectedAddr.label ? `Deliver to ${selectedAddr.label}` : (selectedAddr.city || 'Deliver Here');
+    const street = [selectedAddr.line1, selectedAddr.line2].filter(Boolean).join(', ');
+    addressSubtitle = `${street}${selectedAddr.city ? ', ' + selectedAddr.city : ''}${selectedAddr.pincode ? ' - ' + selectedAddr.pincode : ''}`;
+  } else if (address) {
+    const parts = address.split(',').map(s => s.trim()).filter(Boolean);
+    locationTitle = `Deliver to ${parts[0] || 'Current Location'}`;
+    const rest = parts.slice(1).join(', ');
+    addressSubtitle = (rest || address) + (location?.pincode && !address.includes(location?.pincode) ? ` - ${location.pincode}` : '');
+  } else if (location?.pincode) {
+    locationTitle = `Pincode ${location.pincode}`;
+    addressSubtitle = location?.storeName ? `Served by ${location.storeName}` : 'Express delivery in 90 mins';
+  }
+
+  const getSlotDisplay = (slot) => {
+    if (!slot) return '⚡ Express';
+    const s = String(slot).toLowerCase();
+    if (s === 'express') return '⚡ Express';
+    if (s === 'tomorrow') return '📅 Tomorrow';
+    if (s === 'tomorrow_morning') return '📅 Tomorrow Morning';
+    if (s === 'tomorrow_evening') return '📅 Tomorrow Evening';
+    return '📅 ' + (s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' '));
+  };
 
   return (
     <View style={[styles.headerContainer, { 
@@ -39,10 +65,10 @@ const HomeHeader = React.memo(({
           </View>
           <View style={styles.locationTextContainer}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.locationTitle, { fontSize: 14 - (progress * 1) }]}>
-                {location.selectedAddress?.label ? `Deliver to ${location.selectedAddress.label}` : (address ? `Deliver to ${address.split(',')[0]}` : 'Pick Location')}
+              <Text style={[styles.locationTitle, { fontSize: 14 - (progress * 1) }]} numberOfLines={1}>
+                {locationTitle}
               </Text>
-              {!location.isServiceable && progress < 0.5 && (
+              {!location?.isServiceable && progress < 0.5 && (
                 <View style={styles.unserviceableBadge}>
                   <Text style={styles.unserviceableBadgeText}>OUT OF SERVICE</Text>
                 </View>
@@ -50,9 +76,7 @@ const HomeHeader = React.memo(({
             </View>
             {progress < 0.8 && (
               <Text style={[styles.addressText, { opacity: 1 - (progress * 1.2) }]} numberOfLines={1}>
-                {location.selectedAddress
-                  ? `${location.selectedAddress.line1}${location.selectedAddress.line2 ? ', ' + location.selectedAddress.line2 : ''}`
-                  : address || 'Select your delivery address'}
+                {addressSubtitle}
               </Text>
             )}
           </View>
@@ -64,14 +88,16 @@ const HomeHeader = React.memo(({
             onPress={onSlotPress}
           >
             <View style={[styles.slotBadge, { 
-              backgroundColor: 'rgba(255,255,255,0.2)',
+              backgroundColor: 'rgba(0,0,0,0.25)',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.3)',
               paddingVertical: 5 - (progress * 2),
-              paddingHorizontal: 12 - (progress * 2)
+              paddingHorizontal: 10 - (progress * 2)
             }]}>
-              <Text style={[styles.slotBadgeText, { fontSize: 11 - (progress * 1) }]}>
-                {selectedSlot === 'express' ? '⚡ Express' : selectedSlot === 'tomorrow_morning' ? '📅 Tomorrow Morning' : selectedSlot === 'tomorrow_evening' ? '📅 Tomorrow Evening' : '📅 Standard'}
+              <Text style={[styles.slotBadgeText, { fontSize: 11 - (progress * 1), color: '#FFFFFF' }]}>
+                {getSlotDisplay(selectedSlot)}
               </Text>
-              <Icon name="chevron-down" size={12 - (progress * 2)} color={COLORS.white} />
+              <Icon name="chevron-down" size={14} color="#FFFFFF" style={{ marginLeft: 2 }} />
             </View>
           </TouchableOpacity>
         )}
@@ -80,7 +106,7 @@ const HomeHeader = React.memo(({
           style={styles.notificationBtn}
           onPress={onNotificationPress}
         >
-          <Icon name="bell-outline" size={24 - (progress * 2)} color={COLORS.white} />
+          <Icon name="bell" size={22 - (progress * 2)} color={COLORS.white} />
           {unreadCount > 0 && (
             <View style={styles.notificationBadgeContainer}>
               <Text style={styles.notificationBadgeText}>

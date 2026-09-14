@@ -25,17 +25,46 @@ const AddAddressScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     label: editAddress?.label || 'Home',
-    full_name: editAddress?.full_name || '',
+    full_name: editAddress?.fullName || editAddress?.full_name || '',
     phone: editAddress?.phone || '',
     line1: editAddress?.line1 || locationData?.address || '',
     line2: editAddress?.line2 || '',
-    city: editAddress?.city || locationData?.city || 'Kolkata',
-    state: editAddress?.state || locationData?.state || 'West Bengal',
-    pincode: editAddress?.pincode || locationData?.pincode || '',
+    city: editAddress?.city || locationData?.city || '',
+    state: editAddress?.state || locationData?.state || '',
+    pincode: editAddress?.pincode ? String(editAddress.pincode) : (locationData?.pincode ? String(locationData.pincode) : ''),
     latitude: editAddress?.latitude || locationData?.coords?.lat,
     longitude: editAddress?.longitude || locationData?.coords?.lng,
-    is_default: editAddress?.is_default || false,
+    is_default: editAddress?.isDefault ?? editAddress?.is_default ?? false,
   });
+
+  // Re-sync whenever route params change (e.g. user taps different addresses to edit)
+  React.useEffect(() => {
+    if (editAddress) {
+      setFormData({
+        label: editAddress.label || 'Home',
+        full_name: editAddress.fullName || editAddress.full_name || '',
+        phone: editAddress.phone || '',
+        line1: editAddress.line1 || '',
+        line2: editAddress.line2 || '',
+        city: editAddress.city || '',
+        state: editAddress.state || '',
+        pincode: String(editAddress.pincode || ''),
+        latitude: editAddress.latitude || null,
+        longitude: editAddress.longitude || null,
+        is_default: editAddress.isDefault ?? editAddress.is_default ?? false,
+      });
+    } else if (locationData) {
+      setFormData((prev) => ({
+        ...prev,
+        line1: prev.line1 || locationData.address || '',
+        city: locationData.city || prev.city || '',
+        state: locationData.state || prev.state || '',
+        pincode: locationData.pincode ? String(locationData.pincode) : prev.pincode,
+        latitude: locationData.coords?.lat || prev.latitude,
+        longitude: locationData.coords?.lng || prev.longitude,
+      }));
+    }
+  }, [editAddress, locationData]);
 
   const handleSave = async () => {
     if (!formData.full_name || !formData.phone || !formData.line1 || !formData.pincode) {
@@ -69,14 +98,21 @@ const AddAddressScreen = ({ route, navigation }) => {
         }
       }
 
-      // Validate pincode serviceability using lat/lng if available
+      // Validate pincode serviceability
       const { default: apiClient } = await import('../api/apiClient');
+      const storeParams = {
+        pincode: formData.pincode,
+        lat: lat || undefined,
+        lng: lng || undefined,
+      };
       const storeRes = await apiClient.get('/customer/stores/nearest', { 
-        params: { pincode: formData.pincode, lat, lng } 
+        params: storeParams 
       });
-      const store = storeRes.data?.data?.store;
+      const storeData = storeRes.data?.data;
+      const store = storeData?.store;
+      const isDeliverable = storeData?.is_deliverable === true && !!store;
 
-      if (!store) {
+      if (!isDeliverable) {
         showGlobalAlert('Not Serviceable', 'Sorry, we do not currently deliver to this pincode.', 'warning');
         setLoading(false);
         return;
@@ -95,12 +131,13 @@ const AddAddressScreen = ({ route, navigation }) => {
         showGlobalAlert('Success', editAddress ? 'Address updated' : 'Address saved successfully', 'success');
         
         // Auto-select this address after saving
-        const savedAddress = res.data.address;
+        const savedAddress = res.data?.address || res.data;
         if (savedAddress) {
           dispatch(setSelectedAddress({
             ...savedAddress,
             store_id: store.id,
-            store_name: store.name
+            store_name: store.name,
+            is_serviceable: true,
           }));
         }
 
@@ -147,10 +184,14 @@ const AddAddressScreen = ({ route, navigation }) => {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 100 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.sectionTitle}>SAVE ADDRESS AS</Text>
           <View style={styles.labelRow}>
             {renderLabelOption('Home')}
@@ -233,22 +274,23 @@ const AddAddressScreen = ({ route, navigation }) => {
             />
             <Text style={styles.defaultText}>Set as default delivery address</Text>
           </TouchableOpacity>
+
+          <View style={{ marginTop: 24, marginBottom: 40 }}>
+            <TouchableOpacity 
+              style={[styles.saveBtn, loading && styles.disabledBtn]} 
+              onPress={handleSave}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.saveBtnText}>{editAddress ? 'UPDATE ADDRESS' : 'SAVE ADDRESS'}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity 
-          style={[styles.saveBtn, loading && styles.disabledBtn]} 
-          onPress={handleSave}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={COLORS.white} />
-          ) : (
-            <Text style={styles.saveBtnText}>{editAddress ? 'UPDATE ADDRESS' : 'SAVE ADDRESS'}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };

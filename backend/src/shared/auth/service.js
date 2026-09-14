@@ -166,3 +166,157 @@ export const updatePassword = async (userId, { password, current_password }) => 
   await authRepo.updateProfile(userId, { passwordHash });
   return { success: true };
 };
+
+/**
+ * Authenticate or register with Google OAuth
+ */
+export const loginWithGoogle = async ({ idToken, email, name, photoUrl, googleId }) => {
+  let verifiedEmail = email;
+  let verifiedName = name;
+  let verifiedPicture = photoUrl;
+  let verifiedSub = googleId;
+
+  if (idToken) {
+    let verified = false;
+    try {
+      const { OAuth2Client } = await import('google-auth-library');
+      const client = new OAuth2Client();
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID ? [process.env.GOOGLE_CLIENT_ID] : undefined
+      });
+      const payload = ticket.getPayload();
+      if (payload) {
+        verifiedEmail = payload.email || verifiedEmail;
+        verifiedName = payload.name || verifiedName;
+        verifiedPicture = payload.picture || verifiedPicture;
+        verifiedSub = payload.sub || verifiedSub;
+        verified = true;
+      }
+    } catch (tokenErr) {
+      console.warn('[GoogleAuth] verifyIdToken failed, attempting tokeninfo endpoint fallback:', tokenErr.message);
+    }
+
+    if (!verified) {
+      try {
+        const axios = (await import('axios')).default;
+        const res = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`, { timeout: 5000 });
+        if (res.data && res.data.email) {
+          verifiedEmail = res.data.email;
+          verifiedName = res.data.name || verifiedName;
+          verifiedPicture = res.data.picture || verifiedPicture;
+          verifiedSub = res.data.sub || verifiedSub;
+          verified = true;
+        }
+      } catch (fallbackErr) {
+        console.warn('[GoogleAuth] tokeninfo fallback failed:', fallbackErr.message);
+        if (!verifiedEmail) throw new Error('Invalid Google token');
+      }
+    }
+  }
+
+  if (!verifiedEmail) {
+    const err = new Error('Google email is required');
+    err.status = 400;
+    throw err;
+  }
+
+  const cleanEmail = verifiedEmail.trim().toLowerCase();
+  let user = null;
+  if (verifiedSub) {
+    user = await authRepo.findByGoogleId(verifiedSub);
+  }
+  if (!user) {
+    user = await authRepo.findByEmail(cleanEmail);
+  }
+
+  if (!user) {
+    user = await authRepo.createProfile({
+      fullName: verifiedName || cleanEmail.split('@')[0],
+      email: cleanEmail,
+      phone: null,
+      role: 'customer',
+      authProvider: 'google',
+      googleId: verifiedSub || null,
+      avatarUrl: verifiedPicture || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanEmail)}`,
+      isActive: true
+    });
+  } else if (!user.googleId && verifiedSub) {
+    user = await authRepo.updateProfile(user.id, {
+      googleId: verifiedSub,
+      authProvider: user.authProvider || 'google'
+    });
+  }
+
+  const token = generateToken(user);
+
+  return {
+    access_token: token,
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      full_name: user.fullName,
+      phone: user.phone,
+      role: user.role,
+      avatar_url: user.avatarUrl,
+      created_at: user.createdAt
+    }
+  };
+};
+
+/**
+ * Handle Google OAuth 2.0 Authorization Code callback from Browser
+ */
+export const handleGoogleCallback = async ({ code, state, host, protocol }) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Google OAuth credentials not configured on backend');
+  }
+
+  // Determine redirect URI used
+  let redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  if (!redirectUri) {
+    if (host && host.includes('api.dailyfreshkolkata.online')) {
+      redirectUri = 'https://api.dailyfreshkolkata.online/api/v1/auth/google/callback';
+    } else {
+      const proto = (host && host.includes('localhost')) ? 'http' : (protocol || 'https');
+      redirectUri = `${proto}://${host}/api/v1/auth/google/callback`;
+    }
+  }
+
+  // Exchange authorization code for tokens
+  const axios = (await import('axios')).default;
+  const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    grant_type: 'authorization_code'
+  });
+
+  const { id_token, access_token } = tokenResponse.data;
+
+  // Retrieve user info from Google
+  let userInfo = null;
+  if (access_token) {
+    try {
+      const userRes = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+      userInfo = userRes.data;
+    } catch (uErr) {
+      console.warn('[GoogleAuth] Failed to fetch userinfo with access_token, fallback to id_token:', uErr.message);
+    }
+  }
+
+  return await loginWithGoogle({
+    idToken: id_token,
+    email: userInfo?.email,
+    name: userInfo?.name,
+    photoUrl: userInfo?.picture,
+    googleId: userInfo?.id
+  });
+};

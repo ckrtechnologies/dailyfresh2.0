@@ -1,4 +1,3 @@
-import { supabase } from './supabase';
 import apiClient from './apiClient';
 
 const productService = {
@@ -18,14 +17,19 @@ const productService = {
   },
 
   /**
-   * Get all active categories
+   * Fetch categories with subcategories
    */
-  getCategories: async (deliveryType, storeId) => {
+  getCategories: async (storeId, deliveryType) => {
     try {
-      const response = await apiClient.get('/customer/categories', {
-        params: { delivery_type: deliveryType, store_id: storeId }
-      });
-      return { success: true, data: response.data?.data?.categories || [] };
+      const params = {
+        ...(storeId ? { store_id: storeId } : {}),
+        ...(deliveryType ? { delivery_type: deliveryType } : {})
+      };
+      const response = await apiClient.get('/customer/categories/tree', { params });
+      const cats = Array.isArray(response.data?.data)
+        ? response.data.data
+        : (response.data?.data?.categories || []);
+      return { success: true, data: cats };
     } catch (error) {
       console.error('Error fetching categories:', error);
       return { success: false, error };
@@ -33,49 +37,100 @@ const productService = {
   },
 
   /**
-   * Get banners for home page
+   * Fetch banners
    */
   getBanners: async () => {
     try {
-      // Call backend API — it applies is_active + valid_from/valid_until date filters
       const response = await apiClient.get('/customer/banners');
-      return { success: true, data: response.data?.data?.banners || [] };
+      const banners = Array.isArray(response.data?.data)
+        ? response.data.data
+        : (response.data?.data?.banners || []);
+      return { success: true, data: banners };
     } catch (error) {
       console.error('Error fetching banners:', error);
-      return { success: true, data: [] }; // Graceful fallback — don't break home screen
+      return { success: false, error };
     }
   },
 
   /**
-   * Get products with optional filters (Hits Backend API)
+   * Fetch products with optional filters
    */
-  getProducts: async (filters = {}) => {
+  getProducts: async ({
+    categoryId,
+    subCategoryId,
+    storeId,
+    search,
+    isDeal,
+    isFeatured,
+    isFlashSale,
+    isTrending,
+    isExclusive,
+    isNewLaunch,
+    isFrozen,
+    limit = 50,
+    offset = 0
+  } = {}) => {
     try {
-
-      // Map frontend filter names to backend expected names if different
       const params = {
-        is_featured: filters.isFeatured,
-        is_deal: filters.isDeal,
-        is_flash_sale: filters.isFlashSale,
-        is_frozen: filters.isFrozen,
-        is_trending: filters.isTrending,
-        is_exclusive: filters.isExclusive,
-        is_new_launch: filters.isNewLaunch,
-        sub_category_id: filters.subCategoryId,
-        category_id: filters.categoryId,
-        store_id: filters.storeId,
-        delivery_type: filters.deliveryType,
-        search: filters.search
+        category_id: categoryId,
+        sub_category_id: subCategoryId,
+        store_id: storeId,
+        search,
+        is_deal: isDeal,
+        is_featured: isFeatured,
+        is_flash_sale: isFlashSale,
+        is_trending: isTrending,
+        is_exclusive: isExclusive,
+        is_new_launch: isNewLaunch,
+        is_frozen: isFrozen,
+        limit,
+        offset
       };
 
-      // Clean up undefined params
-      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+      // Strip undefined
+      Object.keys(params).forEach(k => params[k] === undefined && delete params[k]);
 
       const response = await apiClient.get('/customer/products', { params });
-      return { success: true, data: response.data?.data?.products || [] };
+      const products = Array.isArray(response.data?.data)
+        ? response.data.data
+        : (response.data?.data?.products || []);
+      return { success: true, data: products };
     } catch (error) {
       console.error('Error fetching products:', error);
-      return { success: false, error: error.response?.data?.message || 'Failed to fetch products' };
+      return { success: false, error };
+    }
+  },
+
+  /**
+   * Fetch subcategories for a given category ID
+   */
+  getSubCategories: async (categoryId) => {
+    try {
+      const response = await apiClient.get('/customer/categories/tree');
+      const cats = Array.isArray(response.data?.data) 
+        ? response.data.data 
+        : (response.data?.data?.categories || []);
+      const matched = cats.find(c => c.id === categoryId);
+      const subs = matched?.subCategories || matched?.sub_categories || [];
+      return { success: true, data: subs };
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
+      return { success: false, data: [] };
+    }
+  },
+
+  /**
+   * Search products by name
+   */
+  searchProducts: async (query, storeId) => {
+    try {
+      const response = await apiClient.get('/customer/products', {
+        params: { search: query, store_id: storeId }
+      });
+      return { success: true, data: response.data?.data?.products || [] };
+    } catch (error) {
+      console.error('Error searching products:', error);
+      return { success: false, error };
     }
   },
 
@@ -84,40 +139,23 @@ const productService = {
    */
   getProductDetail: async (identifier) => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          sub_category:sub_categories!sub_category_id(
-            *,
-            category:categories!category_id(*)
-          ),
-          store:stores!store_id(*),
-          variants:product_variants(*)
-        `)
-        .or(`slug.eq.${identifier},id.eq.${identifier}`)
-        .single();
-
-      if (error) throw error;
-      return { success: true, data };
+      const response = await apiClient.get(`/customer/products/${identifier}`);
+      return { success: true, data: response.data?.data || response.data };
     } catch (error) {
       console.error('Error fetching product detail:', error);
       return { success: false, error };
     }
   },
 
+  /**
+   * Get store details by ID
+   */
   getStoreDetail: async (storeId) => {
     try {
-      const { data, error } = await supabase
-        .from('stores')
-        .select('*')
-        .eq('id', storeId)
-        .single();
-
-      if (error) throw error;
-      return { success: true, data };
+      const response = await apiClient.get(`/customer/stores/${storeId}`);
+      return { success: true, data: response.data?.data || response.data };
     } catch (error) {
-      console.error('Error fetching store detail:', error);
+      console.warn('Store detail fetch note:', error?.message || error);
       return { success: false, error };
     }
   },
@@ -128,7 +166,7 @@ const productService = {
   findNearestStore: async (params) => {
     try {
       const response = await apiClient.get('/customer/stores/nearest', { params });
-      return { success: true, data: response.data?.data?.store || null };
+      return { success: true, data: response.data?.data || null };
     } catch (error) {
       console.error('Error finding nearest store:', error);
       return { success: false, error };
@@ -140,19 +178,8 @@ const productService = {
    */
   getSettings: async () => {
     try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*');
-
-      if (error) throw error;
-
-      // Convert array of {key, value} to an object
-      const settingsMap = (data || []).reduce((acc, curr) => {
-        acc[curr.key] = curr.value;
-        return acc;
-      }, {});
-
-      return { success: true, data: settingsMap };
+      const response = await apiClient.get('/app/config');
+      return { success: true, data: response.data?.data || response.data || {} };
     } catch (error) {
       console.error('Error fetching settings:', error);
       return { success: false, error };

@@ -114,7 +114,7 @@ const SplashScreen = () => {
       </View>
 
       <View style={styles.bottomBranding}>
-        <Text style={styles.estText}>ESTD. 2024</Text>
+        <Text style={styles.estText}>ESTD. 2018</Text>
       </View>
     </Animated.View>
   );

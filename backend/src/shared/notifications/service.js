@@ -28,9 +28,12 @@ export const sendToUser = async (userId, title, body, data = {}) => {
     }
 
     // 3. Send Firebase Push
-    const avatarUrl = profile.avatarUrl || 'https://dailyfreshkolkata.in/assets/logo.png';
+    const rawImage = data?.image_url || data?.imageUrl || profile.avatarUrl;
+    const isSvg = typeof rawImage === 'string' && (rawImage.includes('.svg') || rawImage.includes('/svg'));
+    const safePushImage = (rawImage && !isSvg) ? rawImage : 'https://dailyfreshkolkata.online/assets/logo.png';
+
     const fcmData = {
-      image_url: avatarUrl,
+      image_url: safePushImage,
       title: String(title),
       body: String(body),
       timestamp: new Date().toISOString(),
@@ -44,20 +47,34 @@ export const sendToUser = async (userId, title, body, data = {}) => {
       });
     }
 
+    const orderId = data?.order_id || data?.orderId;
+    if (orderId) {
+      fcmData.order_id = String(orderId);
+      fcmData.orderId = String(orderId);
+      if (!fcmData.link) {
+        fcmData.link = `dailyfresh://order/${orderId}`;
+      }
+    }
+
+    const isOrderNotification = Boolean(orderId || data?.type?.startsWith('order') || data?.type === 'delivery_update');
+    const channelId = isOrderNotification ? 'orders' : 'dailyfresh_alerts';
+
     const message = {
       notification: { 
         title, 
         body,
-        imageUrl: avatarUrl 
+        ...(safePushImage ? { imageUrl: safePushImage } : {})
       },
       data: fcmData,
       android: {
         priority: 'high',
         ttl: 3600 * 1000,
         notification: {
-          channelId: 'orders',
-          sound: 'ding',
-          imageUrl: avatarUrl,
+          channelId,
+          sound: 'default',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          ...(safePushImage ? { imageUrl: safePushImage } : {}),
           sticky: false,
           visibility: 'public',
           notificationPriority: 'PRIORITY_HIGH',
@@ -66,7 +83,7 @@ export const sendToUser = async (userId, title, body, data = {}) => {
       apns: {
         payload: {
           aps: {
-            sound: 'ding.wav',
+            sound: 'default',
             badge: 1,
             contentAvailable: true,
             mutableContent: true,
@@ -93,13 +110,12 @@ export const sendToUser = async (userId, title, body, data = {}) => {
  */
 export const broadcastToRole = async (role, title, body, data = {}) => {
   try {
-    const userProfiles = await notifRepo.getActiveUserProfilesByRole(role);
-    if (userProfiles && userProfiles.length > 0) {
-      const promises = userProfiles.map(p => sendToUser(p.id, title, body, data));
-      await Promise.all(promises);
-    }
+    // Send push to role topic (e.g. 'customer', 'rider') for instant delivery to all devices
+    const response = await sendToTopic(role, title, body, data);
+    return response;
   } catch (error) {
     console.error(`[Broadcast Error] ${error.message}`);
+    throw error;
   }
 };
 
@@ -108,13 +124,9 @@ export const broadcastToRole = async (role, title, body, data = {}) => {
  */
 export const broadcastToAll = async (title, body, data = {}) => {
   try {
-    const userProfiles = await notifRepo.getAllActiveUserProfiles();
-    if (userProfiles && userProfiles.length > 0) {
-      console.log(`[NMS] Broadcasting to ${userProfiles.length} users`);
-      const promises = userProfiles.map(p => sendToUser(p.id, title, body, data));
-      await Promise.all(promises);
-    }
-    return { success: true, count: userProfiles?.length || 0 };
+    // Send push to 'all' topic for instant device delivery to all registered apps
+    const response = await sendToTopic('all', title, body, data);
+    return { success: true, response };
   } catch (error) {
     console.error(`[Broadcast All Error] ${error.message}`);
     throw error;
@@ -130,9 +142,43 @@ export const sendToTopic = async (topic, title, body, data = {}) => {
       console.warn('[Notification] Firebase Admin messaging not configured.');
       return;
     }
+
+    const fcmData = {
+      title: String(title),
+      body: String(body),
+      timestamp: new Date().toISOString(),
+    };
+    if (data && typeof data === 'object') {
+      Object.keys(data).forEach(key => {
+        if (data[key] !== undefined && data[key] !== null) {
+          fcmData[key] = String(data[key]);
+        }
+      });
+    }
+
     const message = {
       notification: { title, body },
-      data: { ...data, title, body },
+      data: fcmData,
+      android: {
+        priority: 'high',
+        ttl: 3600 * 1000,
+        notification: {
+          channelId: 'dailyfresh_alerts',
+          sound: 'default',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          notificationPriority: 'PRIORITY_HIGH',
+          visibility: 'public',
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
+          }
+        }
+      },
       topic: topic
     };
 
@@ -224,7 +270,9 @@ export const notifyAvailableRiders = async (orderId, orderNumber, storeName, sto
             channelId: 'orders',
             sound: 'default',
             defaultSound: true,
+            defaultVibrateTimings: true,
             notificationPriority: 'PRIORITY_HIGH',
+            visibility: 'public',
           },
         },
         apns: {

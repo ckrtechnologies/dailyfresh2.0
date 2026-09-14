@@ -1,30 +1,73 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useOutletContext, useLocation } from 'react-router-dom';
 import { Plus, UserPlus } from 'lucide-react';
 import apiClient from '../services/api';
 import DataTable from '../components/common/DataTable';
 import { StaffForm, NotificationForm } from '../components/modals/EntityForms';
 import { useFilters } from '../context/FilterContext';
 
-const Riders = () => {
-  const { globalStoreId, searchQuery, setSearchQuery, dateRange } = useFilters();
+const Riders = ({ 
+  storeId: propStoreId, 
+  dateRange: propDateRange, 
+  searchQuery: propSearchQuery,
+  approvalStatus: propApprovalStatus 
+} = {}) => {
+  const filterContext = useFilters();
+  const outletFilters = useOutletContext() || {};
+  const location = useLocation();
+  const navState = location.state || {};
+
+  const globalStoreId = propStoreId ?? navState.storeId ?? outletFilters.globalStoreId ?? filterContext.globalStoreId;
+  const dateRange = propDateRange ?? (
+    navState.startDate !== undefined || navState.endDate !== undefined
+      ? { startDate: navState.startDate || '', endDate: navState.endDate || '' }
+      : (outletFilters.dateRange ?? filterContext.dateRange)
+  );
+  const searchQuery = propSearchQuery ?? navState.search ?? outletFilters.searchQuery ?? filterContext.searchQuery;
+  const setSearchQuery = outletFilters.setSearchQuery ?? filterContext.setSearchQuery;
+
   const queryClient = useQueryClient();
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
+  const [approvalStatus, setApprovalStatus] = useState(
+    propApprovalStatus || navState.approvalStatus || (navState.filter === 'approved' ? 'approved' : 'all')
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNotifyModalOpen, setIsNotifyModalOpen] = useState(false);
   const [selectedRider, setSelectedRider] = useState(null);
 
+  useEffect(() => {
+    if (navState.approvalStatus) {
+      setApprovalStatus(navState.approvalStatus);
+    } else if (navState.filter === 'approved') {
+      setApprovalStatus('approved');
+    }
+    if (navState.storeId !== undefined && navState.storeId !== filterContext.globalStoreId) {
+      filterContext.setGlobalStoreId(navState.storeId);
+    }
+    if (
+      (navState.startDate !== undefined || navState.endDate !== undefined) &&
+      (navState.startDate !== filterContext.dateRange?.startDate || navState.endDate !== filterContext.dateRange?.endDate)
+    ) {
+      filterContext.setDateRange({
+        startDate: navState.startDate || '',
+        endDate: navState.endDate || ''
+      });
+    }
+  }, [navState]);
+
   // Fetch Riders
   const { data: response, isLoading } = useQuery({
-    queryKey: ['riders', pagination, searchQuery, globalStoreId, dateRange],
+    queryKey: ['riders', pagination, searchQuery, globalStoreId, dateRange, approvalStatus],
     queryFn: async () => {
       const resp = await apiClient.get('/admin/riders', {
         params: {
           ...pagination,
           search: searchQuery || undefined,
           store_id: globalStoreId || undefined,
-          startDate: dateRange.startDate || undefined,
-          endDate: dateRange.endDate || undefined
+          startDate: dateRange?.startDate || undefined,
+          endDate: dateRange?.endDate || undefined,
+          approval_status: approvalStatus !== 'all' ? approvalStatus : undefined
         }
       });
       return resp.data.data;
@@ -158,14 +201,27 @@ const Riders = () => {
           <h1>Riders</h1>
           <p>Manage delivery partners and approval status</p>
         </div>
-        <div className="page-actions">
-          <button
-            className="btn-compact"
-            onClick={() => setIsModalOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--primary)', color: 'white', border: 'none' }}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <select 
+            value={approvalStatus}
+            onChange={(e) => setApprovalStatus(e.target.value)}
+            style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '13px', background: 'white' }}
           >
-            <UserPlus size={14} /> Onboard Rider
-          </button>
+            <option value="all">All Riders</option>
+            <option value="approved">Approved</option>
+            <option value="pending">Pending</option>
+            <option value="rejected">Rejected</option>
+          </select>
+
+          <div className="page-actions">
+            <button
+              className="btn-compact"
+              onClick={() => setIsModalOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--primary)', color: 'white', border: 'none' }}
+            >
+              <UserPlus size={14} /> Onboard Rider
+            </button>
+          </div>
         </div>
       </div>
 

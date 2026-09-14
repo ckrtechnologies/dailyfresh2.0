@@ -34,9 +34,9 @@ export const processWebhookEvent = async (event, payload) => {
 
     if (razorpayOrderId) {
       const order = await paymentRepo.findOrderByRazorpayId(razorpayOrderId);
-      if (order && order.paymentStatus !== 'completed') {
+      if (order && order.paymentStatus !== 'paid') {
         await paymentRepo.updateOrderPaymentStatus(order.id, {
-          status: 'completed',
+          status: 'paid',
           paymentId: razorpayPaymentId
         });
 

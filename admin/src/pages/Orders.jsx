@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation, useOutletContext } from 'react-router-dom';
 import { Search, Clock, Eye, X, User, ChevronRight } from 'lucide-react';
 import OrderDetailModal from '../components/modals/OrderDetailModal';
 import { NotificationForm } from '../components/modals/EntityForms';
@@ -8,14 +9,50 @@ import DataTable from '../components/common/DataTable';
 import { useFilters } from '../context/FilterContext';
 import { useAuth } from '../context/AuthContext';
 
-const Orders = () => {
+const Orders = ({ storeId: propStoreId, dateRange: propDateRange, searchQuery: propSearchQuery, status: propStatus } = {}) => {
   const { isAdmin, user } = useAuth();
-  const { globalStoreId, dateRange, searchQuery, setSearchQuery } = useFilters();
+  const filterContext = useFilters();
+  const outletFilters = useOutletContext() || {};
+  const location = useLocation();
+  const navState = location.state || {};
+
+  const globalStoreId = propStoreId ?? navState.storeId ?? outletFilters.globalStoreId ?? filterContext.globalStoreId;
+  const dateRange = propDateRange ?? (
+    navState.startDate !== undefined || navState.endDate !== undefined
+      ? { startDate: navState.startDate || '', endDate: navState.endDate || '' }
+      : (outletFilters.dateRange ?? filterContext.dateRange)
+  );
+  const searchQuery = propSearchQuery ?? navState.search ?? outletFilters.searchQuery ?? filterContext.searchQuery;
+  const setSearchQuery = outletFilters.setSearchQuery ?? filterContext.setSearchQuery;
+
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50 });
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [status, setStatus] = useState('all');
+  const [status, setStatus] = useState(propStatus || navState.status || 'all');
+  const [targetOrderId, setTargetOrderId] = useState(navState.orderId || null);
   const [updatingId, setUpdatingId] = useState(null);
   const [showOnlyMe, setShowOnlyMe] = useState(false);
+
+  useEffect(() => {
+    if (navState.orderId) {
+      setTargetOrderId(navState.orderId);
+      setSearchQuery('');
+    }
+    if (navState.status) {
+      setStatus(navState.status);
+    }
+    if (navState.storeId !== undefined && navState.storeId !== filterContext.globalStoreId) {
+      filterContext.setGlobalStoreId(navState.storeId);
+    }
+    if (
+      (navState.startDate !== undefined || navState.endDate !== undefined) &&
+      (navState.startDate !== filterContext.dateRange?.startDate || navState.endDate !== filterContext.dateRange?.endDate)
+    ) {
+      filterContext.setDateRange({
+        startDate: navState.startDate || '',
+        endDate: navState.endDate || ''
+      });
+    }
+  }, [navState]);
   
   // Notification State
   const [orderToNotify, setOrderToNotify] = useState(null);
@@ -59,7 +96,7 @@ const Orders = () => {
   });
 
   const { data: response, isLoading } = useQuery({
-    queryKey: ['orders', pagination, status, globalStoreId, dateRange, searchQuery],
+    queryKey: ['orders', pagination, status, globalStoreId, dateRange, searchQuery, targetOrderId],
     queryFn: async () => {
       const storeIdToFetch = isAdmin ? globalStoreId : user.store_id;
       const resp = await apiClient.get('/admin/orders', {
@@ -67,15 +104,26 @@ const Orders = () => {
           ...pagination, 
           status, 
           store_id: storeIdToFetch || undefined,
-          startDate: dateRange.startDate || undefined,
-          endDate: dateRange.endDate || undefined,
-          search: searchQuery || undefined,
+          startDate: targetOrderId ? undefined : (dateRange.startDate || undefined),
+          endDate: targetOrderId ? undefined : (dateRange.endDate || undefined),
+          search: targetOrderId ? undefined : (searchQuery || undefined),
+          order_id: targetOrderId || undefined,
           user_id: showOnlyMe ? user.id : undefined
         }
       });
       return resp.data.data;
     }
   });
+
+  // Auto-open modal when navigating to a specific order
+  useEffect(() => {
+    if (targetOrderId && response?.orders?.length > 0) {
+      const found = response.orders.find(o => o.id === targetOrderId) || response.orders[0];
+      if (found && !selectedOrder) {
+        setSelectedOrder(found);
+      }
+    }
+  }, [targetOrderId, response?.orders]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, newStatus, riderId }) => {
@@ -169,6 +217,43 @@ const Orders = () => {
       render: (row) => <b>₹{Number(row.total_amount).toLocaleString()}</b>
     },
     { 
+      header: 'Payment', 
+      accessor: (row) => row.payment_status,
+      align: 'center',
+      render: (row) => {
+        const isCod = (row.payment_method || row.paymentMethod) === 'cod';
+        const pStatus = String(row.payment_status || row.paymentStatus || 'unpaid').toLowerCase();
+        const isPaid = pStatus === 'paid' || pStatus === 'completed';
+
+        if (isPaid) {
+          return (
+            <span className="badge" style={{ background: '#dcfce7', color: '#166534', border: '1px solid #86efac', fontWeight: '700' }}>
+              PAID ({isCod ? 'COD' : 'ONLINE'})
+            </span>
+          );
+        }
+        if (isCod) {
+          return (
+            <span className="badge" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', fontWeight: '700' }}>
+              COD (UNPAID)
+            </span>
+          );
+        }
+        if (pStatus === 'refunded') {
+          return (
+            <span className="badge" style={{ background: '#f3e8ff', color: '#7e22ce', border: '1px solid #d8b4fe', fontWeight: '700' }}>
+              REFUNDED
+            </span>
+          );
+        }
+        return (
+          <span className="badge" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', fontWeight: '700' }}>
+            UNPAID
+          </span>
+        );
+      }
+    },
+    { 
       header: 'Status', 
       accessor: (row) => row.status,
       align: 'center',
@@ -179,10 +264,24 @@ const Orders = () => {
       )
     },
     { 
-      header: 'Date', 
+      header: 'Date & Time', 
       accessor: (row) => row.created_at,
       align: 'center',
-      render: (row) => new Date(row.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      render: (row) => {
+        if (!row.created_at) return <span style={{ color: 'var(--text-muted)' }}>N/A</span>;
+        const d = new Date(row.created_at);
+        if (isNaN(d.getTime())) return <span style={{ color: 'var(--text-muted)' }}>N/A</span>;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+            <span style={{ fontWeight: '600', fontSize: '12px', color: 'var(--text-main)' }}>
+              {d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
+              {d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </span>
+          </div>
+        );
+      }
     },
     {
       header: 'Quick Actions',
@@ -293,6 +392,24 @@ const Orders = () => {
           </select>
         </div>
       </div>
+
+      {targetOrderId && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#ecfdf5', border: '1px solid #10b981', borderRadius: '6px', marginBottom: '14px' }}>
+          <span style={{ fontSize: '13px', color: '#065f46' }}>
+            Viewing specific order: <strong>#{response?.orders?.[0]?.order_number || navState.orderNumber || targetOrderId}</strong>
+          </span>
+          <button
+            onClick={() => {
+              setTargetOrderId(null);
+              setSearchQuery('');
+              window.history.replaceState({}, document.title);
+            }}
+            style={{ padding: '4px 10px', background: 'white', border: '1px solid #10b981', borderRadius: '4px', fontSize: '12px', fontWeight: '600', color: '#047857', cursor: 'pointer' }}
+          >
+            Show All Orders
+          </button>
+        </div>
+      )}
 
       <DataTable 
         title="Orders"

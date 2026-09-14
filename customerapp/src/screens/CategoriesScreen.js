@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,18 +7,62 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
+import productService from '../api/productService';
+import { setCategories } from '../store/slices/productSlice';
+import ComingSoonScreen from './ComingSoonScreen';
 
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - SPACING.l * 2 - SPACING.m * 2) / 3;
 
 const CategoriesScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
   const { categories } = useSelector((state) => state.products);
   const { selectedSlot } = useSelector((state) => state.config);
+  const location = useSelector((state) => state.location);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Guard: show ComingSoonScreen if location not serviceable
+  if (location.isHydrated && !location.isServiceable) {
+    return <ComingSoonScreen pincode={location.pincode} />;
+  }
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchCats = async () => {
+      try {
+        const res = await productService.getCategories(location.storeId, selectedSlot);
+        if (isMounted && res.success && res.data) {
+          dispatch(setCategories(res.data));
+        }
+      } catch (e) {
+        console.warn('Error fetching categories:', e);
+      }
+    };
+    if (location.storeId) {
+      fetchCats();
+    }
+    return () => { isMounted = false; };
+  }, [location.storeId, selectedSlot, dispatch]);
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      const res = await productService.getCategories(location.storeId, selectedSlot);
+      if (res.success && res.data) {
+        dispatch(setCategories(res.data));
+      }
+    } catch (e) {
+      console.warn('Error refreshing categories:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const renderCategoryItem = ({ item }) => {
     return (
@@ -28,7 +72,7 @@ const CategoriesScreen = ({ navigation }) => {
       >
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: item.image_url || 'https://via.placeholder.com/100' }}
+            source={{ uri: item.image_url || item.imageUrl || 'https://via.placeholder.com/100' }}
             style={styles.image}
             resizeMode="cover"
           />
@@ -56,6 +100,9 @@ const CategoriesScreen = ({ navigation }) => {
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No categories found</Text>

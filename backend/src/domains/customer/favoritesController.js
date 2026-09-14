@@ -19,7 +19,12 @@ export const toggleFavorite = async (req, res) => {
 
   try {
     const result = await custRepo.toggleFavorite(req.user.id, targetId);
-    return successResponse(res, result, result.is_favorite ? 'Added to favorites' : 'Removed from favorites');
+    const formatted = {
+      ...result,
+      is_favorite: result.is_favorite,
+      isFavorite: result.is_favorite,
+    };
+    return successResponse(res, formatted, result.is_favorite ? 'Added to favorites' : 'Removed from favorites');
   } catch (error) {
     return errorResponse(res, 'Failed to toggle favorite', 500, error.message);
   }

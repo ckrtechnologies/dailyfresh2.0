@@ -13,18 +13,37 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, THEMES, SPACING, RADIUS } from '../constants/theme';
-import { logout } from '../store/slices/authSlice';
+import { logout, setCredentials } from '../store/slices/authSlice';
 import { clearCart } from '../store/slices/cartSlice';
 import { clearLocation } from '../store/slices/locationSlice';
+import { clearOrders } from '../store/slices/orderSlice';
+import { clearFavorites } from '../store/slices/favoritesSlice';
+import authService from '../api/authService';
 import { showGlobalAlert } from '../services/alertService';
+import { RefreshControl } from 'react-native';
 
 const AccountScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
+  const { user, token } = useSelector((state) => state.auth);
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  // Safely extract user details from Supabase user_metadata
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      const res = await authService.getUserProfile();
+      if (res.success && res.data) {
+        dispatch(setCredentials({ user: res.data, token }));
+      }
+    } catch (e) {
+      console.warn('Error refreshing profile:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Safely extract user details
   const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.full_name || user?.name || 'Daily Fresh User';
   const userPhone = user?.phone || user?.user_metadata?.phone || 'No phone linked';
   const userInitials = userName !== 'Daily Fresh User' ? userName.charAt(0).toUpperCase() : 'U';
@@ -40,8 +59,12 @@ const AccountScreen = ({ navigation }) => {
           text: 'Logout',
           onPress: async () => {
             try {
-              const authService = require('../api/authService').default;
               await authService.logout();
+              dispatch(logout());
+              dispatch(clearCart());
+              dispatch(clearOrders());
+              dispatch(clearFavorites());
+              dispatch(clearLocation());
             } catch (error) {
               console.error('Logout error:', error);
               showGlobalAlert('Error', 'Failed to logout. Please try again.', 'error');
@@ -65,7 +88,7 @@ const AccountScreen = ({ navigation }) => {
   const menuItems = [
     { icon: 'package-variant', label: 'My Orders', screen: 'Orders' },
     { icon: 'account-cog', label: 'Account Settings', screen: 'EditProfile' },
-    { icon: 'map-marker-path', label: 'Saved Addresses', screen: 'SavedAddresses' },
+    { icon: 'map-marker-path', label: 'Saved Addresses', screen: 'SavedAddresses', params: { selectMode: true } },
     { icon: 'share-all', label: 'Invite Friends', action: handleShareApp },
     { icon: 'bell-badge', label: 'Notifications', screen: 'Notifications' },
     { icon: 'headphones', label: 'Help & Support', screen: 'Support' },
@@ -81,7 +104,7 @@ const AccountScreen = ({ navigation }) => {
         style={styles.menuItem}
         onPress={() => {
           if (item.action) item.action();
-          else if (item.screen) navigation.navigate(item.screen);
+          else if (item.screen) navigation.navigate(item.screen, item.params);
         }}
       >
         <View style={styles.menuItemLeft}>
@@ -102,6 +125,9 @@ const AccountScreen = ({ navigation }) => {
         style={styles.mainContent}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.mainContentInner}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
+        }
       >
         {/* Profile Header */}
         <View style={styles.header}>

@@ -172,7 +172,7 @@ export const productVariants = pgTable('product_variants', {
   weightText: text('weight_text'),
   grossWeightText: text('gross_weight_text'),
   imageUrl: text('image_url'),
-  deliveryInfo: text('delivery_info').array().default(sql`ARRAY['Tomorrow Morning']::text[]`),
+  deliveryInfo: text('delivery_info').array().default(sql`ARRAY['tomorrow_morning']::text[]`),
   displayOrder: integer('display_order').default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

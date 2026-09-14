@@ -1,4 +1,5 @@
 import * as custRepo from './repository.js';
+import * as custService from './service.js';
 import { successResponse, errorResponse } from '../../utils/response.js';
 
 export const getProfile = async (req, res) => {
@@ -53,7 +54,27 @@ export const deleteProfile = async (req, res) => {
 export const getAddresses = async (req, res) => {
   try {
     const addresses = await custRepo.getAddresses(req.user.id);
-    return successResponse(res, { addresses }, 'Addresses fetched');
+    const enriched = await Promise.all((addresses || []).map(async (addr) => {
+      try {
+        const storeResult = await custService.findNearestStore(
+          addr.latitude ? Number(addr.latitude) : null,
+          addr.longitude ? Number(addr.longitude) : null,
+          addr.pincode
+        );
+        return {
+          ...addr,
+          store_id: storeResult?.store?.id || null,
+          storeId: storeResult?.store?.id || null,
+          store_name: storeResult?.store?.name || null,
+          storeName: storeResult?.store?.name || null,
+          is_serviceable: storeResult?.is_deliverable ?? false,
+          isServiceable: storeResult?.is_deliverable ?? false,
+        };
+      } catch (e) {
+        return addr;
+      }
+    }));
+    return successResponse(res, { addresses: enriched }, 'Addresses fetched');
   } catch (error) {
     return errorResponse(res, 'Failed to fetch addresses', 500, error.message);
   }
@@ -62,7 +83,26 @@ export const getAddresses = async (req, res) => {
 export const addAddress = async (req, res) => {
   try {
     const address = await custRepo.createAddress(req.user.id, req.body);
-    return successResponse(res, address, 'Address added', 201);
+    let enriched = { ...address };
+    try {
+      const storeResult = await custService.findNearestStore(
+        address.latitude ? Number(address.latitude) : null,
+        address.longitude ? Number(address.longitude) : null,
+        address.pincode
+      );
+      enriched = {
+        ...address,
+        store_id: storeResult?.store?.id || null,
+        storeId: storeResult?.store?.id || null,
+        store_name: storeResult?.store?.name || null,
+        storeName: storeResult?.store?.name || null,
+        is_serviceable: storeResult?.is_deliverable ?? false,
+        isServiceable: storeResult?.is_deliverable ?? false,
+      };
+    } catch (e) {
+      // fallback to raw address
+    }
+    return successResponse(res, { ...enriched, address: enriched }, 'Address added', 201);
   } catch (error) {
     return errorResponse(res, 'Failed to add address', 500, error.message);
   }
@@ -72,7 +112,26 @@ export const updateAddress = async (req, res) => {
   try {
     const { id } = req.params;
     const address = await custRepo.updateAddress(id, req.user.id, req.body);
-    return successResponse(res, address, 'Address updated');
+    let enriched = { ...address };
+    try {
+      const storeResult = await custService.findNearestStore(
+        address.latitude ? Number(address.latitude) : null,
+        address.longitude ? Number(address.longitude) : null,
+        address.pincode
+      );
+      enriched = {
+        ...address,
+        store_id: storeResult?.store?.id || null,
+        storeId: storeResult?.store?.id || null,
+        store_name: storeResult?.store?.name || null,
+        storeName: storeResult?.store?.name || null,
+        is_serviceable: storeResult?.is_deliverable ?? false,
+        isServiceable: storeResult?.is_deliverable ?? false,
+      };
+    } catch (e) {
+      // fallback to raw address
+    }
+    return successResponse(res, { ...enriched, address: enriched }, 'Address updated');
   } catch (error) {
     return errorResponse(res, 'Failed to update address', 500, error.message);
   }
@@ -89,9 +148,12 @@ export const deleteAddress = async (req, res) => {
 };
 
 export const updateFcmToken = async (req, res) => {
-  const { fcm_token } = req.body;
+  const fcmToken = req.body.fcm_token || req.body.fcmToken;
   try {
-    await custRepo.updateProfile(req.user.id, { fcmToken: fcm_token });
+    if (!fcmToken) {
+      return errorResponse(res, 'FCM token is required', 400);
+    }
+    await custRepo.updateProfile(req.user.id, { fcmToken });
     return successResponse(res, null, 'FCM token updated');
   } catch (error) {
     return errorResponse(res, 'Failed to update FCM token', 500, error.message);

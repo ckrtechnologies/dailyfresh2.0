@@ -35,21 +35,21 @@ const orderService = {
       const response = await apiClient.get('/customer/orders', { params: filters });
       return { success: true, data: response.data.data };
     } catch (error) {
-      console.error('Error fetching orders:', error);
-      return { success: false, error: error.response?.data?.message || 'Failed to fetch orders' };
+      console.warn('Orders fetch note:', error?.message || error);
+      return { success: false, error };
     }
   },
 
   /**
    * Get specific order details
    */
-  getOrderById: async (id) => {
+  getOrderById: async (orderId) => {
     try {
-      const response = await apiClient.get(`/customer/orders/${id}`);
-      return { success: true, data: response.data.data };
+      const response = await apiClient.get(`/customer/orders/${orderId}`);
+      return { success: true, data: response.data?.data || response.data };
     } catch (error) {
-      console.error('Error fetching order detail:', error);
-      return { success: false, error: error.response?.data?.message || 'Failed to fetch order details' };
+      console.warn('Order detail fetch note:', error?.message || error);
+      return { success: false, error };
     }
   },
 

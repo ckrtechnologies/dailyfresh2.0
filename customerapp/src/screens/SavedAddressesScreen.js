@@ -7,20 +7,22 @@ import {
   FlatList,
   StatusBar,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import addressService from '../api/addressService';
-import { useDispatch } from 'react-redux';
-import { setSelectedAddress } from '../store/slices/locationSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { setSelectedAddress, setLocation } from '../store/slices/locationSlice';
 import { showGlobalAlert } from '../services/alertService';
 
 const SavedAddressesScreen = ({ route, navigation }) => {
   const dispatch = useDispatch();
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -28,19 +30,26 @@ const SavedAddressesScreen = ({ route, navigation }) => {
     }, [])
   );
 
-  const fetchAddresses = async () => {
+  const fetchAddresses = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) setRefreshing(true);
+      else if (addresses.length === 0) setLoading(true);
       const res = await addressService.getAddresses();
       if (res.success) {
-        setAddresses(res.data.addresses);
-      }
-    } catch (error) {
-      console.error('Fetch addresses error:', error);
-      showGlobalAlert('Error', 'Failed to load saved addresses', 'error');
+        setAddresses(res.data.addresses || []);
+    } 
+  }
+    catch (error) {
+      console.log('Fetch addresses error (guest or auth needed):', error?.message);
+      setAddresses([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    fetchAddresses(true);
   };
 
   const handleDelete = async (id) => {
@@ -74,41 +83,56 @@ const SavedAddressesScreen = ({ route, navigation }) => {
     );
   };
 
-  // Determine if we're in address-selection mode
-  const isSelectMode = !!(
-    route.params?.selectMode ||
-    navigation.getState().routes.some(r => ['Cart', 'Checkout', 'LocationPicker'].includes(r.name))
-  );
+  const selectedAddress = useSelector((state) => state.location?.selectedAddress);
 
   const handleSelect = async (item) => {
     try {
       setLoading(true);
       const { default: apiClient } = await import('../api/apiClient');
-      const storeRes = await apiClient.get('/customer/stores/nearest', { 
-        params: { pincode: item.pincode, lat: item.latitude, lng: item.longitude } 
-      });
-      const store = storeRes.data?.data?.store;
+      const storeParams = {
+        pincode: item.pincode,
+        lat: item.latitude || undefined,
+        lng: item.longitude || undefined,
+      };
+      
+      let store = null;
+      let isDeliverable = false;
 
-      if (!store) {
-        showGlobalAlert('Not Serviceable', 'Sorry, we do not currently deliver to this address.', 'warning');
-        return;
+      try {
+        const storeRes = await apiClient.get('/customer/stores/nearest', { 
+          params: storeParams 
+        });
+        const storeData = storeRes.data?.data;
+        store = storeData?.store;
+        isDeliverable = storeData?.is_deliverable === true && !!store;
+      } catch (storeErr) {
+        console.warn('Store nearest check warning:', storeErr);
       }
 
       // Attach store info to the selected address item before dispatching
       const addressWithStore = {
         ...item,
-        store_id: store.id,
-        store_name: store.name
+        store_id: isDeliverable ? store.id : null,
+        store_name: isDeliverable ? store.name : null,
+        is_serviceable: isDeliverable,
       };
 
       dispatch(setSelectedAddress(addressWithStore));
+
+      if (!isDeliverable) {
+        showGlobalAlert('Outside Service Area', 'We do not deliver to this pincode yet. We are coming near you soon!', 'info');
+      }
+
+      const routes = navigation.getState()?.routes || [];
+      const prevRoute = routes.length >= 2 ? routes[routes.length - 2]?.name : null;
       
-      // If we came from Cart or Checkout, go back. 
-      // Otherwise (like from Splash/Login flow), go to DeliveryMode as intended.
-      if (navigation.canGoBack()) {
+      if (['Cart', 'Checkout'].includes(prevRoute) && navigation.canGoBack()) {
         navigation.goBack();
       } else {
-        navigation.navigate('DeliveryMode');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'AppTabs', params: { screen: 'Home' } }],
+        });
       }
     } catch (error) {
       console.error('Error resolving store for address:', error);
@@ -118,57 +142,83 @@ const SavedAddressesScreen = ({ route, navigation }) => {
     }
   };
 
-  const renderAddressItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.addressCard} 
-      onPress={isSelectMode ? () => handleSelect(item) : undefined}
-      activeOpacity={isSelectMode ? 0.7 : 1}
-    >
-      <View style={styles.addressHeader}>
-        <View style={styles.labelContainer}>
-          <Icon 
-            name={item.label === 'Home' ? 'home-outline' : item.label === 'Work' ? 'briefcase-outline' : 'map-marker-outline'} 
-            size={20} 
-            color={COLORS.primary} 
-          />
-          <Text style={styles.label}>{item.label}</Text>
-          {item.is_default && (
-            <View style={styles.defaultBadge}>
-              <Text style={styles.defaultText}>DEFAULT</Text>
-            </View>
-          )}
-        </View>
-        <TouchableOpacity onPress={() => {
-          showGlobalAlert(
-            'Address Options',
-            'What would you like to do?',
-            'info',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Edit', onPress: () => navigation.navigate('AddAddress', { editAddress: item }) },
-              { text: 'Delete', onPress: () => handleDelete(item.id), style: 'destructive' },
-            ]
-          );
-        }}>
-          <Icon name="dots-vertical" size={20} color={COLORS.gray} />
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.addressText}>{item.line1}{item.line2 ? `, ${item.line2}` : ''}</Text>
-      <Text style={styles.addressSub}>{item.city}, {item.state} - {item.pincode}</Text>
-      
-      <View style={styles.actions}>
-        {isSelectMode ? (
-          // In selection mode: show a clear primary CTA
-          <TouchableOpacity
-            style={styles.selectBtn}
-            onPress={() => handleSelect(item)}
-          >
-            <Icon name="check-circle-outline" size={16} color={COLORS.white} />
-            <Text style={styles.selectBtnText}>Deliver Here</Text>
+  const renderAddressItem = ({ item }) => {
+    const isSelected = !!(
+      (selectedAddress?.id && selectedAddress.id === item.id) ||
+      (!selectedAddress?.id && selectedAddress?.pincode === item.pincode && selectedAddress?.line1 === item.line1)
+    );
+
+    return (
+      <TouchableOpacity 
+        style={[
+          styles.addressCard,
+          isSelected && styles.addressCardSelected
+        ]} 
+        onPress={() => handleSelect(item)}
+        activeOpacity={0.75}
+      >
+        <View style={styles.addressHeader}>
+          <View style={styles.labelContainer}>
+            <Icon 
+              name={item.label === 'Home' ? 'home-outline' : item.label === 'Work' ? 'briefcase-outline' : 'map-marker-outline'} 
+              size={20} 
+              color={COLORS.primary} 
+            />
+            <Text style={styles.label}>{item.label}</Text>
+            {item.is_default && (
+              <View style={styles.defaultBadge}>
+                <Text style={styles.defaultText}>DEFAULT</Text>
+              </View>
+            )}
+            {isSelected && (
+              <View style={styles.activeDeliveryBadge}>
+                <Icon name="check" size={12} color="#15803D" style={{ marginRight: 2 }} />
+                <Text style={styles.activeDeliveryText}>DELIVERING HERE</Text>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity onPress={() => {
+            showGlobalAlert(
+              'Address Options',
+              'What would you like to do?',
+              'info',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Deliver to this Address', onPress: () => handleSelect(item) },
+                { text: 'Edit', onPress: () => navigation.navigate('AddAddress', { editAddress: item }) },
+                { text: 'Delete', onPress: () => handleDelete(item.id), style: 'destructive' },
+              ]
+            );
+          }}>
+            <Icon name="dots-vertical" size={20} color={COLORS.gray} />
           </TouchableOpacity>
-        ) : (
-          // In browse mode: show Edit / Remove
-          <>
+        </View>
+        <Text style={styles.addressText}>{item.line1}{item.line2 ? `, ${item.line2}` : ''}</Text>
+        <Text style={styles.addressSub}>{item.city}, {item.state} - {item.pincode}</Text>
+        
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[
+              styles.selectBtn,
+              isSelected && styles.selectBtnActive
+            ]}
+            onPress={() => handleSelect(item)}
+            activeOpacity={0.8}
+          >
+            <Icon 
+              name={isSelected ? "check-circle" : "truck-delivery-outline"} 
+              size={17} 
+              color={isSelected ? '#15803D' : COLORS.white} 
+            />
+            <Text style={[
+              styles.selectBtnText,
+              isSelected && styles.selectBtnTextActive
+            ]}>
+              {isSelected ? 'Delivering to this Address' : 'Deliver Here'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.secondaryActions}>
             <TouchableOpacity 
               style={styles.actionBtn}
               onPress={() => navigation.navigate('AddAddress', { editAddress: item })}
@@ -182,11 +232,11 @@ const SavedAddressesScreen = ({ route, navigation }) => {
             >
               <Text style={[styles.actionText, { color: '#EF4444' }]}>Remove</Text>
             </TouchableOpacity>
-          </>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -195,9 +245,7 @@ const SavedAddressesScreen = ({ route, navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Icon name="arrow-left" size={24} color={COLORS.dark} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isSelectMode ? 'Choose Delivery Address' : 'Saved Addresses'}
-        </Text>
+        <Text style={styles.headerTitle}>Saved Addresses</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -211,6 +259,18 @@ const SavedAddressesScreen = ({ route, navigation }) => {
           renderItem={renderAddressItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          }
+          ListHeaderComponent={
+            <TouchableOpacity 
+              style={[styles.addBtn, { marginBottom: SPACING.m, borderColor: '#3B82F6', backgroundColor: '#EFF6FF', borderStyle: 'solid' }]}
+              onPress={() => navigation.navigate('LocationPicker', { changeLocation: true })}
+            >
+              <Icon name="crosshairs-gps" size={22} color="#2563EB" />
+              <Text style={[styles.addBtnText, { color: '#2563EB' }]}>Detect GPS / Enter New Pincode</Text>
+            </TouchableOpacity>
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon name="map-marker-off-outline" size={60} color={COLORS.gray} />
@@ -327,26 +387,54 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginTop: 2,
   },
+  addressCardSelected: {
+    borderColor: COLORS.primary,
+    borderWidth: 1.5,
+    backgroundColor: '#F7FEE7',
+  },
+  activeDeliveryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: SPACING.s,
+  },
+  activeDeliveryText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
   actions: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
     marginTop: SPACING.m,
     paddingTop: SPACING.s,
+    gap: 8,
+  },
+  secondaryActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   actionBtn: {
-    flex: 1,
-    alignItems: 'center',
+    paddingHorizontal: SPACING.s,
     paddingVertical: SPACING.s,
+    alignItems: 'center',
   },
   actionText: {
     color: COLORS.primary,
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13,
   },
   vDivider: {
     width: 1,
-    backgroundColor: '#F3F4F6',
+    height: 14,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 4,
   },
   selectBtn: {
     flex: 1,
@@ -355,13 +443,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.s,
-    paddingVertical: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     gap: 6,
+  },
+  selectBtnActive: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
   },
   selectBtnText: {
     color: COLORS.white,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 13,
+  },
+  selectBtnTextActive: {
+    color: '#15803D',
+    fontWeight: '800',
   },
   addBtn: {
     flexDirection: 'row',

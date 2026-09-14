@@ -9,22 +9,39 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { formatDistanceToNow } from 'date-fns';
+import { safeDistanceToNow } from '../utils/dateUtils';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import apiClient from '../api/apiClient';
 
 const NotificationsScreen = ({ navigation }) => {
+  const { user, token } = useSelector((state) => state.auth);
+  const isAuthenticated = !!(token && user);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchNotifications = async (showLoading = true) => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       if (showLoading) setLoading(true);
       const response = await apiClient.get('/customer/notifications');
       if (response.data?.success) {
-        setNotifications(response.data.data.notifications || []);
+        const raw = response.data.data;
+        const list = Array.isArray(raw) ? raw : (raw?.notifications || []);
+        const formatted = list.map(n => ({
+          ...n,
+          is_read: n.is_read !== undefined ? n.is_read : (n.isRead !== undefined ? n.isRead : false),
+          isRead: n.is_read !== undefined ? n.is_read : (n.isRead !== undefined ? n.isRead : false),
+          created_at: n.created_at || n.createdAt,
+        }));
+        setNotifications(formatted);
       }
     } catch (error) {
       console.error('Fetch notifications error:', error);
@@ -82,10 +99,31 @@ const NotificationsScreen = ({ navigation }) => {
     }
   };
 
+  const formatNotificationTime = (dateValue) => {
+    return safeDistanceToNow(dateValue, 'Just now');
+  };
+
+  const handleNotificationPress = async (item) => {
+    if (!item.is_read) {
+      handleMarkAsRead(item.id);
+    }
+    let data = item.data || {};
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {}
+    }
+    const orderId = data.order_id || data.orderId || (item.type?.startsWith('order') && data.id);
+    if (orderId) {
+      navigation.navigate('OrderDetail', { orderId, order: { id: orderId } });
+    }
+  };
+
   const renderItem = ({ item }) => (
     <TouchableOpacity 
       style={[styles.notificationCard, !item.is_read && styles.unreadCard]}
-      onPress={() => !item.is_read && handleMarkAsRead(item.id)}
+      onPress={() => handleNotificationPress(item)}
+      activeOpacity={0.7}
     >
       <View style={[
         styles.iconContainer, 
@@ -104,7 +142,7 @@ const NotificationsScreen = ({ navigation }) => {
         </View>
         <Text style={styles.body}>{item.body}</Text>
         <Text style={styles.time}>
-          {item.created_at ? formatDistanceToNow(new Date(item.created_at), { addSuffix: true }) : 'Just now'}
+          {formatNotificationTime(item.created_at || item.createdAt)}
         </Text>
       </View>
     </TouchableOpacity>
@@ -138,8 +176,22 @@ const NotificationsScreen = ({ navigation }) => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon name="bell-off-outline" size={80} color="#E5E7EB" />
-              <Text style={styles.emptyTitle}>No Notifications</Text>
-              <Text style={styles.emptySubtitle}>We'll notify you about your orders and special offers.</Text>
+              <Text style={styles.emptyTitle}>
+                {!isAuthenticated ? 'Please Log In' : 'No Notifications'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {!isAuthenticated
+                  ? 'Sign in to receive order updates, exclusive deals, and delivery notifications.'
+                  : "We'll notify you about your orders and special offers."}
+              </Text>
+              {!isAuthenticated && (
+                <TouchableOpacity
+                  style={{ marginTop: 16, backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 }}
+                  onPress={() => navigation.navigate('Login')}
+                >
+                  <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 14 }}>Log In</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
         />

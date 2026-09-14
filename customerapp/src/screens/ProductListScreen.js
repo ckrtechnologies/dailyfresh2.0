@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
@@ -14,41 +16,83 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
 import ProductCard from '../components/ProductCard';
 import productService from '../api/productService';
+import ComingSoonScreen from './ComingSoonScreen';
 
 const ProductListScreen = ({ route, navigation }) => {
-  const { title, type, initialProducts, searchQuery, categoryId, subCategoryId } = route.params;
-  const { storeId } = useSelector((state) => state.location);
+  const { title, type, initialProducts, searchQuery, categoryId, subCategoryId } = route.params || {};
+  const { storeId, isServiceable, pincode } = useSelector((state) => state.location);
   const { selectedSlot } = useSelector((state) => state.config);
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
+
   const [products, setProducts] = useState(initialProducts || []);
+  const [subCategories, setSubCategories] = useState([]);
+  const [selectedSubCatId, setSelectedSubCatId] = useState(subCategoryId || 'all');
   const [loading, setLoading] = useState(!initialProducts);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // 1. Fetch subcategories if categoryId is provided
   useEffect(() => {
-    if (!initialProducts || searchQuery || categoryId || subCategoryId) {
-      fetchProducts();
+    let isMounted = true;
+    if (categoryId) {
+      productService.getSubCategories(categoryId).then((res) => {
+        if (isMounted && res.success && res.data && res.data.length > 0) {
+          setSubCategories(res.data);
+        }
+      });
     }
-  }, [searchQuery, categoryId, subCategoryId, storeId, selectedSlot]);
+    return () => { isMounted = false; };
+  }, [categoryId]);
 
-  const fetchProducts = async () => {
+  // 2. Fetch products whenever category, subcategory, store, or slot changes
+  const fetchProducts = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      if (!isServiceable || !storeId) {
+        setProducts([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
       const filters = { storeId, deliveryType: selectedSlot };
       if (searchQuery) filters.search = searchQuery;
       if (categoryId) filters.categoryId = categoryId;
-      if (subCategoryId) filters.subCategoryId = subCategoryId;
+      if (selectedSubCatId && selectedSubCatId !== 'all') {
+        filters.subCategoryId = selectedSubCatId;
+      }
       if (type === 'flash_sale') filters.isFlashSale = true;
       if (type === 'trending') filters.isTrending = true;
       if (type === 'deals') filters.isDeal = true;
+      if (type === 'featured') filters.isFeatured = true;
+      if (type === 'exclusive') filters.isExclusive = true;
+      if (type === 'new_launch') filters.isNewLaunch = true;
+      if (type === 'frozen') filters.isFrozen = true;
 
       const res = await productService.getProducts(filters);
       if (res.success) {
-        setProducts(res.data);
+        setProducts(res.data || []);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  }, [categoryId, selectedSubCatId, storeId, selectedSlot, searchQuery, type]);
+
+  useEffect(() => {
+    if (!initialProducts || searchQuery || categoryId || selectedSubCatId !== 'all') {
+      fetchProducts();
+    }
+  }, [fetchProducts]);
+
+  const onRefresh = () => {
+    fetchProducts(true);
   };
 
   const renderHeader = () => (
@@ -59,12 +103,71 @@ const ProductListScreen = ({ route, navigation }) => {
       >
         <Icon name="arrow-left" size={24} color={COLORS.white} />
       </TouchableOpacity>
-      <Text style={[styles.headerTitle, { color: COLORS.white }]}>{title}</Text>
+      <Text style={[styles.headerTitle, { color: COLORS.white }]}>{title || 'Products'}</Text>
       <View style={{ width: 40 }} />
     </View>
   );
 
-  if (loading) {
+  const renderSubCategoryTabs = () => {
+    if (!subCategories || subCategories.length === 0) return null;
+
+    return (
+      <View style={styles.subCatContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.subCatScrollContent}
+        >
+          <TouchableOpacity
+            style={[
+              styles.subCatPill,
+              selectedSubCatId === 'all' && [styles.subCatPillActive, { backgroundColor: activeTheme.primary, borderColor: activeTheme.primary }]
+            ]}
+            onPress={() => setSelectedSubCatId('all')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.subCatPillText, selectedSubCatId === 'all' && styles.subCatPillTextActive]}>
+              All
+            </Text>
+          </TouchableOpacity>
+
+          {subCategories.map((sub) => {
+            const isActive = selectedSubCatId === sub.id;
+            return (
+              <TouchableOpacity
+                key={sub.id}
+                style={[
+                  styles.subCatPill,
+                  isActive && [styles.subCatPillActive, { backgroundColor: activeTheme.primary, borderColor: activeTheme.primary }]
+                ]}
+                onPress={() => setSelectedSubCatId(sub.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.subCatPillText, isActive && styles.subCatPillTextActive]}>
+                  {sub.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  if (!isServiceable) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: activeTheme.background }]} edges={['bottom', 'left', 'right']}>
+        <StatusBar 
+          backgroundColor={activeTheme.primary} 
+          barStyle="light-content"
+        />
+        {renderHeader()}
+        <ComingSoonScreen pincode={pincode} />
+      </SafeAreaView>
+    );
+  }
+
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -79,16 +182,21 @@ const ProductListScreen = ({ route, navigation }) => {
         barStyle="light-content"
       />
       {renderHeader()}
+      {renderSubCategoryTabs()}
       <FlatList
         data={products}
         keyExtractor={(item) => item.id}
         numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         initialNumToRender={6}
         maxToRenderPerBatch={6}
         windowSize={10}
         removeClippedSubviews={true}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeTheme.primary]} />
+        }
         renderItem={({ item }) => (
           <View style={styles.productWrapper}>
             <ProductCard
@@ -120,8 +228,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.l,
     paddingVertical: SPACING.m,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
   backBtn: {
     padding: SPACING.s,
@@ -133,19 +239,51 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: SPACING.s,
   },
-  filterBtn: {
-    padding: SPACING.s,
-    backgroundColor: 'rgba(45, 106, 79, 0.1)',
-    borderRadius: 8,
+  subCatContainer: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingVertical: 10,
+  },
+  subCatScrollContent: {
+    paddingHorizontal: SPACING.m,
+    alignItems: 'center',
+  },
+  subCatPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  subCatPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  subCatPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  subCatPillTextActive: {
+    color: COLORS.white,
+    fontWeight: '700',
   },
   listContent: {
-    paddingHorizontal: 8, // Half of SPACING.m to work with wrapper padding
+    paddingHorizontal: 8,
     paddingTop: SPACING.m,
     paddingBottom: 100,
   },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+  },
   productWrapper: {
     width: '50%',
-    padding: 8, // This creates a consistent 16px gutter (8+8)
+    padding: 6,
+    display: 'flex',
   },
   loadingContainer: {
     flex: 1,
@@ -154,7 +292,7 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flex: 1,
-    marginTop: 100,
+    marginTop: 80,
     alignItems: 'center',
     justifyContent: 'center',
     padding: SPACING.xxl,

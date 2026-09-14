@@ -15,15 +15,19 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
-import { supabase } from '../api/supabase';
-import { setCredentials } from '../store/slices/authSlice';
+import authService from '../api/authService';
+import { setCredentials, logout } from '../store/slices/authSlice';
+import { clearCart } from '../store/slices/cartSlice';
+import { clearLocation } from '../store/slices/locationSlice';
+import { clearOrders } from '../store/slices/orderSlice';
+import { clearFavorites } from '../store/slices/favoritesSlice';
 import { showGlobalAlert } from '../services/alertService';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, token } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   
-  const initialName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.full_name || user?.name || '';
+  const initialName = user?.full_name || user?.name || user?.user_metadata?.full_name || '';
   
   // Filter out sso_ placeholders from the UI
   const rawPhone = user?.phone || user?.user_metadata?.phone || '';
@@ -42,20 +46,15 @@ const EditProfileScreen = ({ navigation }) => {
     setLoading(true);
     
     try {
-      const { default: authService } = await import('../api/authService');
       const res = await authService.updateProfile({ full_name: name, phone });
 
       if (!res.success) {
         throw new Error(res.error || 'Failed to update profile');
       }
 
-      // Also update the local auth session so it shows immediately
-      const { data, error } = await supabase.auth.updateUser({
-        data: { full_name: name, phone: phone }
-      });
-
       // Update Redux state with the new user object
-      dispatch(setCredentials({ user: data?.user || user, token }));
+      const updatedUser = { ...user, full_name: name, phone };
+      dispatch(setCredentials({ user: updatedUser, token }));
 
       showGlobalAlert('Success', 'Profile updated successfully', 'success', [
         { text: 'OK', onPress: () => navigation.goBack() }
@@ -79,10 +78,14 @@ const EditProfileScreen = ({ navigation }) => {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView 
+          contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: 80 }]} 
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.avatarSection}>
             <View style={[styles.avatar, { overflow: 'hidden' }]}>
               {user?.avatar_url ? (
@@ -183,8 +186,11 @@ const handleDeleteAccount = () => {
             const { default: authService } = await import('../api/authService');
             const res = await authService.deleteAccount();
             if (res.success) {
-              const { logout } = await import('../store/slices/authSlice');
-              // logout logic here
+              dispatch(logout());
+              dispatch(clearCart());
+              dispatch(clearOrders());
+              dispatch(clearFavorites());
+              dispatch(clearLocation());
               showGlobalAlert('Account Deleted', 'Your account has been successfully removed.', 'success');
             } else {
               throw new Error(res.error);

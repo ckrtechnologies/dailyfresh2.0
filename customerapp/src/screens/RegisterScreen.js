@@ -15,9 +15,14 @@ import {
 import { useDispatch } from 'react-redux';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import authService from '../api/authService';
+import { setCredentials, setLoading } from '../store/slices/authSlice';
+import { showGlobalAlert } from '../services/alertService';
+import { autoAssignNearestStore } from '../services/locationHelper';
+import { signInWithGoogleNative, openGoogleBrowserLogin } from '../services/googleAuth';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const RegisterScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -26,6 +31,7 @@ const RegisterScreen = ({ navigation }) => {
     confirm_password: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   const handleInputChange = (name, value) => {
     setFormData({ ...formData, [name]: value });
@@ -40,7 +46,7 @@ const RegisterScreen = ({ navigation }) => {
     }
 
     if (password !== confirm_password) {
-      Alert.alert('Error', 'Passwords do not match');
+      showGlobalAlert('Error', 'Passwords do not match', 'warning');
       return;
     }
 
@@ -54,30 +60,75 @@ const RegisterScreen = ({ navigation }) => {
       });
 
       if (response.success) {
-        Alert.alert(
+        showGlobalAlert(
           'Success',
-          'Registration successful! Please check your email for verification.',
-          [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+          'Registration successful! Please login to continue.',
+          'success',
+          [{ text: 'Login Now', onPress: () => navigation.navigate('Login') }]
         );
       }
     } catch (err) {
       console.error(err);
-      Alert.alert('Registration Failed', err.message || 'Something went wrong');
+      showGlobalAlert('Registration Failed', err.message || 'Something went wrong', 'error');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setIsGoogleSubmitting(true);
+      const googleRes = await signInWithGoogleNative();
+
+      if (googleRes.cancelled) {
+        return;
+      }
+
+      if (googleRes.success) {
+        dispatch(setLoading(true));
+        const res = await authService.signInWithGoogle(googleRes);
+
+        if (res.success) {
+          try {
+            await autoAssignNearestStore(dispatch, { isAuthenticated: true });
+          } catch (locErr) {
+            console.log('Location assignment error:', locErr);
+          }
+
+          dispatch(setCredentials({
+            user: res.data.user,
+            token: res.data.access_token,
+          }));
+          return;
+        }
+      }
+
+      // Seamless fallback: browser-based Google SSO
+      console.log('[RegisterScreen] Native Google sign-in bypassed or failed, launching browser SSO...');
+      await openGoogleBrowserLogin();
+    } catch (err) {
+      console.error('Google Sign-In error:', err);
+      await openGoogleBrowserLogin();
+    } finally {
+      setIsGoogleSubmitting(false);
+      dispatch(setLoading(false));
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 80 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.header}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join Daily Fresh today</Text>
+            <Text style={styles.subtitle}>Sign up to get started</Text>
           </View>
 
           <View style={styles.form}>
@@ -157,11 +208,18 @@ const RegisterScreen = ({ navigation }) => {
             </View>
 
             <TouchableOpacity
-              style={styles.googleButton}
-              onPress={() => authService.signInWithGoogle()}
+              style={[styles.googleButton, isGoogleSubmitting && styles.disabledButton]}
+              onPress={handleGoogleLogin}
+              disabled={isGoogleSubmitting}
             >
-              <Icon name="google" size={24} color="#DB4437" />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              {isGoogleSubmitting ? (
+                <ActivityIndicator color="#DB4437" />
+              ) : (
+                <>
+                  <Icon name="google" size={24} color="#DB4437" />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
+              )}
             </TouchableOpacity>
 
             <View style={styles.footer}>

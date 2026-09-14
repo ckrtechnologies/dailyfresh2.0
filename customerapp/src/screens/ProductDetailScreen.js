@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,10 @@ import {
   Dimensions,
   Share,
   StatusBar,
+  Platform,
+  Animated,
 } from 'react-native';
+import { SvgUri } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, RADIUS, THEMES } from '../constants/theme';
@@ -28,6 +31,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const { productId } = route.params;
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
+  const scrollY = useRef(new Animated.Value(0)).current;
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -36,6 +40,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const [activeTab, setActiveTab] = useState('about');
   const [similarProducts, setSimilarProducts] = useState([]);
   const [deliverySlotsConfig, setDeliverySlotsConfig] = useState(null);
+  const [notFound, setNotFound] = useState(false);
 
   const { items: favorites } = useSelector((state) => state.favorites);
   const { items: cartItems } = useSelector((state) => state.cart);
@@ -43,7 +48,20 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const configFromRedux = useSelector((state) => state.config.delivery_slots_config);
   
   const activeTheme = THEMES[selectedSlot] || THEMES.all;
-  const isFavorite = product && favorites.some(item => item.id === product.id);
+  const prodId = product?.id || product?.productId || product?.product_id;
+  const isFavorite = useSelector((state) =>
+    Boolean(prodId) && (state.favorites?.items || []).some(item => {
+      if (!item) return false;
+      const targetStr = String(prodId);
+      return (
+        String(item.id) === targetStr ||
+        String(item.productId) === targetStr ||
+        String(item.product_id) === targetStr ||
+        String(item.product?.id) === targetStr ||
+        String(item.product?.productId) === targetStr
+      );
+    })
+  );
 
   // Helper to find quantity for a specific config
   const getCartQuantity = (variant = null) => {
@@ -62,7 +80,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
       setLoading(true);
       try {
         const response = await productService.getProductDetail(productId);
-        if (response.success) {
+        if (response.success && response.data) {
           const data = response.data;
           setProduct(data);
           if (data.cut_options?.length > 0) setSelectedCut(data.cut_options[0]);
@@ -76,6 +94,9 @@ const ProductDetailScreen = ({ route, navigation }) => {
           }
 
           fetchSimilarProducts(data.sub_category_id);
+        } else {
+          // Product not found / deleted / inactive
+          setNotFound(true);
         }
       } catch (err) {
         console.error(err);
@@ -186,29 +207,73 @@ const ProductDetailScreen = ({ route, navigation }) => {
     return <LogoLoader fullScreen />;
   }
 
+  if (notFound || !product) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F9FAFB', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+        <StatusBar backgroundColor={activeTheme.primary} barStyle="light-content" />
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+          <View style={[{ backgroundColor: activeTheme.primary, paddingTop: 48, paddingBottom: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center' }]}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
+              <Icon name="arrow-left" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>Product Detail</Text>
+          </View>
+        </View>
+        <Icon name="package-variant-remove" size={80} color="#D1D5DB" />
+        <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827', marginTop: 20, marginBottom: 10, textAlign: 'center' }}>
+          Product Unavailable
+        </Text>
+        <Text style={{ fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+          This product has been removed or is no longer available. Please explore our other fresh products.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: activeTheme.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 28, elevation: 4 }}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const sellingPrice = product.discount_price || product.price;
   const hasDiscount = product.discount_price && product.discount_price < product.price;
 
   // Availability Logic
+  const options = Array.isArray(product.delivery_options)
+    ? product.delivery_options
+    : (Array.isArray(product.deliveryOptions) ? product.deliveryOptions : []);
+  const normalizedSlot = (selectedSlot || 'express').toLowerCase();
+
+  const isProductSlotAvailable = () => {
+    if (normalizedSlot === 'express') {
+      return options.length === 0 || options.includes('express');
+    }
+    if (normalizedSlot === 'tomorrow') {
+      return options.length === 0 || options.includes('tomorrow_morning') || options.includes('tomorrow_evening') || options.includes('tomorrow');
+    }
+    return true;
+  };
+
   const getAvailableVariants = () => {
     if (!product.variants || product.variants.length === 0) return [];
     return product.variants.filter(variant => {
-      const info = Array.isArray(variant.delivery_info)
-        ? variant.delivery_info
-        : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim().toLowerCase()) : []);
+      const rawInfo = variant.delivery_info || variant.deliveryInfo;
+      const info = Array.isArray(rawInfo)
+        ? rawInfo
+        : (rawInfo ? String(rawInfo).split(',').map(s => s.trim().toLowerCase()) : []);
 
-      const normalizedSlot = selectedSlot.toLowerCase();
-      
       if (normalizedSlot === 'express') {
-        return info.some(slot => slot.toLowerCase().includes('express'));
+        const variantMatches = info.some(slot => String(slot).toLowerCase().includes('express'));
+        return variantMatches || options.includes('express') || options.length === 0;
       }
       
       if (normalizedSlot === 'tomorrow') {
-        return info.some(slot => 
-          slot.toLowerCase().includes('morning') || 
-          slot.toLowerCase().includes('evening') ||
-          slot.toLowerCase().includes('tomorrow')
-        );
+        const variantMatches = info.some(slot => {
+          const s = String(slot).toLowerCase();
+          return s.includes('morning') || s.includes('evening') || s.includes('tomorrow');
+        });
+        return variantMatches || options.includes('tomorrow_morning') || options.includes('tomorrow_evening') || options.includes('tomorrow') || options.length === 0;
       }
 
       return true;
@@ -218,24 +283,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const availableVariants = getAvailableVariants();
   const hasVariants = product.variants?.length > 0;
 
-  const isProductSlotAvailable = () => {
-    if (hasVariants) return availableVariants.length > 0;
-
-    const options = product.delivery_options || [];
-    const normalizedSlot = selectedSlot.toLowerCase();
-
-    if (normalizedSlot === 'express') {
-      return options.includes('express');
-    }
-
-    if (normalizedSlot === 'tomorrow') {
-      return options.includes('tomorrow_morning') || options.includes('tomorrow_evening');
-    }
-
-    return true;
-  };
-
-  const isAvailable = isProductSlotAvailable();
+  const isAvailable = hasVariants ? (availableVariants.length > 0 || isProductSlotAvailable()) : isProductSlotAvailable();
 
   return (
     <View style={styles.container}>
@@ -243,41 +291,31 @@ const ProductDetailScreen = ({ route, navigation }) => {
         backgroundColor={activeTheme.primary}
         barStyle="light-content"
       />
-      {/* Header with Premium Icons */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
-        >
-          <Icon name="chevron-left" size={28} color={COLORS.white} />
-        </TouchableOpacity>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
-            onPress={handleShare}
-          >
-            <Icon name="share-variant" size={22} color={COLORS.white} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
-            onPress={handleToggleFavorite}
-          >
-            <Icon
-              name={isFavorite ? "heart" : "heart-outline"}
-              size={24}
-              color={isFavorite ? COLORS.secondary : COLORS.white}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Image source={{ uri: product.image_url }} style={styles.image} />
+      <Animated.ScrollView
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.imageContainer}>
+          {(() => {
+            const uri = product.image_url || product.imageUrl;
+            if (uri && typeof uri === 'string' && uri.toLowerCase().endsWith('.svg')) {
+              return (
+                <View style={styles.image}>
+                  <SvgUri width="100%" height="100%" uri={uri} />
+                </View>
+              );
+            }
+            return <Image source={{ uri }} style={styles.image} />;
+          })()}
+        </View>
 
         <View style={styles.infoContainer}>
-          <Text style={styles.categoryName}>{product.sub_category?.category?.name}</Text>
+          <Text style={styles.categoryName}>{product.sub_category?.category?.name || product.subCategory?.category?.name}</Text>
           <Text style={styles.name}>{product.name}</Text>
-          <Text style={styles.weight}>{product.weight_unit || '500g'}</Text>
+          <Text style={styles.weight}>{product.weight_unit || product.weightUnit || '500g'}</Text>
 
           {!isAvailable && (
             <View style={styles.unavailableBanner}>
@@ -385,8 +423,10 @@ const ProductDetailScreen = ({ route, navigation }) => {
                 )}
 
                 {/* Tomorrow Badge */}
-                {((product.delivery_options || []).includes('tomorrow_morning') || (product.delivery_options || []).includes('tomorrow_evening')) && 
-                 product.scheduled_stock_qty > 0 && (
+                {(((product.delivery_options || product.deliveryOptions || []).includes('tomorrow_morning') || 
+                  (product.delivery_options || product.deliveryOptions || []).includes('tomorrow_evening') ||
+                  (product.delivery_options || product.deliveryOptions || []).includes('tomorrow'))) && 
+                 Number(product.scheduled_stock_qty ?? product.scheduledStockQty ?? product.stock_quantity ?? product.stockQuantity ?? 0) > 0 && (
                   <View style={[
                     styles.deliveryCard,
                     {
@@ -406,32 +446,30 @@ const ProductDetailScreen = ({ route, navigation }) => {
           )}
 
           {/* Product Detail Tabs */}
-          {isAvailable && (
-            <View style={styles.tabContainer}>
-              {hasVariants && (
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'customize' && styles.activeTab]}
-                  onPress={() => setActiveTab('customize')}
-                >
-                  <Text style={[styles.tabText, activeTab === 'customize' && styles.activeTabText]}>Customize</Text>
-                </TouchableOpacity>
-              )}
+          <View style={styles.tabContainer}>
+            {hasVariants && (
               <TouchableOpacity
-                style={[styles.tab, activeTab === 'about' && styles.activeTab]}
-                onPress={() => setActiveTab('about')}
+                style={[styles.tab, activeTab === 'customize' && styles.activeTab]}
+                onPress={() => setActiveTab('customize')}
               >
-                <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>About</Text>
+                <Text style={[styles.tabText, activeTab === 'customize' && styles.activeTabText]}>Customize</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'recipe' && styles.activeTab]}
-                onPress={() => setActiveTab('recipe')}
-              >
-                <Text style={[styles.tabText, activeTab === 'recipe' && styles.activeTabText]}>Recipe</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            )}
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'about' && styles.activeTab]}
+              onPress={() => setActiveTab('about')}
+            >
+              <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>About</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, (activeTab === 'recipe' || activeTab === 'guide') && styles.activeTab]}
+              onPress={() => setActiveTab('recipe')}
+            >
+              <Text style={[styles.tabText, (activeTab === 'recipe' || activeTab === 'guide') && styles.activeTabText]}>Cooking Guide</Text>
+            </TouchableOpacity>
+          </View>
 
-          {isAvailable && activeTab === 'customize' && hasVariants && (
+          {activeTab === 'customize' && hasVariants && (
             <View style={styles.tabContent}>
               {availableVariants.map((variant) => (
                 <View key={variant.id} style={styles.variantCard}>
@@ -459,35 +497,53 @@ const ProductDetailScreen = ({ route, navigation }) => {
                       </View>
 
                       <View style={styles.deliverySlotsContainer}>
-                        {(Array.isArray(variant.delivery_info) ? variant.delivery_info : (variant.delivery_info ? variant.delivery_info.split(',').map(s => s.trim()) : ['Tomorrow'])).map((slot, sIdx) => {
-                          const s = slot.toLowerCase();
-                          let label = slot;
-                          let icon = 'truck-delivery-outline';
-                          let color = '#64748b';
+                        {(() => {
+                          const rawSlots = Array.isArray(variant.delivery_info)
+                            ? variant.delivery_info
+                            : (variant.delivery_info ? String(variant.delivery_info).split(',').map(s => s.trim()) : []);
+                          const productOpts = Array.isArray(product.delivery_options) ? product.delivery_options : (product.deliveryOptions || []);
 
-                          if (s.includes('express')) {
-                            label = 'Express'; icon = 'flash'; color = '#F59E0B';
-                          } else if (s.includes('morning') || s.includes('evening') || s.includes('tomorrow')) {
-                            label = 'Tomorrow'; icon = 'calendar-clock'; color = '#10B981';
-                          } else {
-                            return null;
+                          const hasExpress = rawSlots.some(s => String(s).toLowerCase().includes('express')) && productOpts.includes('express');
+                          const hasTomorrow = rawSlots.some(s => {
+                            const str = String(s).toLowerCase();
+                            return str.includes('morning') || str.includes('evening') || str.includes('tomorrow');
+                          }) && (productOpts.includes('tomorrow_morning') || productOpts.includes('tomorrow_evening') || productOpts.includes('tomorrow'));
+
+                          const badges = [];
+                          if (hasExpress) {
+                            badges.push({ label: 'Express', icon: 'flash', color: '#F59E0B' });
+                          }
+                          if (hasTomorrow) {
+                            badges.push({ label: 'Tomorrow', icon: 'calendar-clock', color: '#10B981' });
                           }
 
-                          return (
-                            <View key={sIdx} style={[styles.deliveryBadge, { backgroundColor: color + '12' }]}>
-                              <Icon name={icon} size={12} color={color} />
-                              <Text style={[styles.deliveryBadgeText, { color }]}>{label}</Text>
+                          return badges.map((b, bIdx) => (
+                            <View key={bIdx} style={[styles.deliveryBadge, { backgroundColor: b.color + '12' }]}>
+                              <Icon name={b.icon} size={12} color={b.color} />
+                              <Text style={[styles.deliveryBadgeText, { color: b.color }]}>{b.label}</Text>
                             </View>
-                          );
-                        })}
+                          ));
+                        })()}
                       </View>
                     </View>
 
                     <View style={styles.variantImageContainer}>
-                      <Image
-                        source={{ uri: variant.image_url || product.image_url }}
-                        style={styles.variantImage}
-                      />
+                      {(() => {
+                        const vUri = variant.image_url || product.image_url;
+                        if (vUri && typeof vUri === 'string' && vUri.toLowerCase().endsWith('.svg')) {
+                          return (
+                            <View style={styles.variantImage}>
+                              <SvgUri width="100%" height="100%" uri={vUri} />
+                            </View>
+                          );
+                        }
+                        return (
+                          <Image
+                            source={{ uri: vUri }}
+                            style={styles.variantImage}
+                          />
+                        );
+                      })()}
                       {getCartQuantity(variant) > 0 ? (
                         <View style={styles.variantQtySelector}>
                           <TouchableOpacity
@@ -519,7 +575,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {isAvailable && activeTab === 'about' && (
+          {activeTab === 'about' && (
             <View style={styles.tabContent}>
               <View style={styles.descriptionSection}>
                 <View style={styles.sectionHeader}>
@@ -544,7 +600,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {isAvailable && activeTab === 'recipe' && (
+          {(activeTab === 'recipe' || activeTab === 'guide') && (
             <View style={styles.tabContent}>
               {/* Visual Steps from Highlights */}
               {product.product_highlights && product.product_highlights.length > 0 && (
@@ -572,21 +628,42 @@ const ProductDetailScreen = ({ route, navigation }) => {
                 </View>
 
                 <View style={styles.recipeBody}>
-                  {product.cooking_guide ? (
-                    product.cooking_guide.split('\n').filter(line => line.trim()).map((step, index) => (
-                      <View key={index} style={styles.stepContainer}>
-                        <View style={styles.stepNumber}>
-                          <Text style={styles.stepNumberText}>{index + 1}</Text>
-                        </View>
-                        <Text style={styles.stepText}>{step.replace(/^\d+\.\s*/, '').trim()}</Text>
+                  {(() => {
+                    const rawGuide = product.cooking_guide || product.cookingGuide;
+                    let steps = [];
+                    if (Array.isArray(rawGuide)) {
+                      steps = rawGuide;
+                    } else if (typeof rawGuide === 'string' && rawGuide.trim()) {
+                      try {
+                        const parsed = JSON.parse(rawGuide);
+                        if (Array.isArray(parsed)) steps = parsed;
+                        else steps = rawGuide.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim());
+                      } catch {
+                        steps = rawGuide.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim());
+                      }
+                    }
+                    if (steps.length > 0) {
+                      return steps.map((step, index) => {
+                        const cleanedText = String(step)
+                          .replace(/^(step\s*\d*[:.-]*|\d+[\.\):-]*)\s*/i, '')
+                          .trim();
+                        return (
+                          <View key={index} style={styles.stepContainer}>
+                            <View style={styles.stepNumber}>
+                              <Text style={styles.stepNumberText}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.stepText}>{cleanedText || step}</Text>
+                          </View>
+                        );
+                      });
+                    }
+                    return (
+                      <View style={styles.emptyRecipe}>
+                        <Icon name="silverware-clean" size={40} color="#cbd5e1" />
+                        <Text style={styles.emptyRecipeText}>No instructions provided yet. Stay tuned for recipes!</Text>
                       </View>
-                    ))
-                  ) : (
-                    <View style={styles.emptyRecipe}>
-                      <Icon name="silverware-clean" size={40} color="#cbd5e1" />
-                      <Text style={styles.emptyRecipeText}>No instructions provided yet. Stay tuned for recipes!</Text>
-                    </View>
-                  )}
+                    );
+                  })()}
                 </View>
               </View>
             </View>
@@ -609,8 +686,21 @@ const ProductDetailScreen = ({ route, navigation }) => {
                   key={p.id}
                   style={styles.similarCard}
                   onPress={() => navigation.push('ProductDetail', { productId: p.id })}
+                  activeOpacity={0.8}
                 >
-                  <Image source={{ uri: p.image_url }} style={styles.similarImage} />
+                  <View style={{ width: '100%', height: 120, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }}>
+                    {(() => {
+                      const simUri = p.image_url;
+                      if (simUri && typeof simUri === 'string' && simUri.toLowerCase().endsWith('.svg')) {
+                        return (
+                          <View style={styles.similarImage}>
+                            <SvgUri width="100%" height="100%" uri={simUri} />
+                          </View>
+                        );
+                      }
+                      return <Image source={{ uri: simUri }} style={styles.similarImage} />;
+                    })()}
+                  </View>
                   <View style={styles.similarInfo}>
                     <Text style={styles.similarName} numberOfLines={2}>{p.name}</Text>
                     <Text style={styles.similarPrice}>₹{p.discount_price || p.price}</Text>
@@ -634,7 +724,41 @@ const ProductDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
         <View style={{ height: 120 }} />
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* Header with Premium Icons - Rendered after ScrollView for top-level touch responsiveness */}
+      <View style={[styles.header, { top: insets.top > 0 ? insets.top + 6 : 12, zIndex: 999, elevation: 999 }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Icon name="chevron-left" size={28} color={COLORS.white} />
+        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: activeTheme.primary }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Icon name="share-variant" size={22} color={COLORS.white} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: '#FFFFFF' }]}
+            onPress={handleToggleFavorite}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Icon
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={22}
+              color={isFavorite ? '#EF4444' : '#1E293B'}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
 
     </View>
   );
@@ -674,10 +798,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.m,
     paddingVertical: SPACING.s,
     position: 'absolute',
-    top: 50, // Slightly lower for notch/dynamic island
+    top: 50,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 20,
+    elevation: 20,
   },
   headerRight: {
     flexDirection: 'row',
@@ -855,11 +980,6 @@ const styles = StyleSheet.create({
   selectedOptionText: {
     color: COLORS.primary,
     fontWeight: '700',
-  },
-  description: {
-    fontSize: 15,
-    color: COLORS.gray,
-    lineHeight: 22,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -1218,7 +1338,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     marginLeft: 4,
-    textTransform: 'uppercase',
   },
   variantImageContainer: {
     alignItems: 'center',

@@ -19,10 +19,10 @@ const cartSlice = createSlice({
       const cleaningPreference = payload.cleaningPreference || null;
       
       const existingItemIndex = state.items.findIndex(
-        (item) => item.id === product.id && 
-                  item.variant?.id === variant?.id &&
-                  item.cutPreference === cutPreference && 
-                  item.cleaningPreference === cleaningPreference
+        (item) => String(item.id) === String(product.id) && 
+                  String(item.variant?.id || '') === String(variant?.id || '') &&
+                  String(item.cutPreference || '') === String(cutPreference || '') && 
+                  String(item.cleaningPreference || '') === String(cleaningPreference || '')
       );
 
       if (existingItemIndex > -1) {
@@ -49,10 +49,10 @@ const cartSlice = createSlice({
       const cleaningPref = typeof payload === 'object' ? payload.cleaningPreference : null;
 
       const itemIndex = state.items.findIndex(
-        (item) => item.id === id && 
-                  item.variant?.id === variantId &&
-                  item.cutPreference === cutPref &&
-                  item.cleaningPreference === cleaningPref
+        (item) => String(item.id) === String(id) && 
+                  String(item.variant?.id || '') === String(variantId || '') &&
+                  String(item.cutPreference || '') === String(cutPref || '') &&
+                  String(item.cleaningPreference || '') === String(cleaningPref || '')
       );
 
       if (itemIndex > -1) {
@@ -87,8 +87,38 @@ const cartSlice = createSlice({
       }, 0);
       state.totalCount = items.reduce((acc, item) => acc + item.quantity, 0);
     },
+    setItemQuantity: (state, action) => {
+      const { item, quantity } = action.payload;
+      const id = typeof item === 'object' ? item.id : item;
+      const variantId = typeof item === 'object' ? item.variant?.id : null;
+      const cutPref = typeof item === 'object' ? item.cutPreference : null;
+      const cleaningPref = typeof item === 'object' ? item.cleaningPreference : null;
+
+      const itemIndex = state.items.findIndex(
+        (i) => String(i.id) === String(id) && 
+                  String(i.variant?.id || '') === String(variantId || '') &&
+                  String(i.cutPreference || '') === String(cutPref || '') &&
+                  String(i.cleaningPreference || '') === String(cleaningPref || '')
+      );
+
+      if (itemIndex > -1) {
+        const existingItem = state.items[itemIndex];
+        const newQty = Math.max(0, parseInt(quantity, 10) || 0);
+        
+        if (newQty === 0) {
+          state.totalCount -= existingItem.quantity;
+          state.totalAmount -= (existingItem.price * existingItem.quantity);
+          state.items.splice(itemIndex, 1);
+        } else {
+          const diff = newQty - existingItem.quantity;
+          existingItem.quantity = newQty;
+          state.totalCount += diff;
+          state.totalAmount += (existingItem.price * diff);
+        }
+      }
+    },
   },
 });
 
-export const { addItem, removeItem, clearCart, setCart, updateCartAfterValidation } = cartSlice.actions;
+export const { addItem, removeItem, clearCart, setCart, updateCartAfterValidation, setItemQuantity } = cartSlice.actions;
 export default cartSlice.reducer;
